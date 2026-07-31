@@ -26,6 +26,8 @@ landing_html = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BLENIN.G.77 THE BEST FUTURE FOR YOU</title>
+    <!-- Íconos de Redes Sociales (FontAwesome) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root { --cyan: #00e5ff; --dark: #0d1b2a; --card: #1b263b; --text: #e0e1dd; }
         body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--dark); color: var(--text); scroll-behavior: smooth; }
@@ -41,7 +43,7 @@ landing_html = """
         .hero h1 { font-size: 2.5rem; color: var(--cyan); margin: 0; text-shadow: 0 0 20px rgba(0, 0, 0, 0.8); }
         .hero h2 { font-size: 1.2rem; color: #fff; margin: 10px 0; text-shadow: 1px 1px 4px rgba(0,0,0,0.8); font-weight: normal; }
         .hero p { font-size: 1.3rem; max-width: 600px; margin: 20px auto; color: #e0e1dd; text-shadow: 1px 1px 4px rgba(0,0,0,0.8); }
-        .cta-input { padding: 15px; width: 300px; border-radius: 5px; border: none; background: #fff; color: #000; font-size: 1rem; margin-right: 10px; }
+        
         .btn-primary { background: var(--cyan); color: #000; padding: 15px 30px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: 0.3s; text-decoration: none; display: inline-block; }
         .btn-primary:hover { background: #fff; transform: translateY(-2px); }
         
@@ -57,10 +59,14 @@ landing_html = """
         
         .comments-section { background: var(--card); padding: 40px; border-radius: 15px; margin: 40px 10%; max-width: 800px; margin-left: auto; margin-right: auto; }
         
-        footer { background: #000; padding: 40px 20px; text-align: center; margin-top: 60px; }
-        .social-icons { display: flex; justify-content: center; gap: 20px; margin-bottom: 20px; }
-        .social-icons a { color: #94a3b8; font-size: 2rem; transition: 0.3s; }
-        .social-icons a:hover { color: var(--cyan); transform: scale(1.2); }
+        /* Estilos Redes Sociales */
+        .social-footer { text-align: center; margin-top: 40px; }
+        .social-footer h3 { color: #fff; margin-bottom: 20px; }
+        .social-icons-footer { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+        .social-icons-footer a { width: 50px; height: 50px; border-radius: 50%; background: #334155; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; transition: 0.3s; text-decoration: none; }
+        .social-icons-footer a:hover { transform: scale(1.2); background: var(--cyan); color: #000; }
+        
+        footer { background: #000; padding: 40px 20px; text-align: center; margin-top: 0; }
         .copyright { color: #64748b; font-size: 0.9rem; max-width: 800px; margin: 0 auto; }
         
         /* Estilos del formulario MailerLite */
@@ -146,7 +152,7 @@ landing_html = """
         </div>
     </div>
 
-    <!-- INICIO FORMULARIO MAILERLITE (Movido al final) -->
+    <!-- INICIO FORMULARIO MAILERLITE -->
     <div class="section" style="max-width: 600px; margin: 0 auto 60px auto;">
         <style type="text/css">@import url("https://assets.mlcdn.com/fonts.css?version=1785409");</style>
         <style type="text/css">
@@ -287,15 +293,29 @@ landing_html = """
     </div>
     <!-- FIN FORMULARIO MAILERLITE -->
 
-    <footer>
-        <div class="social-icons">
-            <a href="https://t.me/tu_canal">📱</a>
-            <a href="https://youtube.com">▶️</a>
-            <a href="https://twitter.com">🐦</a>
-            <a href="https://instagram.com">📸</a>
+    <!-- INICIO ÍCONOS DE REDES SOCIALES -->
+    <div class="social-footer">
+        <h3>Síguenos en nuestras redes</h3>
+        <div class="social-icons-footer">
+            <a href="TU_ENLACE_FACEBOOK_AQUI" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
+            <a href="TU_ENLACE_WHATSAPP_AQUI" target="_blank" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
+            <a href="TU_ENLACE_YOUTUBE_AQUI" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
+            <a href="TU_ENLACE_TIKTOK_AQUI" target="_blank" title="TikTok"><i class="fab fa-tiktok"></i></a>
+            <a href="TU_ENLACE_TELEGRAM_AQUI" target="_blank" title="Telegram"><i class="fab fa-telegram-plane"></i></a>
+            <a href="TU_ENLACE_INSTAGRAM_AQUI" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
         </div>
+    </div>
+    <!-- FIN ÍCONOS DE REDES SOCIALES -->
+
+    <footer>
         <p class="copyright">&copy; 2026 BLENIN.G.77 THE BEST FUTURE FOR YOU ܐܠܗܐ ܪܥܐ ܠܝ ܘܠܐ ܐܟܣܪ ܠܝ ܒܟܠ ܫܘܡܐ. Todos los derechos reservados. Creado por Lenin Benitez.</p>
     </footer>
+
+    <!-- 🤖 INICIO AGENTE IA DE SOPORTE (Chatbase) -->
+    <script>
+    (function(){if(!window.chatbase||window.chatbase("getState")!=="initialized"){window.chatbase=(...arguments)=>{if(!window.chatbase.q){window.chatbase.q=[]}window.chatbase.q.push(arguments)};window.chatbase=new Proxy(window.chatbase,{get(target,prop){if(prop==="q"){return target.q}return(...args)=>target(prop,...args)}})}const onLoad=function(){const script=document.createElement("script");script.src="https://www.chatbase.co/embed.min.js";script.id="gzEjAzK1VCE72hJ_hBfA4";script.domain="www.chatbase.co";document.body.appendChild(script)};if(document.readyState==="complete"){onLoad()}else{window.addEventListener("load",onLoad)}})();
+    </script>
+    <!-- 🤖 FIN AGENTE IA DE SOPORTE -->
 
 </body>
 </html>
