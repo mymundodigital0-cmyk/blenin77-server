@@ -34,9 +34,12 @@ landing_html = """
         nav ul { list-style: none; display: flex; gap: 20px; }
         nav ul li a { color: var(--text); text-decoration: none; transition: 0.3s; }
         nav ul li a:hover { color: var(--cyan); }
-        .hero { text-align: center; padding: 80px 20px; background: radial-gradient(circle at 50% 50%, #1b263b 0%, var(--dark) 100%); }
-        .hero h1 { font-size: 3.5rem; color: var(--cyan); margin: 0; text-shadow: 0 0 20px rgba(0, 229, 255, 0.5); }
-        .hero p { font-size: 1.3rem; max-width: 600px; margin: 20px auto; color: #94a3b8; }
+        
+        /* ✅ IMAGEN DE FONDO AÑADIDA AQUÍ */
+        .hero { text-align: center; padding: 80px 20px; background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(13, 27, 42, 0.9)), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; color: white; }
+        
+        .hero h1 { font-size: 3.5rem; color: var(--cyan); margin: 0; text-shadow: 0 0 20px rgba(0, 0, 0, 0.8); }
+        .hero p { font-size: 1.3rem; max-width: 600px; margin: 20px auto; color: #e0e1dd; text-shadow: 1px 1px 4px rgba(0,0,0,0.8); }
         .cta-input { padding: 15px; width: 300px; border-radius: 5px; border: none; background: #fff; color: #000; font-size: 1rem; margin-right: 10px; }
         .btn-primary { background: var(--cyan); color: #000; padding: 15px 30px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: 0.3s; text-decoration: none; display: inline-block; }
         .btn-primary:hover { background: #fff; transform: translateY(-2px); }
