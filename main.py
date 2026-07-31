@@ -1,226 +1,156 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
-from collections import defaultdict
-from datetime import datetime, timedelta
-import random
-import string
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ==========================================
-# 🌐 PÁGINA WEB DE VENTAS (Landing Page)
-# ==========================================
 landing_html = """
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BLENIN77 - Sistema de Trading Cuantitativo con IA</title>
+    <title>BLENIN77 - Plataforma de Trading Cuantitativo</title>
     <style>
-        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0d1b2a; color: #e0e1dd; }
-        header { background-color: #1b263b; padding: 40px 20px; text-align: center; border-bottom: 2px solid #00e5ff; }
-        h1 { color: #00e5ff; margin: 0; font-size: 3rem; }
-        h2 { color: #fff; text-align: center; margin-top: 40px; }
-        p { text-align: center; color: #94a3b8; font-size: 1.2rem; }
-        .features { display: flex; justify-content: center; flex-wrap: wrap; padding: 20px; }
-        .feature-box { background: #1b263b; padding: 20px; margin: 10px; border-radius: 10px; width: 300px; text-align: center; border: 1px solid #334155; }
-        .feature-box h3 { color: #00e5ff; }
-        .pricing { display: flex; justify-content: center; flex-wrap: wrap; padding: 40px 20px; }
-        .plan { background: #1b263b; border: 1px solid #334155; border-radius: 15px; width: 300px; margin: 15px; padding: 30px; text-align: center; }
-        .plan h3 { color: #fff; font-size: 1.5rem; }
-        .plan .price { font-size: 3rem; color: #00e5ff; margin: 15px 0; }
-        .btn { display: inline-block; background: #00e5ff; color: #000; padding: 15px 30px; text-decoration: none; font-weight: bold; border-radius: 5px; transition: 0.3s; width: 80%; margin-top: 15px; }
-        .btn:hover { background: #fff; }
-        .plan.gold { border: 2px solid #ffc107; }
-        footer { text-align: center; padding: 20px; background: #1b263b; color: #64748b; margin-top: 40px; }
+        :root { --cyan: #00e5ff; --dark: #0d1b2a; --card: #1b263b; --text: #e0e1dd; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--dark); color: var(--text); scroll-behavior: smooth; }
+        nav { background: rgba(13, 27, 42, 0.9); backdrop-filter: blur(10px); padding: 15px 5%; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; border-bottom: 1px solid #334155; }
+        nav .logo { color: var(--cyan); font-size: 1.5rem; font-weight: bold; text-decoration: none; }
+        nav ul { list-style: none; display: flex; gap: 20px; }
+        nav ul li a { color: var(--text); text-decoration: none; transition: 0.3s; }
+        nav ul li a:hover { color: var(--cyan); }
+        .hero { text-align: center; padding: 80px 20px; background: radial-gradient(circle at 50% 50%, #1b263b 0%, var(--dark) 100%); }
+        .hero h1 { font-size: 3.5rem; color: var(--cyan); margin: 0; text-shadow: 0 0 20px rgba(0, 229, 255, 0.5); }
+        .hero p { font-size: 1.3rem; max-width: 600px; margin: 20px auto; color: #94a3b8; }
+        .cta-input { padding: 15px; width: 300px; border-radius: 5px; border: none; background: #fff; color: #000; font-size: 1rem; margin-right: 10px; }
+        .btn-primary { background: var(--cyan); color: #000; padding: 15px 30px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: 0.3s; text-decoration: none; display: inline-block; }
+        .btn-primary:hover { background: #fff; transform: translateY(-2px); }
+        
+        .section { padding: 60px 10%; max-width: 1200px; margin: 0 auto; }
+        .section h2 { text-align: center; font-size: 2.5rem; color: #fff; margin-bottom: 40px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 30px; }
+        .card { background: var(--card); padding: 30px; border-radius: 15px; border: 1px solid #334155; transition: 0.3s; }
+        .card:hover { transform: translateY(-5px); border-color: var(--cyan); }
+        .card h3 { color: var(--cyan); font-size: 1.5rem; margin-top: 0; }
+        
+        .video-container { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+        .video-container iframe { width: 560px; height: 315px; border-radius: 10px; border: 2px solid var(--cyan); max-width: 100%; }
+        
+        .comments-section { background: var(--card); padding: 40px; border-radius: 15px; margin: 40px 10%; max-width: 800px; margin-left: auto; margin-right: auto; }
+        
+        footer { background: #000; padding: 40px 20px; text-align: center; margin-top: 60px; }
+        .social-icons { display: flex; justify-content: center; gap: 20px; margin-bottom: 20px; }
+        .social-icons a { color: #94a3b8; font-size: 2rem; transition: 0.3s; }
+        .social-icons a:hover { color: var(--cyan); transform: scale(1.2); }
+        .copyright { color: #64748b; font-size: 0.9rem; }
     </style>
 </head>
 <body>
-    <header>
-        <h1>BLENIN77</h1>
-        <p>El Sistema Definitivo de Trading Algorítmico con Inteligencia Artificial y Enjambre de Agentes</p>
-    </header>
 
-    <section class="features">
-        <div class="feature-box">
-            <h3>🐟 Enjambre 3D</h3>
-            <p>500 agentes simulan el futuro del mercado en milisegundos para aprobar o vetar operaciones.</p>
-        </div>
-        <div class="feature-box">
-            <h3>🛡️ Agente Centinela</h3>
-            <p>Lee noticias en tiempo real y bloquea operaciones si detecta peligros en la economía global.</p>
-        </div>
-        <div class="feature-box">
-            <h3>🧠 Cerebro Global</h3>
-            <p>Aprende de todos los usuarios del mundo para potenciar estrategias ganadoras.</p>
-        </div>
-    </section>
+    <nav>
+        <a href="#" class="logo">BLENIN77</a>
+        <ul>
+            <li><a href="#features">Funciones</a></li>
+            <li><a href="#videos">Videos</a></li>
+            <li><a href="#pricing">Precios</a></li>
+            <li><a href="#community">Comunidad</a></li>
+        </ul>
+    </nav>
 
-    <h2>Planes de Suscripción</h2>
-    <section class="pricing">
-        <div class="plan">
-            <h3>🥉 Bronce</h3>
-            <div class="price">$49<span style="font-size: 1rem; color: #94a3b8;">/mes</span></div>
-            <p>1 Cuenta MT5</p>
-            <p>Modo MT5 Puro</p>
-            <p>3 Activos Máximos</p>
-            <!-- AQUÍ PONES TU ENLACE DE STRIPE PARA BRONCE -->
-            <a href="https://buy.stripe.com/test_4gw3eq8eV6YX7OEdQQ" class="btn">Suscribirme</a>
+    <div class="hero">
+        <h1>El Futuro del Trading Algorítmico</h1>
+        <p>IA Predictiva, Enjambre de 500 Agentes y Análisis Global en Tiempo Real. Únete a la revolución cuantitativa.</p>
+        <!-- EMBUDO DE VENTAS: Registro de correo -->
+        <form action="https://TU_URL_DE_MAILERLITE.com" method="post" style="margin-top: 30px;">
+            <input type="email" class="cta-input" name="email" placeholder="Ingresa tu correo para ver el bot en acción..." required>
+            <button type="submit" class="btn-primary">Quiero Acceso</button>
+        </form>
+    </div>
+
+    <div id="features" class="section">
+        <h2>Tecnología de Nivel Institucional</h2>
+        <div class="grid-3">
+            <div class="card">
+                <h3>🐟 Enjambre 3D</h3>
+                <p>Antes de abrir una operación, 500 agentes virtuales simulan el futuro del mercado en milisegundos basándose en el patrón histórico del activo.</p>
+            </div>
+            <div class="card">
+                <h3>🛡️ Agente Centinela</h3>
+                <p>Un guardaespaldas que lee Reuters, CNBC y la Fed en tiempo real. Si detecta un crash, bloquea al bot para proteger tu capital.</p>
+            </div>
+            <div class="card">
+                <h3>🧠 Cerebro Global</h3>
+                <p>Red neuronal descentralizada. Tu bot aprende de las operaciones exitosas y fallidas de todos los usuarios a nivel mundial.</p>
+            </div>
         </div>
-        <div class="plan">
-            <h3>🥈 Plata</h3>
-            <div class="price">$99<span style="font-size: 1rem; color: #94a3b8;">/mes</span></div>
-            <p>2 Cuentas MT5</p>
-            <p>Modo Híbrido + Centinela</p>
-            <p>10 Activos + Enjambre 3D</p>
-            <!-- AQUÍ PONES TU ENLACE DE STRIPE PARA PLATA -->
-            <a href="https://buy.stripe.com/test_28o5mA4gF2AS5xO000" class="btn">Suscribirme</a>
+    </div>
+
+    <div id="videos" class="section">
+        <h2>Mira al Sistema en Acción</h2>
+        <div class="video-container">
+            <!-- Reemplaza este link por el ID de tu video de YouTube -->
+            <iframe src="https://www.youtube.com/embed/dQw4w9WgXcQ" title="Video 1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            <iframe src="https://www.youtube.com/embed/dQw4w9WgXcQ" title="Video 2" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
         </div>
-        <div class="plan gold">
-            <h3>🥇 Oro</h3>
-            <div class="price">$199<span style="font-size: 1rem; color: #94a3b8;">/mes</span></div>
-            <p>Cuentas Ilimitadas</p>
-            <p>Deep Learning (PyTorch)</p>
-            <p>Cerebro Global Premium</p>
-            <!-- AQUÍ PONES TU ENLACE DE STRIPE PARA ORO -->
-            <a href="https://buy.stripe.com/test_8wM3eqdEj9zC5xO146" class="btn">Suscribirme</a>
+    </div>
+
+    <div id="pricing" class="section">
+        <h2>Planes de Suscripción</h2>
+        <div class="grid-3">
+            <div class="card">
+                <h3>🥉 Bronce</h3>
+                <div style="font-size: 2rem; color: var(--cyan); margin: 15px 0;">$49<span style="font-size:1rem; color:#94a3b8;">/mes</span></div>
+                <p>✅ 1 Cuenta MT5</p>
+                <p>✅ Modo MT5 Puro</p>
+                <a href="https://buy.stripe.com/test_4gw3eq8eV6YX7OEdQQ" class="btn-primary" style="margin-top: 20px;">Suscribirme</a>
+            </div>
+            <div class="card" style="border: 2px solid var(--cyan); transform: scale(1.05);">
+                <h3>🥈 Plata</h3>
+                <div style="font-size: 2rem; color: var(--cyan); margin: 15px 0;">$99<span style="font-size:1rem; color:#94a3b8;">/mes</span></div>
+                <p>✅ 2 Cuentas MT5</p>
+                <p>✅ Modo Híbrido + Enjambre</p>
+                <a href="https://buy.stripe.com/test_28o5mA4gF2AS5xO000" class="btn-primary" style="margin-top: 20px;">Suscribirme</a>
+            </div>
+            <div class="card">
+                <h3>🥇 Oro</h3>
+                <div style="font-size: 2rem; color: var(--cyan); margin: 15px 0;">$199<span style="font-size:1rem; color:#94a3b8;">/mes</span></div>
+                <p>✅ Cuentas Ilimitadas</p>
+                <p>✅ Deep Learning (PyTorch)</p>
+                <a href="https://buy.stripe.com/test_8wM3eqdEj9zC5xO146" class="btn-primary" style="margin-top: 20px;">Suscribirme</a>
+            </div>
         </div>
-    </section>
+    </div>
+
+    <div id="community" class="comments-section">
+        <h2>Comunidad y Testimonios</h2>
+        <p style="text-align: center; margin-bottom: 30px;">Comparte tus configuraciones, resultados y aprende de otros traders.</p>
+        
+        <!-- BOTÓN PARA UNIRSE A TELEGRAM/DISCORD -->
+        <div style="text-align: center; margin-bottom: 40px;">
+            <a href="https://t.me/tu_canal_de_telegram" class="btn-primary" style="background: #0088cc; color: white;">Únete a nuestro Telegram</a>
+        </div>
+
+        <!-- SISTEMA DE COMENTARIOS DISQUS -->
+        <div id="disqus_thread"></div>
+        <script>
+            var disqus_config = function () {
+                this.page.url = "https://blenin77-server.onrender.com"; // Pon tu URL real
+                this.page.identifier = "blenin77-home";
+            };
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://TU_SITIO_DISQUS.disqus.com/embed.js'; // Pon tu sitio de Disqus
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    </div>
 
     <footer>
-        <p>&copy; 2026 BLENIN77. Todos los derechos reservados. By Lenin Benitez.</p>
+        <div class="social-icons">
+            <!-- Íconos de redes sociales (usando texto/emoji por simplicidad, puedes cambiar a SVG) -->
+            <a href="https://t.me/tu_canal">📱</a>
+            <a href="https://youtube.com">▶️</a>
+            <a href="https://twitter.com">🐦</a>
+            <a href="https://instagram.com">📸</a>
+        </div>
+        <p class="copyright">&copy; 2026 BLENIN77. Todos los derechos reservados. Creado por Lenin Benitez.</p>
     </footer>
+
 </body>
 </html>
 """
-
-# ==========================================
-# 🧠 BASES DE DATOS EN MEMORIA
-# ==========================================
-db_trades = []
-licenses_db = {
-    "BLENIN-TEST-1234": {"hwid": None, "expires": datetime.now() + timedelta(days=30), "active": True, "plan": "ORO"}
-}
-
-# ==========================================
-# 📦 MODELOS DE DATOS (Pydantic)
-# ==========================================
-class TradeData(BaseModel):
-    strategy: str
-    symbol: str
-    timeframe: str
-    outcome: bool
-    profit_pips: float
-    session: str
-
-class LicenseCheck(BaseModel):
-    key: str
-    hwid: str
-
-class LicenseCreate(BaseModel):
-    plan: str
-    duration_days: int = 30
-
-class LicenseAction(BaseModel):
-    key: str
-
-def generate_license_key(plan):
-    part1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-    part2 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-    plan_name = plan.upper().split()[0]
-    return f"BLENIN-{plan_name}-{part1}-{part2}"
-
-# ==========================================
-# 🌐 RUTA WEB (Lo que ve el usuario en internet)
-# ==========================================
-@app.get("/", response_class=HTMLResponse)
-def read_root():
-    return landing_html
-
-# ==========================================
-# 🐟 RUTAS DEL CEREBRO GLOBAL (IA)
-# ==========================================
-@app.post("/api/sync_intel")
-def receive_intel(trade: TradeData):
-    db_trades.append(trade)
-    return {"status": "received", "total_trades": len(db_trades)}
-
-@app.get("/api/get_global_intel")
-def get_intel():
-    if not db_trades: return {}
-    stats = defaultdict(lambda: {"wins": 0, "total": 0})
-    for t in db_trades:
-        key = f"{t.strategy}_{t.symbol}_{t.session}"
-        stats[key]["total"] += 1
-        if t.outcome: stats[key]["wins"] += 1
-    result = {}
-    for key, val in stats.items():
-        if val["total"] > 0:
-            result[key] = {"win_rate": val["wins"] / val["total"], "trades": val["total"]}
-    return result
-
-# ==========================================
-# 🔒 RUTAS DE LICENCIAS (Sistema de Cobros)
-# ==========================================
-@app.post("/api/validate_license")
-def validate_license(data: LicenseCheck):
-    key = data.key.upper().strip()
-    if key not in licenses_db:
-        return {"valid": False, "message": "❌ Licencia no encontrada."}
-    
-    license_info = licenses_db[key]
-    
-    if not license_info["active"]:
-        return {"valid": False, "message": "🚫 Licencia suspendada por falta de pago."}
-        
-    if datetime.now() > license_info["expires"]:
-        return {"valid": False, "message": "⏳ Tu suscripción ha expirado. Renueva en blenin77.com."}
-        
-    if license_info["hwid"] is None:
-        license_info["hwid"] = data.hwid
-    elif license_info["hwid"] != data.hwid:
-        return {"valid": False, "message": "🔒 Esta licencia ya está activada en otra PC."}
-        
-    days_left = (license_info["expires"] - datetime.now()).days
-    return {"valid": True, "message": f"✅ Licencia activa. Quedan {days_left} días.", "days_left": days_left}
-
-@app.post("/api/create_license")
-def create_license(data: LicenseCreate):
-    """Make.com llama esta ruta cuando Stripe confirma un pago"""
-    key = generate_license_key(data.plan)
-    licenses_db[key] = {
-        "hwid": None,
-        "expires": datetime.now() + timedelta(days=data.duration_days),
-        "active": True,
-        "plan": data.plan
-    }
-    return {"status": "success", "key": key}
-
-@app.post("/api/suspend_license")
-def suspend_license(data: LicenseAction):
-    """Make.com llama esta ruta cuando Stripe reporta que el pago falló"""
-    key = data.key.upper().strip()
-    if key in licenses_db:
-        licenses_db[key]["active"] = False
-        return {"status": "success", "message": "Licencia suspendida."}
-    return {"status": "error", "message": "Licencia no encontrada."}
-
-@app.post("/api/renew_license")
-def renew_license(data: LicenseAction):
-    """Make.com llama esta ruta para renovar 30 días más"""
-    key = data.key.upper().strip()
-    if key in licenses_db:
-        licenses_db[key]["active"] = True
-        licenses_db[key]["expires"] = datetime.now() + timedelta(days=30)
-        return {"status": "success", "message": "Licencia renovada."}
-    return {"status": "error", "message": "Licencia no encontrada."}
