@@ -26,7 +26,6 @@ landing_html = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BLENIN.G.77 THE BEST FUTURE FOR YOU</title>
-    <!-- Íconos de Redes Sociales (FontAwesome) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root { --cyan: #00e5ff; --dark: #0d1b2a; --card: #1b263b; --text: #e0e1dd; }
@@ -37,9 +36,7 @@ landing_html = """
         nav ul li a { color: var(--text); text-decoration: none; transition: 0.3s; }
         nav ul li a:hover { color: var(--cyan); }
         
-        /* Imagen de fondo */
         .hero { text-align: center; padding: 120px 20px; background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(13, 27, 42, 0.9)), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; color: white; }
-        
         .hero h1 { font-size: 2.5rem; color: var(--cyan); margin: 0; text-shadow: 0 0 20px rgba(0, 0, 0, 0.8); }
         .hero h2 { font-size: 1.2rem; color: #fff; margin: 10px 0; text-shadow: 1px 1px 4px rgba(0,0,0,0.8); font-weight: normal; }
         .hero p { font-size: 1.3rem; max-width: 600px; margin: 20px auto; color: #e0e1dd; text-shadow: 1px 1px 4px rgba(0,0,0,0.8); }
@@ -59,7 +56,6 @@ landing_html = """
         
         .comments-section { background: var(--card); padding: 40px; border-radius: 15px; margin: 40px 10%; max-width: 800px; margin-left: auto; margin-right: auto; }
         
-        /* Estilos Redes Sociales */
         .social-footer { text-align: center; margin-top: 40px; }
         .social-footer h3 { color: #fff; margin-bottom: 20px; }
         .social-icons-footer { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
@@ -69,7 +65,6 @@ landing_html = """
         footer { background: #000; padding: 40px 20px; text-align: center; margin-top: 0; }
         .copyright { color: #64748b; font-size: 0.9rem; max-width: 800px; margin: 0 auto; }
         
-        /* Estilos del formulario MailerLite */
         .ml-form-embedWrapper { margin: 30px auto !important; max-width: 400px !important; }
     </style>
 </head>
@@ -152,7 +147,6 @@ landing_html = """
         </div>
     </div>
 
-    <!-- INICIO FORMULARIO MAILERLITE -->
     <div class="section" style="max-width: 600px; margin: 0 auto 60px auto;">
         <style type="text/css">@import url("https://assets.mlcdn.com/fonts.css?version=1785409");</style>
         <style type="text/css">
@@ -291,9 +285,7 @@ landing_html = """
             fetch("https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/takel")
         </script>
     </div>
-    <!-- FIN FORMULARIO MAILERLITE -->
 
-    <!-- INICIO ÍCONOS DE REDES SOCIALES -->
     <div class="social-footer">
         <h3>Síguenos en nuestras redes</h3>
         <div class="social-icons-footer">
@@ -305,7 +297,6 @@ landing_html = """
             <a href="TU_ENLACE_INSTAGRAM_AQUI" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
         </div>
     </div>
-    <!-- FIN ÍCONOS DE REDES SOCIALES -->
 
     <footer>
         <p class="copyright">&copy; 2026 BLENIN.G.77 THE BEST FUTURE FOR YOU ܐܠܗܐ ܪܥܐ ܠܝ ܘܠܐ ܐܟܣܪ ܠܝ ܒܟܠ ܫܘܡܐ. Todos los derechos reservados. Creado por Lenin Benitez.</p>
@@ -328,6 +319,7 @@ db_trades = []
 licenses_db = {
     "BLENIN-TEST-1234": {"hwid": None, "expires": datetime.now() + timedelta(days=30), "active": True, "plan": "ORO"}
 }
+trials_db = {} # Base de datos para registrar qué PCs ya usaron la prueba gratuita
 
 # ==========================================
 # 📦 MODELOS DE DATOS (Pydantic)
@@ -350,6 +342,9 @@ class LicenseCreate(BaseModel):
 
 class LicenseAction(BaseModel):
     key: str
+
+class TrialRequest(BaseModel):
+    hwid: str
 
 def generate_license_key(plan):
     part1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
@@ -387,6 +382,25 @@ def get_intel():
     return result
 
 # ==========================================
+# 🎁 RUTA DE PRUEBA GRATUITA (30 Días)
+# ==========================================
+@app.post("/api/start_trial")
+def start_trial(data: TrialRequest):
+    """Otorga 30 días de prueba gratuitos a una PC nueva"""
+    hwid = data.hwid.strip()
+    
+    if hwid in trials_db:
+        # Si la PC ya pidió prueba antes, revisar si sigue activa
+        if datetime.now() > trials_db[hwid]["expires"]:
+            return {"valid": False, "message": "⏳ Tu prueba gratuita de 30 días ha expirado. Compra tu licencia en blenin77.com."}
+        days_left = (trials_db[hwid]["expires"] - datetime.now()).days
+        return {"valid": True, "message": f"✅ Prueba gratuita activa. Quedan {days_left} días.", "days_left": days_left, "plan": "BRONCE"}
+    else:
+        # Si es una PC nueva, darle 30 días
+        trials_db[hwid] = {"expires": datetime.now() + timedelta(days=30)}
+        return {"valid": True, "message": "🎉 ¡Prueba gratuita de 30 días iniciada con éxito!", "days_left": 30, "plan": "BRONCE"}
+
+# ==========================================
 # 🔒 RUTAS DE LICENCIAS (Sistema de Cobros)
 # ==========================================
 @app.post("/api/validate_license")
@@ -409,7 +423,6 @@ def validate_license(data: LicenseCheck):
         return {"valid": False, "message": "🔒 Esta licencia ya está activada en otra PC."}
         
     days_left = (license_info["expires"] - datetime.now()).days
-    # ✅ AQUÍ SE DEVUELVE EL PLAN (BRONCE, PLATA, ORO) PARA QUE EL BOT BLOQUEE FUNCIONES
     return {"valid": True, "message": f"✅ Licencia activa. Plan {license_info['plan']}. Quedan {days_left} días.", "days_left": days_left, "plan": license_info["plan"]}
 
 @app.post("/api/create_license")
