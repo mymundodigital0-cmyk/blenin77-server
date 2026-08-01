@@ -316,9 +316,14 @@ landing_html = """
 # 🧠 BASES DE DATOS EN MEMORIA
 # ==========================================
 db_trades = []
+
+# ✅ CLAVES DE PRUEBA PARA PROBAR LOS 3 PLANES
 licenses_db = {
-    "BLENIN-TEST-1234": {"hwid": None, "expires": datetime.now() + timedelta(days=30), "active": True, "plan": "ORO"}
+    "BLENIN-TEST-ORO": {"hwid": None, "expires": datetime.now() + timedelta(days=30), "active": True, "plan": "ORO"},
+    "BLENIN-TEST-PLATA": {"hwid": None, "expires": datetime.now() + timedelta(days=30), "active": True, "plan": "PLATA"},
+    "BLENIN-TEST-BRONCE": {"hwid": None, "expires": datetime.now() + timedelta(days=30), "active": True, "plan": "BRONCE"}
 }
+
 trials_db = {} # Base de datos para registrar qué PCs ya usaron la prueba gratuita
 
 # ==========================================
