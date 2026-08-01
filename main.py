@@ -409,7 +409,8 @@ def validate_license(data: LicenseCheck):
         return {"valid": False, "message": "🔒 Esta licencia ya está activada en otra PC."}
         
     days_left = (license_info["expires"] - datetime.now()).days
-    return {"valid": True, "message": f"✅ Licencia activa. Quedan {days_left} días.", "days_left": days_left}
+    # ✅ AQUÍ SE DEVUELVE EL PLAN (BRONCE, PLATA, ORO) PARA QUE EL BOT BLOQUEE FUNCIONES
+    return {"valid": True, "message": f"✅ Licencia activa. Plan {license_info['plan']}. Quedan {days_left} días.", "days_left": days_left, "plan": license_info["plan"]}
 
 @app.post("/api/create_license")
 def create_license(data: LicenseCreate):
@@ -419,7 +420,7 @@ def create_license(data: LicenseCreate):
         "hwid": None,
         "expires": datetime.now() + timedelta(days=data.duration_days),
         "active": True,
-        "plan": data.plan
+        "plan": data.plan.upper()
     }
     return {"status": "success", "key": key}
 
