@@ -147,6 +147,7 @@ landing_html = """
         </div>
     </div>
 
+    <!-- INICIO FORMULARIO MAILERLITE -->
     <div class="section" style="max-width: 600px; margin: 0 auto 60px auto;">
         <style type="text/css">@import url("https://assets.mlcdn.com/fonts.css?version=1785409");</style>
         <style type="text/css">
@@ -317,11 +318,14 @@ landing_html = """
 # ==========================================
 db_trades = []
 
+# ✅ FECHA FIJA PARA QUE LOS DÍAS REALMENTE BAJEN (Ej: 15 de Septiembre 2026)
+TEST_EXPIRY_DATE = datetime(2026, 9, 15)
+
 # ✅ CLAVES DE PRUEBA PARA PROBAR LOS 3 PLANES
 licenses_db = {
-    "BLENIN-TEST-ORO": {"hwid": None, "expires": datetime.now() + timedelta(days=30), "active": True, "plan": "ORO"},
-    "BLENIN-TEST-PLATA": {"hwid": None, "expires": datetime.now() + timedelta(days=30), "active": True, "plan": "PLATA"},
-    "BLENIN-TEST-BRONCE": {"hwid": None, "expires": datetime.now() + timedelta(days=30), "active": True, "plan": "BRONCE"}
+    "BLENIN-TEST-ORO": {"hwid": None, "expires": TEST_EXPIRY_DATE, "active": True, "plan": "ORO"},
+    "BLENIN-TEST-PLATA": {"hwid": None, "expires": TEST_EXPIRY_DATE, "active": True, "plan": "PLATA"},
+    "BLENIN-TEST-BRONCE": {"hwid": None, "expires": TEST_EXPIRY_DATE, "active": True, "plan": "BRONCE"}
 }
 
 trials_db = {} # Base de datos para registrar qué PCs ya usaron la prueba gratuita
