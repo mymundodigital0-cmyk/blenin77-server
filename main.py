@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -319,7 +320,7 @@ landing_html = """
 db_trades = []
 
 # ✅ FECHA FIJA PARA QUE LOS DÍAS REALMENTE BAJEN (Ej: 15 de Septiembre 2026)
-TEST_EXPIRY_DATE = datetime(2026, 9, 15)
+TEST_EXPIRY_DATE = datetime(2026, 9, 2)
 
 # ✅ CLAVES DE PRUEBA PARA PROBAR LOS 3 PLANES
 licenses_db = {
