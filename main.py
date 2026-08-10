@@ -27,7 +27,7 @@ JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SMTP_EMAIL = "mymundodigital0@gmail.com"
-SMTP_PASSWORD = "ysdoqcmnevrnnogy" # ✅ Tu contraseña de aplicación de Google ya configurada
+SMTP_PASSWORD = "ysdoqcmnevrnnogy" # ✅ Tu contraseña de aplicación de Google
 
 def send_email(to_email, subject, body):
     try:
@@ -50,17 +50,20 @@ def get_content():
         headers = {"X-Master-Key": JSONBIN_API_KEY}
         resp = requests.get(JSONBIN_URL, headers=headers, timeout=5)
         if resp.status_code == 200:
-            return resp.json()["record"]
+            data = resp.json()["record"]
+            if "videos" not in data: data["videos"] = [] # Compatibilidad hacia atrás
+            return data
     except: pass
     return {
-        "youtube_url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
         "hero_title": "BLENIN.G.77",
         "hero_subtitle": "THE BEST FUTURE FOR YOU",
-        "hero_text": "IA Predictiva, Enjambre de 500 Agentes y Análisis Global en Tiempo Real."
+        "hero_text": "IA Predictiva, Enjambre de 500 Agentes y Análisis Global en Tiempo Real.",
+        "videos": [
+            {"url": "https://www.youtube.com/embed/dQw4w9WgXcQ", "desc": "Mira cómo el Enjambre de Agentes abre operaciones reales."}
+        ]
     }
 
 def save_content(data):
-    """Guarda los nuevos textos y videos en JSONBin"""
     try:
         headers = {"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}
         requests.put(JSONBIN_URL, json=data, headers=headers, timeout=5)
@@ -68,21 +71,29 @@ def save_content(data):
     except: return False
 
 # ==========================================
-# 🎛️ PANEL DE ADMINISTRACIÓN (OCULTO)
+# 🎛️ PANEL DE ADMINISTRACIÓN (Con Múltiples Videos)
 # ==========================================
 @app.get("/admin", response_class=HTMLResponse)
 def admin_panel():
     c = get_content()
+    videos = c.get('videos', [])
+    
+    # Generar inputs de videos existentes en formato JSON para que JS los lea
+    videos_json = str(videos).replace("'", '"').replace('"', '&quot;')
+    
     return f"""
     <html><head><title>Admin Panel - BLENIN77</title>
-    <style>body{{font-family:sans-serif;background:#1e293b;color:#fff;padding:40px;max-width:800px;margin:auto;}}
-    input,textarea{{width:100%;padding:10px;margin:10px 0;border-radius:5px;border:none;background:#334155;color:#fff;}}
-    button{{background:#00e5ff;color:#000;padding:15px 30px;border:none;border-radius:5px;font-weight:bold;cursor:pointer;}}
+    <style>
+        body{{font-family:sans-serif;background:#1e293b;color:#fff;padding:40px;max-width:800px;margin:auto;}}
+        input,textarea{{width:100%;padding:10px;margin:10px 0;border-radius:5px;border:none;background:#334155;color:#fff;box-sizing:border-box;}}
+        button{{background:#00e5ff;color:#000;padding:15px 30px;border:none;border-radius:5px;font-weight:bold;cursor:pointer;}}
+        .video-row{{background:#0f172a;padding:15px;border-radius:8px;margin-bottom:15px;border:1px solid #334155;}}
+        .btn-del{{background:#ef4444;color:white;padding:8px 15px;font-size:12px;}}
+        .btn-add{{background:#10b981;color:white;padding:10px 20px;font-size:14px;margin-bottom:20px;}}
     </style></head>
     <body><h1>🎛️ Panel de Control de la Página Web</h1>
-    <label>URL del Video de YouTube (Embed):</label>
-    <input type="text" id="youtube_url" value="{c.get('youtube_url', '')}" required>
     
+    <h3>Textos Principales</h3>
     <label>Título Principal (H1):</label>
     <input type="text" id="hero_title" value="{c.get('hero_title', '')}" required>
     
@@ -90,19 +101,55 @@ def admin_panel():
     <input type="text" id="hero_subtitle" value="{c.get('hero_subtitle', '')}" required>
     
     <label>Texto descriptivo:</label>
-    <textarea id="hero_text" rows="4" required>{c.get('hero_text', '')}</textarea>
-    
+    <textarea id="hero_text" rows="3" required>{c.get('hero_text', '')}</textarea>
+
+    <h3>Videos de YouTube</h3>
+    <div id="videos-container"></div>
+    <button class="btn-add" onclick="addVideoRow()">➕ Agregar Nuevo Video</button>
+    <br><br>
     <button onclick="saveData()">💾 Guardar y Publicar Cambios</button>
-    <p id="msg" style="color:green;font-weight:bold;"></p>
+    <p id="msg" style="color:green;font-weight:bold;font-size:18px;"></p>
 
     <script>
+    const existingVideos = {videos_json};
+    
+    function addVideoRow(url = '', desc = '') {{
+        const container = document.getElementById('videos-container');
+        const div = document.createElement('div');
+        div.className = 'video-row';
+        div.innerHTML = `
+            <input type="text" class="v-url" placeholder="URL Embed de YouTube (ej: https://www.youtube.com/embed/1234)" value="${{url}}">
+            <textarea class="v-desc" placeholder="Anuncio o descripción de referencia del video">${{desc}}</textarea>
+            <button class="btn-del" onclick="this.parentElement.remove()">🗑️ Eliminar Video</button>
+        `;
+        container.appendChild(div);
+    }}
+
+    // Cargar videos existentes al abrir el panel
+    if(existingVideos.length === 0) {{
+        addVideoRow();
+    }} else {{
+        existingVideos.forEach(v => addVideoRow(v.url, v.desc));
+    }}
+
     async function saveData() {{
+        const urlInputs = document.querySelectorAll('.v-url');
+        const descInputs = document.querySelectorAll('.v-desc');
+        let videosArray = [];
+        
+        for(let i=0; i<urlInputs.length; i++) {{
+            if(urlInputs[i].value.trim() !== '') {{
+                videosArray.push({{url: urlInputs[i].value, desc: descInputs[i].value}});
+            }}
+        }}
+
         const data = {{
-            youtube_url: document.getElementById('youtube_url').value,
             hero_title: document.getElementById('hero_title').value,
             hero_subtitle: document.getElementById('hero_subtitle').value,
-            hero_text: document.getElementById('hero_text').value
+            hero_text: document.getElementById('hero_text').value,
+            videos: videosArray
         }};
+        
         const res = await fetch('/api/save_content', {{
             method: 'POST',
             headers: {{'Content-Type': 'application/json'}},
@@ -159,6 +206,18 @@ def recover_page():
 @app.get("/", response_class=HTMLResponse)
 def read_root():
     c = get_content()
+    
+    # Generar el HTML dinámico para todos los videos
+    videos_html = ""
+    for v in c.get('videos', []):
+        if v.get('url'):
+            videos_html += f"""
+            <div style="text-align: center; margin-bottom: 50px;">
+                <iframe src="{v['url']}" width="560" height="315" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="border-radius: 10px; border: 2px solid var(--cyan); max-width: 100%;"></iframe>
+                <p style="margin-top: 15px; font-size: 1.1rem; color: #94a3b8; max-width: 600px; margin-left: auto; margin-right: auto;">{v.get('desc', '')}</p>
+            </div>
+            """
+
     return f"""
 <!DOCTYPE html>
 <html lang="es">
@@ -187,8 +246,7 @@ def read_root():
         .card {{ background: var(--card); padding: 30px; border-radius: 15px; border: 1px solid #334155; transition: 0.3s; }}
         .card:hover {{ transform: translateY(-5px); border-color: var(--cyan); }}
         .card h3 {{ color: var(--cyan); font-size: 1.5rem; margin-top: 0; }}
-        .video-container {{ display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }}
-        .video-container iframe {{ width: 560px; height: 315px; border-radius: 10px; border: 2px solid var(--cyan); max-width: 100%; }}
+        .video-container {{ display: flex; flex-direction: column; align-items: center; gap: 20px; flex-wrap: wrap; }}
         footer {{ background: #000; padding: 40px 20px; text-align: center; margin-top: 0; }}
         .copyright {{ color: #64748b; font-size: 0.9rem; max-width: 800px; margin: 0 auto; }}
     </style>
@@ -221,7 +279,7 @@ def read_root():
     <div id="videos" class="section">
         <h2>Mira al Sistema en Acción</h2>
         <div class="video-container">
-            <iframe src="{c.get('youtube_url')}" title="Video 1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            {videos_html}
         </div>
     </div>
 
