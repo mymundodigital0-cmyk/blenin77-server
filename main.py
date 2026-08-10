@@ -52,6 +52,7 @@ def get_content():
             data = resp.json()["record"]
             if "publications" not in data: data["publications"] = []
             if "plans" not in data: data["plans"] = []
+            if "social_links" not in data: data["social_links"] = {}
             return data
     except: pass
     return {
@@ -65,7 +66,10 @@ def get_content():
             {"name": "🥉 Bronce", "price": "$49", "features": "✅ 1 Cuenta MT5\n✅ Modo MT5 Puro", "link": "https://buy.stripe.com/test_4gw3eq8eV6YX7OEdQQ", "highlight": False},
             {"name": "🥈 Plata", "price": "$99", "features": "✅ 2 Cuentas MT5\n✅ Modo Híbrido + Enjambre", "link": "https://buy.stripe.com/test_28o5mA4gF2AS5xO000", "highlight": True},
             {"name": "🥇 Oro", "price": "$199", "features": "✅ Cuentas Ilimitadas\n✅ Deep Learning (PyTorch)", "link": "https://buy.stripe.com/test_8wM3eqdEj9zC5xO146", "highlight": False}
-        ]
+        ],
+        "social_links": {
+            "facebook": "", "whatsapp": "", "youtube": "", "tiktok": "", "telegram": "", "instagram": ""
+        }
     }
 
 def save_content(data):
@@ -83,6 +87,7 @@ def admin_panel():
     c = get_content()
     pubs = c.get('publications', [])
     plans = c.get('plans', [])
+    social = c.get('social_links', {})
     
     pubs_json = str(pubs).replace("'", '"').replace('"', '&quot;')
     plans_json = str(plans).replace("'", '"').replace('"', '&quot;')
@@ -115,6 +120,20 @@ def admin_panel():
     <h3>Planes de Suscripción</h3>
     <div id="plans-container"></div>
     <button class="btn-add" onclick="addPlanRow()">➕ Agregar Nuevo Plan</button>
+
+    <h3>Redes Sociales (Deja en blanco para ocultar)</h3>
+    <label>Facebook (URL):</label>
+    <input type="text" id="fb_link" placeholder="https://facebook.com/..." value="{social.get('facebook', '')}">
+    <label>WhatsApp (URL):</label>
+    <input type="text" id="wa_link" placeholder="https://wa.me/593..." value="{social.get('whatsapp', '')}">
+    <label>YouTube (URL):</label>
+    <input type="text" id="yt_link" placeholder="https://youtube.com/..." value="{social.get('youtube', '')}">
+    <label>TikTok (URL):</label>
+    <input type="text" id="tt_link" placeholder="https://tiktok.com/..." value="{social.get('tiktok', '')}">
+    <label>Telegram (URL):</label>
+    <input type="text" id="tg_link" placeholder="https://t.me/..." value="{social.get('telegram', '')}">
+    <label>Instagram (URL):</label>
+    <input type="text" id="ig_link" placeholder="https://instagram.com/..." value="{social.get('instagram', '')}">
 
     <br><br>
     <button onclick="saveData()">💾 Guardar y Publicar Cambios</button>
@@ -200,7 +219,15 @@ def admin_panel():
             hero_subtitle: document.getElementById('hero_subtitle').value,
             hero_text: document.getElementById('hero_text').value,
             publications: pubsArray,
-            plans: plansArray
+            plans: plansArray,
+            social_links: {{
+                facebook: document.getElementById('fb_link').value,
+                whatsapp: document.getElementById('wa_link').value,
+                youtube: document.getElementById('yt_link').value,
+                tiktok: document.getElementById('tt_link').value,
+                telegram: document.getElementById('tg_link').value,
+                instagram: document.getElementById('ig_link').value
+            }}
         }};
         
         const res = await fetch('/api/save_content', {{
@@ -260,7 +287,7 @@ def recover_page():
 def read_root():
     c = get_content()
     
-    # Generar HTML de Publicaciones (Videos/Imágenes)
+    # Generar HTML de Publicaciones
     pubs_html = ""
     for p in c.get('publications', []):
         if p.get('url'):
@@ -294,7 +321,16 @@ def read_root():
             </div>
             """
 
-    # Plantilla principal usando string replace para no romper el CSS/JS de MailerLite
+    # Generar HTML de Redes Sociales dinámicamente
+    social = c.get('social_links', {})
+    social_html = ""
+    if social.get('facebook'): social_html += f'<a href="{social["facebook"]}" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>'
+    if social.get('whatsapp'): social_html += f'<a href="{social["whatsapp"]}" target="_blank" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>'
+    if social.get('youtube'): social_html += f'<a href="{social["youtube"]}" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>'
+    if social.get('tiktok'): social_html += f'<a href="{social["tiktok"]}" target="_blank" title="TikTok"><i class="fab fa-tiktok"></i></a>'
+    if social.get('telegram'): social_html += f'<a href="{social["telegram"]}" target="_blank" title="Telegram"><i class="fab fa-telegram-plane"></i></a>'
+    if social.get('instagram'): social_html += f'<a href="{social["instagram"]}" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>'
+
     template = """<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -516,12 +552,7 @@ def read_root():
     <div class="social-footer">
         <h3>Síguenos en nuestras redes</h3>
         <div class="social-icons-footer">
-            <a href="TU_ENLACE_FACEBOOK_AQUI" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>
-            <a href="TU_ENLACE_WHATSAPP_AQUI" target="_blank" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
-            <a href="TU_ENLACE_YOUTUBE_AQUI" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>
-            <a href="TU_ENLACE_TIKTOK_AQUI" target="_blank" title="TikTok"><i class="fab fa-tiktok"></i></a>
-            <a href="TU_ENLACE_TELEGRAM_AQUI" target="_blank" title="Telegram"><i class="fab fa-telegram-plane"></i></a>
-            <a href="TU_ENLACE_INSTAGRAM_AQUI" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+            {SOCIAL_HTML}
         </div>
     </div>
 
@@ -538,7 +569,7 @@ def read_root():
 </body>
 </html>"""
 
-    return template.replace("{HERO_TITLE}", c.get('hero_title', '')).replace("{HERO_SUBTITLE}", c.get('hero_subtitle', '')).replace("{HERO_TEXT}", c.get('hero_text', '')).replace("{PUBLICATIONS_HTML}", pubs_html).replace("{PLANS_HTML}", plans_html)
+    return template.replace("{HERO_TITLE}", c.get('hero_title', '')).replace("{HERO_SUBTITLE}", c.get('hero_subtitle', '')).replace("{HERO_TEXT}", c.get('hero_text', '')).replace("{PUBLICATIONS_HTML}", pubs_html).replace("{PLANS_HTML}", plans_html).replace("{SOCIAL_HTML}", social_html)
 
 # ==========================================
 # 🧠 BASES DE DATOS Y RUTAS API (Licencias, IA, etc.)
