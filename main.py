@@ -4,7 +4,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from collections import defaultdict
 from datetime import datetime, timedelta
-import random, string, smtplib, os, requests
+import random, string, smtplib, os, requests, json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -45,21 +45,29 @@ def send_email(to_email, subject, body):
     except: return False
 
 def get_content():
-    """Lee los textos y videos desde JSONBin"""
+    """Lee los textos, videos y planes desde JSONBin"""
     try:
         headers = {"X-Master-Key": JSONBIN_API_KEY}
         resp = requests.get(JSONBIN_URL, headers=headers, timeout=5)
         if resp.status_code == 200:
             data = resp.json()["record"]
-            if "videos" not in data: data["videos"] = [] # Compatibilidad hacia atrás
+            if "videos" not in data: data["videos"] = []
+            if "plans" not in data: data["plans"] = []
             return data
     except: pass
+    
+    # Valores por defecto si falla la conexión o es la primera vez
     return {
         "hero_title": "BLENIN.G.77",
         "hero_subtitle": "THE BEST FUTURE FOR YOU",
         "hero_text": "IA Predictiva, Enjambre de 500 Agentes y Análisis Global en Tiempo Real.",
         "videos": [
             {"url": "https://www.youtube.com/embed/dQw4w9WgXcQ", "desc": "Mira cómo el Enjambre de Agentes abre operaciones reales."}
+        ],
+        "plans": [
+            {"name": "🥉 Bronce", "price": "$49", "features": "✅ 1 Cuenta MT5\n✅ Modo MT5 Puro", "link": "https://buy.stripe.com/test_4gw3eq8eV6YX7OEdQQ", "highlight": False},
+            {"name": "🥈 Plata", "price": "$99", "features": "✅ 2 Cuentas MT5\n✅ Modo Híbrido + Enjambre", "link": "https://buy.stripe.com/test_28o5mA4gF2AS5xO000", "highlight": True},
+            {"name": "🥇 Oro", "price": "$199", "features": "✅ Cuentas Ilimitadas\n✅ Deep Learning (PyTorch)", "link": "https://buy.stripe.com/test_8wM3eqdEj9zC5xO146", "highlight": False}
         ]
     }
 
@@ -71,83 +79,114 @@ def save_content(data):
     except: return False
 
 # ==========================================
-# 🎛️ PANEL DE ADMINISTRACIÓN (Con Múltiples Videos)
+# 🎛️ PANEL DE ADMINISTRACIÓN (Texto, Videos y Planes)
 # ==========================================
 @app.get("/admin", response_class=HTMLResponse)
 def admin_panel():
     c = get_content()
     videos = c.get('videos', [])
+    plans = c.get('plans', [])
     
-    # Generar inputs de videos existentes en formato JSON para que JS los lea
     videos_json = str(videos).replace("'", '"').replace('"', '&quot;')
+    plans_json = str(plans).replace("'", '"').replace('"', '&quot;')
     
     return f"""
     <html><head><title>Admin Panel - BLENIN77</title>
     <style>
         body{{font-family:sans-serif;background:#1e293b;color:#fff;padding:40px;max-width:800px;margin:auto;}}
-        input,textarea{{width:100%;padding:10px;margin:10px 0;border-radius:5px;border:none;background:#334155;color:#fff;box-sizing:border-box;}}
+        input,textarea,select{{width:100%;padding:10px;margin:10px 0;border-radius:5px;border:none;background:#334155;color:#fff;box-sizing:border-box;}}
         button{{background:#00e5ff;color:#000;padding:15px 30px;border:none;border-radius:5px;font-weight:bold;cursor:pointer;}}
-        .video-row{{background:#0f172a;padding:15px;border-radius:8px;margin-bottom:15px;border:1px solid #334155;}}
+        .row{{background:#0f172a;padding:15px;border-radius:8px;margin-bottom:15px;border:1px solid #334155;}}
         .btn-del{{background:#ef4444;color:white;padding:8px 15px;font-size:12px;}}
         .btn-add{{background:#10b981;color:white;padding:10px 20px;font-size:14px;margin-bottom:20px;}}
+        h3{{border-bottom:1px solid #334155;padding-bottom:10px;margin-top:40px;}}
     </style></head>
     <body><h1>🎛️ Panel de Control de la Página Web</h1>
     
     <h3>Textos Principales</h3>
     <label>Título Principal (H1):</label>
     <input type="text" id="hero_title" value="{c.get('hero_title', '')}" required>
-    
     <label>Subtítulo (H2):</label>
     <input type="text" id="hero_subtitle" value="{c.get('hero_subtitle', '')}" required>
-    
     <label>Texto descriptivo:</label>
     <textarea id="hero_text" rows="3" required>{c.get('hero_text', '')}</textarea>
 
     <h3>Videos de YouTube</h3>
     <div id="videos-container"></div>
     <button class="btn-add" onclick="addVideoRow()">➕ Agregar Nuevo Video</button>
+
+    <h3>Planes de Suscripción</h3>
+    <div id="plans-container"></div>
+    <button class="btn-add" onclick="addPlanRow()">➕ Agregar Nuevo Plan</button>
+
     <br><br>
     <button onclick="saveData()">💾 Guardar y Publicar Cambios</button>
     <p id="msg" style="color:green;font-weight:bold;font-size:18px;"></p>
 
     <script>
     const existingVideos = {videos_json};
+    const existingPlans = {plans_json};
     
     function addVideoRow(url = '', desc = '') {{
         const container = document.getElementById('videos-container');
         const div = document.createElement('div');
-        div.className = 'video-row';
+        div.className = 'row';
         div.innerHTML = `
-            <input type="text" class="v-url" placeholder="URL Embed de YouTube (ej: https://www.youtube.com/embed/1234)" value="${{url}}">
-            <textarea class="v-desc" placeholder="Anuncio o descripción de referencia del video">${{desc}}</textarea>
+            <input type="text" class="v-url" placeholder="URL Embed de YouTube" value="${{url}}">
+            <textarea class="v-desc" placeholder="Anuncio o descripción">${{desc}}</textarea>
             <button class="btn-del" onclick="this.parentElement.remove()">🗑️ Eliminar Video</button>
         `;
         container.appendChild(div);
     }}
 
-    // Cargar videos existentes al abrir el panel
-    if(existingVideos.length === 0) {{
-        addVideoRow();
-    }} else {{
-        existingVideos.forEach(v => addVideoRow(v.url, v.desc));
+    function addPlanRow(name = '', price = '', features = '', link = '', highlight = false) {{
+        const container = document.getElementById('plans-container');
+        const div = document.createElement('div');
+        div.className = 'row';
+        div.innerHTML = `
+            <input type="text" class="p-name" placeholder="Nombre del Plan (ej. 🥈 Plata)" value="${{name}}">
+            <input type="text" class="p-price" placeholder="Precio (ej. $99)" value="${{price}}">
+            <textarea class="p-features" placeholder="Características (usa Enter para saltos de línea)">${{features}}</textarea>
+            <input type="text" class="p-link" placeholder="Enlace de pago de Stripe" value="${{link}}">
+            <label><input type="checkbox" class="p-highlight" ${{highlight ? 'checked' : ''}}> Resaltar este plan (borde cian)</label>
+            <button class="btn-del" onclick="this.parentElement.remove()">🗑️ Eliminar Plan</button>
+        `;
+        container.appendChild(div);
     }}
 
+    if(existingVideos.length === 0) addVideoRow();
+    else existingVideos.forEach(v => addVideoRow(v.url, v.desc));
+
+    if(existingPlans.length === 0) addPlanRow();
+    else existingPlans.forEach(p => addPlanRow(p.name, p.price, p.features, p.link, p.highlight));
+
     async function saveData() {{
-        const urlInputs = document.querySelectorAll('.v-url');
-        const descInputs = document.querySelectorAll('.v-desc');
         let videosArray = [];
-        
-        for(let i=0; i<urlInputs.length; i++) {{
-            if(urlInputs[i].value.trim() !== '') {{
-                videosArray.push({{url: urlInputs[i].value, desc: descInputs[i].value}});
+        document.querySelectorAll('#videos-container .row').forEach(div => {{
+            const url = div.querySelector('.v-url').value;
+            if(url.trim()) videosArray.push({{url: url, desc: div.querySelector('.v-desc').value}});
+        }});
+
+        let plansArray = [];
+        document.querySelectorAll('#plans-container .row').forEach(div => {{
+            const name = div.querySelector('.p-name').value;
+            if(name.trim()) {{
+                plansArray.push({{
+                    name: name,
+                    price: div.querySelector('.p-price').value,
+                    features: div.querySelector('.p-features').value,
+                    link: div.querySelector('.p-link').value,
+                    highlight: div.querySelector('.p-highlight').checked
+                }});
             }}
-        }}
+        }});
 
         const data = {{
             hero_title: document.getElementById('hero_title').value,
             hero_subtitle: document.getElementById('hero_subtitle').value,
             hero_text: document.getElementById('hero_text').value,
-            videos: videosArray
+            videos: videosArray,
+            plans: plansArray
         }};
         
         const res = await fetch('/api/save_content', {{
@@ -218,6 +257,21 @@ def read_root():
             </div>
             """
 
+    # Generar el HTML dinámico para los planes de suscripción
+    plans_html = ""
+    for p in c.get('plans', []):
+        if p.get('name'):
+            highlight_style = "border: 2px solid var(--cyan); transform: scale(1.05);" if p.get('highlight') else ""
+            features_html = p.get('features', '').replace('\n', '<br>')
+            plans_html += f"""
+            <div class="card" style="{highlight_style}">
+                <h3>{p.get('name', '')}</h3>
+                <div style="font-size: 2rem; color: var(--cyan); margin: 15px 0;">{p.get('price', '')}<span style="font-size:1rem; color:#94a3b8;">/mes</span></div>
+                <p>{features_html}</p>
+                <a href="{p.get('link', '#')}" class="btn-primary" style="margin-top: 20px;">Suscribirme</a>
+            </div>
+            """
+
     return f"""
 <!DOCTYPE html>
 <html lang="es">
@@ -234,10 +288,13 @@ def read_root():
         nav ul {{ list-style: none; display: flex; gap: 20px; }}
         nav ul li a {{ color: var(--text); text-decoration: none; transition: 0.3s; }}
         nav ul li a:hover {{ color: var(--cyan); }}
-        .hero {{ text-align: center; padding: 120px 20px; background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(13, 27, 42, 0.9)), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; color: white; }}
-        .hero h1 {{ font-size: 2.5rem; color: var(--cyan); margin: 0; text-shadow: 0 0 20px rgba(0, 0, 0, 0.8); }}
-        .hero h2 {{ font-size: 1.2rem; color: #fff; margin: 10px 0; text-shadow: 1px 1px 4px rgba(0,0,0,0.8); font-weight: normal; }}
-        .hero p {{ font-size: 1.3rem; max-width: 600px; margin: 20px auto; color: #e0e1dd; text-shadow: 1px 1px 4px rgba(0,0,0,0.8); }}
+        
+        /* ✅ MEJORA DE IMAGEN: Degradado más claro en la parte superior para iluminar la foto */
+        .hero {{ text-align: center; padding: 120px 20px; background: linear-gradient(to bottom, rgba(0, 0, 0, 0.2) 0%, rgba(13, 27, 42, 0.8) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; color: white; }}
+        .hero h1 {{ font-size: 2.5rem; color: var(--cyan); margin: 0; text-shadow: 0 0 20px rgba(0, 0, 0, 1); }}
+        .hero h2 {{ font-size: 1.2rem; color: #fff; margin: 10px 0; text-shadow: 2px 2px 4px rgba(0,0,0,1); font-weight: normal; }}
+        .hero p {{ font-size: 1.3rem; max-width: 600px; margin: 20px auto; color: #e0e1dd; text-shadow: 2px 2px 4px rgba(0,0,0,1); }}
+        
         .btn-primary {{ background: var(--cyan); color: #000; padding: 15px 30px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 1rem; transition: 0.3s; text-decoration: none; display: inline-block; }}
         .btn-primary:hover {{ background: #fff; transform: translateY(-2px); }}
         .section {{ padding: 60px 10%; max-width: 1200px; margin: 0 auto; }}
@@ -286,9 +343,7 @@ def read_root():
     <div id="pricing" class="section">
         <h2>Planes de Suscripción</h2>
         <div class="grid-3">
-            <div class="card"><h3>🥉 Bronce</h3><div style="font-size: 2rem; color: var(--cyan); margin: 15px 0;">$49<span style="font-size:1rem; color:#94a3b8;">/mes</span></div><p>✅ 1 Cuenta MT5</p><a href="https://buy.stripe.com/test_4gw3eq8eV6YX7OEdQQ" class="btn-primary" style="margin-top: 20px;">Suscribirme</a></div>
-            <div class="card" style="border: 2px solid var(--cyan); transform: scale(1.05);"><h3>🥈 Plata</h3><div style="font-size: 2rem; color: var(--cyan); margin: 15px 0;">$99<span style="font-size:1rem; color:#94a3b8;">/mes</span></div><p>✅ 2 Cuentas MT5</p><a href="https://buy.stripe.com/test_28o5mA4gF2AS5xO000" class="btn-primary" style="margin-top: 20px;">Suscribirme</a></div>
-            <div class="card"><h3>🥇 Oro</h3><div style="font-size: 2rem; color: var(--cyan); margin: 15px 0;">$199<span style="font-size:1rem; color:#94a3b8;">/mes</span></div><p>✅ Cuentas Ilimitadas</p><a href="https://buy.stripe.com/test_8wM3eqdEj9zC5xO146" class="btn-primary" style="margin-top: 20px;">Suscribirme</a></div>
+            {plans_html}
         </div>
     </div>
 
