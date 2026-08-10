@@ -27,7 +27,7 @@ JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SMTP_EMAIL = "mymundodigital0@gmail.com"
-SMTP_PASSWORD = "TU_CONTRASEÑA_DE_APLICACION_AQUI"
+SMTP_PASSWORD = "ysdoqcmnevrnnogy" # ✅ Tu contraseña de aplicación de Google ya configurada
 
 def send_email(to_email, subject, body):
     try:
@@ -122,6 +122,38 @@ def api_save_content(data: dict):
     return {"message": "❌ Error al guardar. Revisa las variables de entorno en Render."}
 
 # ==========================================
+# 🌐 PÁGINA WEB DE RECUPERACIÓN DE CLAVE
+# ==========================================
+@app.get("/recuperar-clave", response_class=HTMLResponse)
+def recover_page():
+    return """
+    <html><head><title>Recuperar Licencia - BLENIN77</title>
+    <style>body{font-family:sans-serif;background:#0d1b2a;color:white;text-align:center;padding:50px;}
+    input{padding:15px;width:300px;border-radius:5px;border:none;margin:10px;font-size:16px;}
+    button{padding:15px 30px;background:#00e5ff;color:black;border:none;border-radius:5px;font-weight:bold;cursor:pointer;font-size:16px;}
+    #msg{margin-top:20px;font-size:18px;color:#4caf50;font-weight:bold;}
+    </style></head>
+    <body><h1>🔑 Recuperar Licencia BLENIN77</h1>
+    <p>Ingresa el correo electrónico con el que realizaste tu compra:</p>
+    <input type="email" id="email" placeholder="tu.correo@gmail.com">
+    <br><button onclick="recover()">Enviar mi licencia por correo</button>
+    <div id="msg"></div>
+    <script>
+    function recover(){
+        var email = document.getElementById('email').value;
+        fetch('/api/recover_by_email', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email: email})
+        }).then(r => r.json()).then(d => {
+            document.getElementById('msg').innerText = d.message;
+        });
+    }
+    </script>
+    </body></html>
+    """
+
+# ==========================================
 # 🌐 PÁGINA WEB DE VENTAS (Landing Page)
 # ==========================================
 @app.get("/", response_class=HTMLResponse)
@@ -205,6 +237,13 @@ def read_root():
     <footer>
         <p class="copyright">&copy; 2026 BLENIN.G.77 THE BEST FUTURE FOR YOU. Todos los derechos reservados. Creado por Lenin Benitez.</p>
     </footer>
+
+    <!-- 🤖 INICIO AGENTE IA DE SOPORTE (Chatbase) -->
+    <script>
+    (function(){{if(!window.chatbase||window.chatbase("getState")!=="initialized"){{window.chatbase=(...arguments)=>{{if(!window.chatbase.q){{window.chatbase.q=[]}}window.chatbase.q.push(arguments)}};window.chatbase=new Proxy(window.chatbase,{{get(target,prop){{if(prop==="q"){{return target.q}}return(...args)=>target(prop,...args)}}}})}}const onLoad=function(){{const script=document.createElement("script");script.src="https://www.chatbase.co/embed.min.js";script.id="gzEjAzK1VCE72hJ_hBfA4";script.domain="www.chatbase.co";document.body.appendChild(script)}};if(document.readyState==="complete"){{onLoad()}}else{{window.addEventListener("load",onLoad)}}}})();
+    </script>
+    <!-- 🤖 FIN AGENTE IA DE SOPORTE -->
+
 </body>
 </html>
 """
