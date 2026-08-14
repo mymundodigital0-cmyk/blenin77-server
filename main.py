@@ -24,14 +24,13 @@ JSONBIN_BIN_ID = os.environ.get("JSONBIN_BIN_ID", "")
 JSONBIN_API_KEY = os.environ.get("JSONBIN_API_KEY", "")
 JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
 
-# ✅ BASE DE DATOS PERMANENTE EN LA NUBE (Licencias y Pruebas)
 JSONBIN_DB_ID = os.environ.get("JSONBIN_DB_ID", "")
 JSONBIN_DB_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_DB_ID}"
 
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SMTP_EMAIL = "mymundodigital0@gmail.com"
-SMTP_PASSWORD = "ysdoqcmnevrnnogy" # ✅ Tu contraseña de aplicación de Google
+SMTP_PASSWORD = "ysdoqcmnevrnnogy" 
 
 def send_email(to_email, subject, body):
     try:
@@ -49,10 +48,9 @@ def send_email(to_email, subject, body):
     except: return False
 
 # ==========================================
-# 🧠 SISTEMA DE BASE DE DATOS EN LA NUBE (Anti-Reset)
+# 🧠 SISTEMA DE BASE DE DATOS EN LA NUBE
 # ==========================================
 def load_dbs():
-    """Carga las licencias y pruebas desde JSONBin para no perderlas al reiniciar"""
     try:
         headers = {"X-Master-Key": JSONBIN_API_KEY}
         resp = requests.get(JSONBIN_DB_URL, headers=headers, timeout=5)
@@ -63,17 +61,14 @@ def load_dbs():
     return {}, {}
 
 def save_dbs(lic, trials):
-    """Guarda las licencias y pruebas en JSONBin permanentemente"""
     try:
         headers = {"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}
         data = {"licenses_db": lic, "trials_db": trials}
         requests.put(JSONBIN_DB_URL, json=data, headers=headers, timeout=5)
     except: pass
 
-# Cargar bases de datos al arrancar el servidor
 licenses_db, trials_db = load_dbs()
 
-# Si está vacío (primera vez), poner las licencias de prueba
 if not licenses_db:
     licenses_db = {
         "BLENIN-TEST-ORO": {"hwid": None, "expires": "2026-09-15T00:00:00", "active": True, "plan": "ORO", "email": "test-oro@blenin77.com"},
@@ -136,6 +131,7 @@ def admin_panel():
         .btn-del{{background:#ef4444;color:white;padding:8px 15px;font-size:12px;}}
         .btn-add{{background:#10b981;color:white;padding:10px 20px;font-size:14px;margin-bottom:20px;}}
         h3{{border-bottom:1px solid #334155;padding-bottom:10px;margin-top:40px;}}
+        .lic-box{{background:#0f172a;padding:20px;border-radius:8px;border:1px solid #334155;}}
     </style></head>
     <body><h1>🎛️ Panel de Control de la Página Web</h1>
     
@@ -147,7 +143,7 @@ def admin_panel():
     <label>Texto descriptivo:</label>
     <textarea id="hero_text" rows="3" required>{c.get('hero_text', '')}</textarea>
 
-    <h3>Publicaciones (Videos e Imágenes)</h3>
+    <h3>Publicaciones (Editar o Eliminar)</h3>
     <div id="pubs-container"></div>
     <button class="btn-add" onclick="addPubRow()">➕ Agregar Nueva Publicación</button>
 
@@ -169,8 +165,20 @@ def admin_panel():
     <label>Instagram (URL):</label>
     <input type="text" id="ig_link" placeholder="https://instagram.com/..." value="{social.get('instagram', '')}">
 
+    <h3>🛠️ Gestión de Licencias</h3>
+    <div class="lic-box">
+        <p>Inserta una clave de licencia para gestionarla:</p>
+        <input type="text" id="lic_key" placeholder="Ej: BLENIN-ORO-A1B2-C3D4">
+        <div style="display:flex; gap:10px;">
+            <button onclick="manageLic(false)" style="background:#ef4444; color:white;">🚫 Suspender Licencia</button>
+            <button onclick="manageLic(true)" style="background:#10b981; color:white;">✅ Activar Licencia</button>
+            <button onclick="resetHwid()" style="background:#f59e0b; color:black;">🔄 Resetear HWID (Cambio de PC)</button>
+        </div>
+        <p id="lic_msg" style="color:cyan; font-weight:bold; margin-top:15px;"></p>
+    </div>
+
     <br><br>
-    <button onclick="saveData()">💾 Guardar y Publicar Cambios</button>
+    <button onclick="saveData()">💾 Guardar y Publicar Cambios Web</button>
     <p id="msg" style="color:green;font-weight:bold;font-size:18px;"></p>
 
     <script>
@@ -272,6 +280,28 @@ def admin_panel():
         const result = await res.json();
         document.getElementById('msg').innerText = result.message;
     }}
+
+    async function manageLic(activeStatus) {{
+        const key = document.getElementById('lic_key').value;
+        const res = await fetch('/api/manage_license', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{key: key, active: activeStatus}})
+        }});
+        const result = await res.json();
+        document.getElementById('lic_msg').innerText = result.message;
+    }}
+
+    async function resetHwid() {{
+        const key = document.getElementById('lic_key').value;
+        const res = await fetch('/api/reset_hwid', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{key: key}})
+        }});
+        const result = await res.json();
+        document.getElementById('lic_msg').innerText = result.message;
+    }}
     </script>
     </body></html>
     """
@@ -355,12 +385,12 @@ def read_root():
 
     social = c.get('social_links', {})
     social_html = ""
-    if social.get('facebook'): social_html += f'<a href="{social["facebook"]}" target="_blank" title="Facebook"><i class="fab fa-facebook-f"></i></a>'
-    if social.get('whatsapp'): social_html += f'<a href="{social["whatsapp"]}" target="_blank" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>'
-    if social.get('youtube'): social_html += f'<a href="{social["youtube"]}" target="_blank" title="YouTube"><i class="fab fa-youtube"></i></a>'
-    if social.get('tiktok'): social_html += f'<a href="{social["tiktok"]}" target="_blank" title="TikTok"><i class="fab fa-tiktok"></i></a>'
-    if social.get('telegram'): social_html += f'<a href="{social["telegram"]}" target="_blank" title="Telegram"><i class="fab fa-telegram-plane"></i></a>'
-    if social.get('instagram'): social_html += f'<a href="{social["instagram"]}" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>'
+    if social.get('facebook'): social_html += f'<a href="{social["facebook"]}" class="social-btn" target="_blank"><i class="fab fa-facebook-f"></i><span>Facebook</span></a>'
+    if social.get('whatsapp'): social_html += f'<a href="{social["whatsapp"]}" class="social-btn" target="_blank"><i class="fab fa-whatsapp"></i><span>WhatsApp</span></a>'
+    if social.get('youtube'): social_html += f'<a href="{social["youtube"]}" class="social-btn" target="_blank"><i class="fab fa-youtube"></i><span>YouTube</span></a>'
+    if social.get('tiktok'): social_html += f'<a href="{social["tiktok"]}" class="social-btn" target="_blank"><i class="fab fa-tiktok"></i><span>TikTok</span></a>'
+    if social.get('telegram'): social_html += f'<a href="{social["telegram"]}" class="social-btn" target="_blank"><i class="fab fa-telegram-plane"></i><span>Telegram</span></a>'
+    if social.get('instagram'): social_html += f'<a href="{social["instagram"]}" class="social-btn" target="_blank"><i class="fab fa-instagram"></i><span>Instagram</span></a>'
 
     template = """<!DOCTYPE html>
 <html lang="es">
@@ -392,9 +422,10 @@ def read_root():
         .video-container { display: flex; flex-direction: column; align-items: center; gap: 20px; flex-wrap: wrap; }
         .social-footer { text-align: center; margin-top: 40px; }
         .social-footer h3 { color: #fff; margin-bottom: 20px; }
-        .social-icons-footer { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
-        .social-icons-footer a { width: 50px; height: 50px; border-radius: 50%; background: #334155; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; transition: 0.3s; text-decoration: none; }
-        .social-icons-footer a:hover { transform: scale(1.2); background: var(--cyan); color: #000; }
+        .social-icons-footer { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; margin-bottom: 40px; }
+        .social-btn { display: inline-flex; align-items: center; gap: 10px; background: #1b263b; border: 1px solid #334155; color: #fff; padding: 12px 25px; border-radius: 30px; text-decoration: none; font-weight: 600; transition: 0.3s; font-size: 1rem; }
+        .social-btn:hover { transform: translateY(-3px); background: var(--cyan); color: #000; border-color: var(--cyan); }
+        .social-btn i { font-size: 1.3rem; }
         footer { background: #000; padding: 40px 20px; text-align: center; margin-top: 0; }
         .copyright { color: #64748b; font-size: 0.9rem; max-width: 800px; margin: 0 auto; }
         .ml-form-embedWrapper { margin: 30px auto !important; max-width: 400px !important; }
@@ -611,8 +642,11 @@ class TradeData(BaseModel): strategy: str; symbol: str; timeframe: str; outcome:
 class LicenseCheck(BaseModel): key: str; hwid: str
 class LicenseCreate(BaseModel): plan: str; duration_days: int = 30; email: str = ""
 class LicenseAction(BaseModel): key: str
-class TrialRequest(BaseModel): hwid: str
 class RecoveryRequest(BaseModel): email: str
+
+# NUEVOS MODELOS PARA ADMINISTRACIÓN
+class LicenseUpdate(BaseModel): key: str; active: bool = False
+class ResetHWID(BaseModel): key: str
 
 def generate_license_key(plan):
     p1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
@@ -636,7 +670,6 @@ def get_intel():
 
 @app.post("/api/start_trial")
 def start_trial(data: TrialRequest):
-    """Otorga 30 días de prueba y los guarda en la nube para no reiniciarse"""
     global trials_db
     if data.hwid in trials_db:
         expires = datetime.fromisoformat(trials_db[data.hwid]["expires"])
@@ -645,7 +678,7 @@ def start_trial(data: TrialRequest):
         return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": "BRONCE"}
     
     trials_db[data.hwid] = {"expires": (datetime.now() + timedelta(days=30)).isoformat()}
-    save_dbs(licenses_db, trials_db) # ✅ GUARDAR EN NUBE
+    save_dbs(licenses_db, trials_db)
     return {"valid": True, "days_left": 30, "plan": "BRONCE"}
 
 @app.post("/api/validate_license")
@@ -654,14 +687,14 @@ def validate_license(data: LicenseCheck):
     key = data.key.upper().strip()
     if key not in licenses_db: return {"valid": False, "message": "❌ Licencia no encontrada."}
     info = licenses_db[key]
-    if not info["active"]: return {"valid": False, "message": "🚫 Licencia suspendada."}
+    if not info["active"]: return {"valid": False, "message": "🚫 Licencia suspendida."}
     
     expires = datetime.fromisoformat(info["expires"])
     if datetime.now() > expires: return {"valid": False, "message": "⏳ Expirada."}
     
     if info["hwid"] is None:
         info["hwid"] = data.hwid
-        save_dbs(licenses_db, trials_db) # ✅ GUARDAR HWID EN NUBE
+        save_dbs(licenses_db, trials_db)
     elif info["hwid"] != data.hwid: return {"valid": False, "message": "🔒 En uso en otra PC."}
     
     return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": info["plan"]}
@@ -675,7 +708,7 @@ def create_license(data: LicenseCreate):
         "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(), 
         "active": True, "plan": data.plan.upper(), "email": data.email.lower()
     }
-    save_dbs(licenses_db, trials_db) # ✅ GUARDAR EN NUBE
+    save_dbs(licenses_db, trials_db)
     return {"status": "success", "key": key}
 
 @app.post("/api/recover_by_email")
@@ -685,3 +718,27 @@ def recover_by_email(req: RecoveryRequest):
             send_email(req.email, "🔑 Tu Licencia BLENIN77", f"Tu clave es: {key}\nPlan: {info['plan']}")
             return {"status": "success", "message": "Enviado al correo."}
     return {"status": "error", "message": "Correo no encontrado."}
+
+# NUEVOS ENDPOINTS PARA GESTIONAR LICENCIAS
+@app.post("/api/manage_license")
+def manage_license(data: LicenseUpdate):
+    global licenses_db
+    key = data.key.upper().strip()
+    if key not in licenses_db:
+        return {"status": "error", "message": "❌ Licencia no encontrada."}
+    
+    licenses_db[key]["active"] = data.active
+    save_dbs(licenses_db, trials_db)
+    status = "activada" if data.active else "suspendida"
+    return {"status": "success", "message": f"✅ Licencia {key} {status} correctamente."}
+
+@app.post("/api/reset_hwid")
+def reset_hwid(data: ResetHWID):
+    global licenses_db
+    key = data.key.upper().strip()
+    if key not in licenses_db:
+        return {"status": "error", "message": "❌ Licencia no encontrada."}
+    
+    licenses_db[key]["hwid"] = None
+    save_dbs(licenses_db, trials_db)
+    return {"status": "success", "message": f"✅ HWID reseteado para {key}. El cliente puede usarlo en una nueva PC."}
