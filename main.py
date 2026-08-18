@@ -56,18 +56,18 @@ def load_dbs():
         resp = requests.get(JSONBIN_DB_URL, headers=headers, timeout=5)
         if resp.status_code == 200:
             data = resp.json()["record"]
-            return data.get("licenses_db", {}), data.get("trials_db", {})
+            return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}})
     except: pass
-    return {}, {}
+    return {}, {}, {"views": 0, "countries": {}}
 
-def save_dbs(lic, trials):
+def save_dbs(lic, trials, stats):
     try:
         headers = {"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}
-        data = {"licenses_db": lic, "trials_db": trials}
+        data = {"licenses_db": lic, "trials_db": trials, "stats_db": stats}
         requests.put(JSONBIN_DB_URL, json=data, headers=headers, timeout=5)
     except: pass
 
-licenses_db, trials_db = load_dbs()
+licenses_db, trials_db, stats_db = load_dbs()
 
 if not licenses_db:
     licenses_db = {
@@ -75,7 +75,7 @@ if not licenses_db:
         "BLENIN-TEST-PLATA": {"hwid": None, "expires": "2026-09-15T00:00:00", "active": True, "plan": "PLATA", "email": "test-plata@blenin77.com"},
         "BLENIN-TEST-BRONCE": {"hwid": None, "expires": "2026-09-15T00:00:00", "active": True, "plan": "BRONCE", "email": "test-bronce@blenin77.com"}
     }
-    save_dbs(licenses_db, trials_db)
+    save_dbs(licenses_db, trials_db, stats_db)
 
 def get_content():
     try:
@@ -133,7 +133,8 @@ def admin_panel():
     <nav class="bg-slate-950 p-4 shadow-lg border-b border-slate-800 flex justify-between items-center">
         <h1 class="text-xl font-bold text-cyan-400">🎛️ Panel BLENIN77</h1>
         <div class="flex gap-2 flex-wrap">
-            <button onclick="showTab('web')" id="tab-web" class="tab-active px-4 py-2 rounded text-sm font-medium transition">Página Web</button>
+            <button onclick="showTab('stats')" id="tab-stats" class="tab-active px-4 py-2 rounded text-sm font-medium transition">📊 Estadísticas</button>
+            <button onclick="showTab('web')" id="tab-web" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">Página Web</button>
             <button onclick="showTab('plans')" id="tab-plans" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">Planes</button>
             <button onclick="showTab('lic')" id="tab-lic" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">Licencias</button>
             <button onclick="showTab('social')" id="tab-social" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">Redes</button>
@@ -142,8 +143,26 @@ def admin_panel():
 
     <div class="flex-1 container mx-auto p-6 md:p-10 max-w-4xl">
         
+        <!-- PESTAÑA ESTADÍSTICAS -->
+        <div id="content-stats" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg text-center">
+                    <h3 class="text-sm text-slate-400 uppercase tracking-wider mb-2">Visitas Totales</h3>
+                    <p id="stat_views" class="text-5xl font-extrabold text-cyan-400">0</p>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg text-center">
+                    <h3 class="text-sm text-slate-400 uppercase tracking-wider mb-2">Países Alcanzados</h3>
+                    <p id="stat_countries_count" class="text-5xl font-extrabold text-emerald-400">0</p>
+                </div>
+            </div>
+            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Top Países de Origen</h3>
+                <div id="stat_countries" class="space-y-2"></div>
+            </div>
+        </div>
+
         <!-- PESTAÑA WEB -->
-        <div id="content-web" class="space-y-6">
+        <div id="content-web" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Textos Principales (Hero)</h3>
                 <label class="text-sm text-slate-400">Título Principal (H1)</label>
@@ -209,7 +228,6 @@ def admin_panel():
         </div>
     </footer>
 
-    <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-5 right-5 bg-slate-700 text-white px-4 py-3 rounded-lg shadow-2xl opacity-0 transition-opacity duration-300 pointer-events-none">
         <span id="toast-msg"></span>
     </div>
@@ -219,7 +237,7 @@ def admin_panel():
     const existingPlans = {plans_json};
     
     function showTab(tabId) {{
-        ['web', 'plans', 'lic', 'social'].forEach(id => {{
+        ['stats', 'web', 'plans', 'lic', 'social'].forEach(id => {{
             document.getElementById('content-' + id).classList.add('hidden');
             document.getElementById('tab-' + id).classList.remove('tab-active');
             document.getElementById('tab-' + id).classList.add('bg-slate-800', 'hover:bg-slate-700');
@@ -235,6 +253,24 @@ def admin_panel():
         t.classList.remove('opacity-0');
         setTimeout(() => t.classList.add('opacity-0'), 3000);
     }}
+
+    async function loadStats() {{
+        try {{
+            const res = await fetch('/api/get_stats');
+            const data = await res.json();
+            document.getElementById('stat_views').innerText = data.views || 0;
+            const countries = data.countries || {{}};
+            const countryKeys = Object.keys(countries);
+            document.getElementById('stat_countries_count').innerText = countryKeys.length;
+            
+            let html = '';
+            countryKeys.sort((a,b) => countries[b] - countries[a]).forEach(c => {{
+                html += `<div class="flex justify-between items-center bg-slate-900 p-2 rounded"><span class="text-sm text-slate-300">${{c}}</span><span class="text-cyan-400 font-bold">${{countries[c]}}</span></div>`;
+            }});
+            document.getElementById('stat_countries').innerHTML = html || '<p class="text-slate-500 text-sm">Aún no hay datos.</p>';
+        }} catch (e) {{ console.error(e); }}
+    }}
+    loadStats();
 
     function addPubRow(type = 'video', url = '', desc = '') {{
         const c = document.getElementById('pubs-container');
@@ -440,6 +476,10 @@ def read_root():
         body { font-family: 'Inter', sans-serif; background-color: #020617; }
         .glow { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }
         .hero-bg { background: linear-gradient(to bottom, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; }
+        /* Ocultar la barra superior de Google Translate */
+        .goog-te-banner-frame.skiptranslate {display: none !important;} body {top: 0px !important;}
+        .goog-te-gadget {font-size: 0 !important;}
+        .goog-te-gadget .goog-te-combo {background-color: #1e293b; color: #fff; padding: 5px 10px; border-radius: 5px; border: 1px solid #334155; outline: none; font-size: 12px; margin-top: 5px;}
     </style>
 </head>
 <body class="text-slate-300">
@@ -448,10 +488,11 @@ def read_root():
     <nav class="bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-800">
         <div class="container mx-auto px-6 py-4 flex justify-between items-center">
             <a href="#" class="text-xl font-extrabold text-cyan-400 glow">BLENIN.G.77</a>
-            <div class="hidden md:flex space-x-6 text-sm font-medium">
+            <div class="hidden md:flex space-x-6 text-sm font-medium items-center">
                 <a href="#features" class="hover:text-cyan-400 transition">Tecnología</a>
                 <a href="#videos" class="hover:text-cyan-400 transition">Galería</a>
                 <a href="#pricing" class="hover:text-cyan-400 transition">Precios</a>
+                <div id="google_translate_element"></div>
             </div>
             <a href="#pricing" class="bg-cyan-500 text-slate-900 px-4 py-2 rounded text-sm font-bold hover:bg-cyan-400 transition">Comprar Ahora</a>
         </div>
@@ -651,6 +692,19 @@ def read_root():
     <script>
     (function(){if(!window.chatbase||window.chatbase("getState")!=="initialized"){window.chatbase=(...arguments)=>{if(!window.chatbase.q){window.chatbase.q=[]}window.chatbase.q.push(arguments)};window.chatbase=new Proxy(window.chatbase,{get(target,prop){if(prop==="q"){return target.q}return(...args)=>target(prop,...args)}})}}const onLoad=function(){const script=document.createElement("script");script.src="https://www.chatbase.co/embed.min.js";script.id="gzEjAzK1VCE72hJ_hBfA4";script.domain="www.chatbase.co";document.body.appendChild(script)};if(document.readyState==="complete"){onLoad()}else{window.addEventListener("load",onLoad)}})();
     </script>
+
+    <!-- GOOGLE TRANSLATE WIDGET -->
+    <script type="text/javascript">
+    function googleTranslateElementInit() {
+      new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'en,fr,pt,ru,it,de,zh-CN,ko,hi', layout: google.translate.TranslateElement.InlineLayout.SIMPLE, autoDisplay: false}, 'google_translate_element');
+    }
+    </script>
+    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+    <!-- TRACKING SCRIPT -->
+    <script>
+        fetch('/api/track_view', { method: 'POST' });
+    </script>
 </body>
 </html>"""
 
@@ -672,9 +726,29 @@ class LicenseCreate(BaseModel): plan: str; duration_days: int = 30; email: str =
 class LicenseAction(BaseModel): key: str
 class RecoveryRequest(BaseModel): email: str
 class TrialRequest(BaseModel): hwid: str
-
 class LicenseUpdate(BaseModel): key: str; active: bool = False
 class ResetHWID(BaseModel): key: str
+
+@app.post("/api/track_view")
+def track_view(request: Request):
+    global stats_db
+    try:
+        ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "8.8.8.8").split(",")[0]
+        # Usamos GeoJS (gratuito, sin límites e indefinido para uso general)
+        geo_resp = requests.get(f"https://get.geojs.io/v1/ip/country.json?ip={ip}", timeout=2)
+        country = geo_resp.json().get("country", "Unknown") if geo_resp.status_code == 200 else "Unknown"
+    except:
+        country = "Unknown"
+    
+    stats_db["views"] = stats_db.get("views", 0) + 1
+    stats_db["countries"][country] = stats_db["countries"].get(country, 0) + 1
+    
+    save_dbs(licenses_db, trials_db, stats_db)
+    return {"status": "tracked"}
+
+@app.get("/api/get_stats")
+def get_stats():
+    return stats_db
 
 def generate_license_key(plan):
     p1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
@@ -706,7 +780,7 @@ def start_trial(data: TrialRequest):
         return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": "BRONCE"}
     
     trials_db[data.hwid] = {"expires": (datetime.now() + timedelta(days=30)).isoformat()}
-    save_dbs(licenses_db, trials_db)
+    save_dbs(licenses_db, trials_db, stats_db)
     return {"valid": True, "days_left": 30, "plan": "BRONCE"}
 
 @app.post("/api/validate_license")
@@ -722,7 +796,7 @@ def validate_license(data: LicenseCheck):
     
     if info["hwid"] is None:
         info["hwid"] = data.hwid
-        save_dbs(licenses_db, trials_db)
+        save_dbs(licenses_db, trials_db, stats_db)
     elif info["hwid"] != data.hwid: return {"valid": False, "message": "🔒 En uso en otra PC."}
     
     return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": info["plan"]}
@@ -736,7 +810,7 @@ def create_license(data: LicenseCreate):
         "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(), 
         "active": True, "plan": data.plan.upper(), "email": data.email.lower()
     }
-    save_dbs(licenses_db, trials_db)
+    save_dbs(licenses_db, trials_db, stats_db)
     return {"status": "success", "key": key}
 
 @app.post("/api/recover_by_email")
@@ -755,7 +829,7 @@ def manage_license(data: LicenseUpdate):
         return {"status": "error", "message": "❌ Licencia no encontrada."}
     
     licenses_db[key]["active"] = data.active
-    save_dbs(licenses_db, trials_db)
+    save_dbs(licenses_db, trials_db, stats_db)
     status = "activada" if data.active else "suspendida"
     return {"status": "success", "message": f"✅ Licencia {key} {status} correctamente."}
 
@@ -767,5 +841,5 @@ def reset_hwid(data: ResetHWID):
         return {"status": "error", "message": "❌ Licencia no encontrada."}
     
     licenses_db[key]["hwid"] = None
-    save_dbs(licenses_db, trials_db)
+    save_dbs(licenses_db, trials_db, stats_db)
     return {"status": "success", "message": f"✅ HWID reseteado para {key}."}
