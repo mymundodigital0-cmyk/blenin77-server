@@ -476,14 +476,20 @@ def read_root():
         body { font-family: 'Inter', sans-serif; background-color: #020617; }
         .glow { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }
         .hero-bg { background: linear-gradient(to bottom, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; }
-        /* Ocultar la barra superior y estilos del traductor nativo de Google */
-        .goog-te-banner-frame.skiptranslate {display: none !important;} body {top: 0px !important;}
-        .goog-te-gadget {font-size: 0 !important; display: none !important;}
-        .goog-logo-link {display: none !important;}
-        .goog-te-gadget span {display: none !important;}
-        .goog-te-balloon-frame {display: none !important;}
-        div.goog-te-gadget {display: none !important;}
-        /* Scrollbar styling */
+        /* Ocultar la barra superior de Google Translate pero mantener el motor activo */
+        .goog-te-banner-frame.skiptranslate { display: none !important; } 
+        body { top: 0px !important; }
+        .goog-tooltip, .goog-tooltip:hover { display: none !important; }
+        .goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }
+        /* Mover el widget nativo fuera de la pantalla en lugar de usar display:none para evitar errores de Google */
+        #google_translate_element {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+            opacity: 0;
+        }
+        .goog-te-gadget { font-size: 0 !important; }
+        /* Scrollbar styling para el menú de idiomas */
         #lang-menu::-webkit-scrollbar { width: 6px; }
         #lang-menu::-webkit-scrollbar-track { background: #1e293b; border-radius: 10px; }
         #lang-menu::-webkit-scrollbar-thumb { background: #0e7490; border-radius: 10px; }
@@ -510,16 +516,16 @@ def read_root():
                     </button>
                     <div id="lang-menu" class="hidden absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-slate-800 ring-1 ring-black ring-opacity-5 focus:outline-none z-50 max-h-80 overflow-y-auto">
                         <div class="py-1">
-                            <a href="#" onclick="changeLang('es', '🇪🇸 Español')" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇪🇸 Español</a>
-                            <a href="#" onclick="changeLang('en', '🇬🇧 English')" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇬🇧 English</a>
-                            <a href="#" onclick="changeLang('fr', '🇫🇷 Français')" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇫🇷 Français</a>
-                            <a href="#" onclick="changeLang('pt', '🇵🇹 Português')" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇵🇹 Português</a>
-                            <a href="#" onclick="changeLang('ru', '🇷🇺 Русский')" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇷🇺 Русский</a>
-                            <a href="#" onclick="changeLang('it', '🇮🇹 Italiano')" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇮🇹 Italiano</a>
-                            <a href="#" onclick="changeLang('de', '🇩🇪 Deutsch')" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇩🇪 Deutsch</a>
-                            <a href="#" onclick="changeLang('zh-CN', '🇨🇳 中文')" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇨🇳 中文</a>
-                            <a href="#" onclick="changeLang('ko', '🇰🇷 한국어')" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇰🇷 한국어</a>
-                            <a href="#" onclick="changeLang('hi', '🇮🇳 हिन्दी')" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇮🇳 हिन्दी</a>
+                            <a href="#" onclick="changeLang('es', '🇪🇸 Español'); return false;" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇪🇸 Español</a>
+                            <a href="#" onclick="changeLang('en', '🇬🇧 English'); return false;" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇬🇧 English</a>
+                            <a href="#" onclick="changeLang('fr', '🇫🇷 Français'); return false;" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇫🇷 Français</a>
+                            <a href="#" onclick="changeLang('pt', '🇵🇹 Português'); return false;" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇵🇹 Português</a>
+                            <a href="#" onclick="changeLang('ru', '🇷🇺 Русский'); return false;" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇷🇺 Русский</a>
+                            <a href="#" onclick="changeLang('it', '🇮🇹 Italiano'); return false;" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇮🇹 Italiano</a>
+                            <a href="#" onclick="changeLang('de', '🇩🇪 Deutsch'); return false;" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇩🇪 Deutsch</a>
+                            <a href="#" onclick="changeLang('zh-CN', '🇨🇳 中文'); return false;" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇨🇳 中文</a>
+                            <a href="#" onclick="changeLang('ko', '🇰🇷 한국어'); return false;" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇰🇷 한국어</a>
+                            <a href="#" onclick="changeLang('hi', '🇮🇳 हिन्दी'); return false;" class="lang-option flex items-center gap-3 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 hover:text-cyan-400 transition">🇮🇳 हिन्दी</a>
                         </div>
                     </div>
                 </div>
@@ -724,8 +730,8 @@ def read_root():
     (function(){if(!window.chatbase||window.chatbase("getState")!=="initialized"){window.chatbase=(...arguments)=>{if(!window.chatbase.q){window.chatbase.q=[]}window.chatbase.q.push(arguments)};window.chatbase=new Proxy(window.chatbase,{get(target,prop){if(prop==="q"){return target.q}return(...args)=>target(prop,...args)}})}}const onLoad=function(){const script=document.createElement("script");script.src="https://www.chatbase.co/embed.min.js";script.id="gzEjAzK1VCE72hJ_hBfA4";script.domain="www.chatbase.co";document.body.appendChild(script)};if(document.readyState==="complete"){onLoad()}else{window.addEventListener("load",onLoad)}})();
     </script>
 
-    <!-- GOOGLE TRANSLATE WIDGET (Oculto) Y SCRIPT DE TRADUCCIÓN PERSONALIZADO -->
-    <div id="google_translate_element" style="display:none;"></div>
+    <!-- GOOGLE TRANSLATE WIDGET (Oculto visualmente pero activo) Y SCRIPT DE TRADUCCIÓN PERSONALIZADO -->
+    <div id="google_translate_element"></div>
     <script type="text/javascript">
     function googleTranslateElementInit() {
       new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'en,fr,pt,ru,it,de,zh-CN,ko,hi', layout: google.translate.TranslateElement.InlineLayout.SIMPLE, autoDisplay: false}, 'google_translate_element');
@@ -754,14 +760,23 @@ def read_root():
             document.getElementById('current-lang-name').innerText = langName;
             langMenu.classList.add('hidden');
             
-            // Interactuar con el select nativo de Google Translate
-            setTimeout(() => {
+            // Forzar la traducción interactuando con el select nativo de Google
+            setTimeout(function() {
                 var select = document.querySelector('.goog-te-combo');
                 if (select) {
-                    select.value = langCode;
-                    select.dispatchEvent(new Event('change'));
+                    select.value = langCode; // Asignar el idioma
+                    // Disparar el evento change de manera universal para que Google Translate reaccione
+                    if (document.createEventObject) {
+                        var evt = document.createEventObject();
+                        select.fireEvent('onchange', evt);
+                    } else {
+                        var evt = new Event('change', { bubbles: true, cancelable: true });
+                        select.dispatchEvent(evt);
+                    }
+                } else {
+                    console.error("Google Translate select element not found.");
                 }
-            }, 200); // Pequeño delay para asegurar que Google Translate cargó
+            }, 100);
         }
     </script>
 
