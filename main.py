@@ -90,7 +90,15 @@ def get_default_content(page_name="Principal"):
             {"name": "Plata", "price": "$99", "features": "✅ 2 Cuentas MT5\n✅ Modo Híbrido + Enjambre", "link": "https://paypal.me/plata", "highlight": True},
             {"name": "Oro", "price": "$199", "features": "✅ Cuentas Ilimitadas\n✅ Deep Learning (PyTorch)", "link": "https://paypal.me/oro", "highlight": False}
         ],
-        "social_links": {"facebook": "", "whatsapp": "", "youtube": "", "tiktok": "", "telegram": "", "instagram": ""}
+        "social_links": {"facebook": "", "whatsapp": "", "youtube": "", "tiktok": "", "telegram": "", "instagram": ""},
+        "bank_transfer_info": {
+            "bank_name": "Banco Ejemplo S.A.",
+            "account_type": "Cuenta Corriente",
+            "account_number": "01234567890123456789",
+            "beneficiary": "Lenin Benitez",
+            "email_for_proof": "pagos@blenin77.com",
+            "whatsapp_for_proof": "593999999999"
+        }
     }
 
 def get_all_pages():
@@ -169,7 +177,7 @@ def admin_panel():
                     <i class="fas fa-robot text-cyan-400"></i>
                     <input type="text" id="chatbot_id" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none" placeholder="Ej: gzEjAzK1VCE72hJ_hBfA4">
                 </div>
-                <p class="text-xs text-slate-500 mb-4">Crea un bot nuevo en Chatbase para cada producto y pega su ID aquí. Esto hace que el bot hable SOLO de este producto.</p>
+                <p class="text-xs text-slate-500 mb-4">Crea un bot nuevo en Chatbase para cada producto y pega su ID aquí.</p>
 
                 <label class="text-sm text-slate-400">Título Principal (H1)</label>
                 <input type="text" id="hero_title" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
@@ -177,6 +185,20 @@ def admin_panel():
                 <input type="text" id="hero_subtitle" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
                 <label class="text-sm text-slate-400">Texto Descriptivo</label>
                 <textarea id="hero_text" rows="3" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none"></textarea>
+            </div>
+
+            <!-- SECCIÓN TRANSFERENCIA BANCARIA -->
+            <div class="bg-slate-800 p-6 rounded-xl border border-amber-700 shadow-lg">
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">💳 Pagos por Transferencia Bancaria</h3>
+                <p class="text-sm text-slate-400 mb-4">Configura los datos bancarios para los usuarios sin tarjeta de crédito. Se aplicará a esta página.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label class="text-sm text-slate-400">Nombre del Banco</label><input type="text" id="bt_bank_name" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Bank of America"></div>
+                    <div><label class="text-sm text-slate-400">Tipo de Cuenta</label><input type="text" id="bt_account_type" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Cuenta Corriente"></div>
+                    <div><label class="text-sm text-slate-400">Número de Cuenta / IBAN</label><input type="text" id="bt_account_number" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: 0123456789"></div>
+                    <div><label class="text-sm text-slate-400">Beneficiario</label><input type="text" id="bt_beneficiary" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Lenin Benitez"></div>
+                    <div><label class="text-sm text-slate-400">Correo para enviar comprobante</label><input type="email" id="bt_email" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="pagos@blenin77.com"></div>
+                    <div><label class="text-sm text-slate-400">WhatsApp para enviar comprobante (con código de país)</label><input type="text" id="bt_whatsapp" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="593999999999"></div>
+                </div>
             </div>
 
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
@@ -224,10 +246,9 @@ def admin_panel():
 
         <!-- PESTAÑA LICENCIAS -->
         <div id="content-lic" class="space-y-6">
-            <!-- CREACIÓN MANUAL DE LICENCIA -->
             <div class="bg-slate-800 p-6 rounded-xl border border-emerald-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">➕ Crear Licencia Manualmente</h3>
-                <p class="text-sm text-slate-400 mb-4">Si el sistema automático falla, puedes crear una licencia aquí. Se guardará en el servidor principal y el cliente podrá usarla de inmediato.</p>
+                <p class="text-sm text-slate-400 mb-4">Usa esta función cuando recibas el comprobante de transferencia bancaria de un cliente.</p>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div>
                         <label class="text-sm text-slate-400">Plan</label>
@@ -250,7 +271,6 @@ def admin_panel():
                 <div id="manual_lic_msg" class="mt-4 text-cyan-400 font-bold text-sm hidden bg-slate-900 p-3 rounded"></div>
             </div>
 
-            <!-- GESTIÓN DE LICENCIAS EXISTENTES -->
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Gestión de Licencias Existentes</h3>
                 <label class="text-sm text-slate-400">Clave de Licencia</label>
@@ -321,6 +341,14 @@ def admin_panel():
         document.getElementById('hero_subtitle').value = p.hero_subtitle || '';
         document.getElementById('hero_text').value = p.hero_text || '';
         
+        const bt = p.bank_transfer_info || {{}};
+        document.getElementById('bt_bank_name').value = bt.bank_name || '';
+        document.getElementById('bt_account_type').value = bt.account_type || '';
+        document.getElementById('bt_account_number').value = bt.account_number || '';
+        document.getElementById('bt_beneficiary').value = bt.beneficiary || '';
+        document.getElementById('bt_email').value = bt.email_for_proof || '';
+        document.getElementById('bt_whatsapp').value = bt.whatsapp_for_proof || '';
+
         document.getElementById('fb_link').value = p.social_links?.facebook || '';
         document.getElementById('wa_link').value = p.social_links?.whatsapp || '';
         document.getElementById('yt_link').value = p.social_links?.youtube || '';
@@ -348,7 +376,7 @@ def admin_panel():
         slug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '');
         if(allPages[slug]) {{ alert('Esa URL ya existe'); return; }}
         
-        allPages[slug] = {{ page_name: name, chatbot_id: 'gzEjAzK1VCE72hJ_hBfA4', hero_title: name, hero_subtitle: '', hero_text: '', publications: [], plans: [], social_links: {{}} }};
+        allPages[slug] = {{ page_name: name, chatbot_id: 'gzEjAzK1VCE72hJ_hBfA4', hero_title: name, hero_subtitle: '', hero_text: '', publications: [], plans: [], social_links: {{}}, bank_transfer_info: {{}} }};
         saveData(true);
     }}
 
@@ -439,6 +467,14 @@ def admin_panel():
                 tiktok: document.getElementById('tt_link').value,
                 telegram: document.getElementById('tg_link').value,
                 instagram: document.getElementById('ig_link').value
+            }},
+            bank_transfer_info: {{
+                bank_name: document.getElementById('bt_bank_name').value,
+                account_type: document.getElementById('bt_account_type').value,
+                account_number: document.getElementById('bt_account_number').value,
+                beneficiary: document.getElementById('bt_beneficiary').value,
+                email_for_proof: document.getElementById('bt_email').value,
+                whatsapp_for_proof: document.getElementById('bt_whatsapp').value
             }}
         }};
         
@@ -487,7 +523,7 @@ def admin_panel():
             msgDiv.innerHTML = `✅ Licencia creada y guardada en el servidor: <br><br> <input type="text" value="${{result.key}}" readonly class="w-full bg-slate-950 text-cyan-400 p-2 rounded mt-2 cursor-pointer select-all" onclick="this.select()">`;
             document.getElementById('lic_key').value = result.key; 
         }} else {{
-            msgDiv.innerText = "❌ Error al crear la licencia. Revisa la consola.";
+            msgDiv.innerText = "❌ Error al crear la licencia.";
         }}
         showToast('Licencia creada manualmente con éxito.');
     }}
@@ -594,19 +630,34 @@ def render_landing_page(c):
                 </div>
                 """
 
+    bt = c.get('bank_transfer_info', {})
+    has_bank_info = bt.get('account_number')
+    
     plans_html = ""
     for p in c.get('plans', []):
         if p.get('name'):
             highlight_classes = "lg:scale-105 border-cyan-500 shadow-cyan-500/20" if p.get('highlight') else "border-slate-800"
             badge = '<span class="absolute top-0 right-0 bg-cyan-500 text-slate-900 text-xs font-bold px-3 py-1 rounded-bl-lg">MÁS POPULAR</span>' if p.get('highlight') else ''
             features_html = p.get('features', '').replace('\n', '<br>')
+            
+            bank_btn_html = ""
+            if has_bank_info:
+                bank_btn_html = f"""
+                <button onclick="openBankModal('{p.get('name', '')}', '{p.get('price', '')}')" class="block text-center w-full bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium py-2 rounded text-sm transition mt-2">
+                    <i class="fas fa-university mr-2"></i>Pagar por Transferencia Bancaria
+                </button>
+                """
+
             plans_html += f"""
-            <div class="relative bg-slate-800 p-8 rounded-xl border {highlight_classes} transition-all duration-300 hover:-translate-y-2 hover:shadow-xl">
+            <div class="relative bg-slate-800 p-8 rounded-xl border {highlight_classes} transition-all duration-300 hover:-translate-y-2 hover:shadow-xl flex flex-col">
                 {badge}
                 <h3 class="text-xl font-bold text-white mb-2">{p.get('name', '')}</h3>
                 <div class="text-4xl font-extrabold text-cyan-400 mb-4">{p.get('price', '')}<span class="text-base font-normal text-slate-500">/mes</span></div>
-                <p class="text-slate-300 text-sm mb-6">{features_html}</p>
-                <a href="{p.get('link', '#')}" class="block text-center w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Suscribirme</a>
+                <p class="text-slate-300 text-sm mb-6 flex-grow">{features_html}</p>
+                <div class="mt-auto">
+                    <a href="{p.get('link', '#')}" class="block text-center w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Suscribirme con Tarjeta</a>
+                    {bank_btn_html}
+                </div>
             </div>
             """
 
@@ -620,6 +671,60 @@ def render_landing_page(c):
     if social.get('instagram'): social_html += f'<a href="{social["instagram"]}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-instagram"></i></a>'
 
     chatbot_id = c.get('chatbot_id', 'gzEjAzK1VCE72hJ_hBfA4')
+
+    # Generar HTML del Modal de Transferencia
+    bank_modal_html = ""
+    if has_bank_info:
+        wa_link = f"https://wa.me/{bt.get('whatsapp_for_proof', '')}?text=Hola%2C%20adjunto%20el%20comprobante%20de%20pago%20para%20el%20plan%20"
+        mail_link = f"mailto:{bt.get('email_for_proof', '')}?subject=Comprobante%20de%20Pago%20Plan%20"
+        
+        bank_modal_html = f"""
+        <div id="bankModal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
+            <div class="bg-slate-800 p-8 rounded-xl max-w-md w-full border border-slate-700 shadow-2xl relative">
+                <button onclick="closeBankModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">&times;</button>
+                <h3 class="text-2xl font-bold text-cyan-400 mb-2">Instrucciones de Pago</h3>
+                <p class="text-slate-400 text-sm mb-6">Estás comprando el plan: <span id="modal_plan_name" class="font-bold text-white"></span> por <span id="modal_plan_price" class="font-bold text-white"></span></p>
+                
+                <div class="bg-slate-900 p-4 rounded-lg border border-slate-700 space-y-3 text-sm">
+                    <p><strong class="text-slate-400">Banco:</strong> <span class="text-white">{bt.get('bank_name', '')}</span></p>
+                    <p><strong class="text-slate-400">Tipo de Cuenta:</strong> <span class="text-white">{bt.get('account_type', '')}</span></p>
+                    <p><strong class="text-slate-400">Número de Cuenta:</strong> <span class="text-cyan-400 font-mono">{bt.get('account_number', '')}</span></p>
+                    <p><strong class="text-slate-400">Beneficiario:</strong> <span class="text-white">{bt.get('beneficiary', '')}</span></p>
+                </div>
+
+                <div class="mt-6">
+                    <h4 class="text-white font-bold mb-2">¿Qué hacer después?</h4>
+                    <p class="text-slate-400 text-sm mb-4">1. Realiza la transferencia por el monto exacto del plan.<br>2. Envía el comprobante de pago por WhatsApp o Correo.<br>3. Recibirás tu licencia de activación en cuanto confirmemos el pago.</p>
+                </div>
+
+                <div class="flex flex-col gap-2 mt-4">
+                    <a id="wa_send_btn" href="{wa_link}" target="_blank" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-center font-bold py-3 rounded transition">
+                        <i class="fab fa-whatsapp mr-2"></i> Enviar comprobante por WhatsApp
+                    </a>
+                    <a id="mail_send_btn" href="{mail_link}" class="w-full bg-slate-600 hover:bg-slate-500 text-white text-center font-bold py-3 rounded transition">
+                        <i class="fas fa-envelope mr-2"></i> Enviar comprobante por Correo
+                    </a>
+                </div>
+            </div>
+        </div>
+        <script>
+            function openBankModal(planName, planPrice) {{
+                document.getElementById('modal_plan_name').innerText = planName;
+                document.getElementById('modal_plan_price').innerText = planPrice;
+                
+                let waLink = "{wa_link}" + encodeURIComponent(planName);
+                let mailLink = "{mail_link}" + encodeURIComponent(planName);
+                
+                document.getElementById('wa_send_btn').href = waLink;
+                document.getElementById('mail_send_btn').href = mailLink;
+                
+                document.getElementById('bankModal').classList.remove('hidden');
+            }}
+            function closeBankModal() {{
+                document.getElementById('bankModal').classList.add('hidden');
+            }}
+        </script>
+        """
 
     template = """<!DOCTYPE html>
 <html lang="es">
@@ -760,6 +865,8 @@ def render_landing_page(c):
         </div>
     </footer>
 
+    {BANK_MODAL_HTML}
+
     <div id="google_translate_element"></div>
     <script type="text/javascript">
     function googleTranslateElementInit() { new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'en,fr,pt,ru,it,de,zh-CN,ko,hi', layout: google.translate.TranslateElement.InlineLayout.SIMPLE, autoDisplay: false}, 'google_translate_element'); }
@@ -805,7 +912,8 @@ def render_landing_page(c):
                    .replace("{HERO_TEXT}", c.get('hero_text', ''))\
                    .replace("{PUBLICATIONS_HTML}", pubs_html)\
                    .replace("{PLANS_HTML}", plans_html)\
-                   .replace("{SOCIAL_HTML}", social_html)
+                   .replace("{SOCIAL_HTML}", social_html)\
+                   .replace("{BANK_MODAL_HTML}", bank_modal_html)
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
