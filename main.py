@@ -80,6 +80,7 @@ if not licenses_db:
 def get_default_content(page_name="Principal"):
     return {
         "page_name": page_name,
+        "chatbot_id": "gzEjAzK1VCE72hJ_hBfA4", # Bot principal por defecto
         "hero_title": "BLENIN.G.77",
         "hero_subtitle": "THE BEST FUTURE FOR YOU",
         "hero_text": "IA Predictiva, Enjambre de 500 Agentes y Análisis Global en Tiempo Real.",
@@ -98,14 +99,12 @@ def get_all_pages():
         resp = requests.get(JSONBIN_URL, headers=headers, timeout=5)
         if resp.status_code == 200:
             data = resp.json()["record"]
-            # MIGRACIÓN AUTOMÁTICA: Si está en formato antiguo, lo convierte
             if "hero_title" in data and "pages" not in data:
                 new_data = {"pages": {"main": data}}
                 save_all_pages(new_data)
                 return new_data
             return data
     except: pass
-    # Si no existe nada, crea la página principal
     default_data = {"pages": {"main": get_default_content()}}
     save_all_pages(default_data)
     return default_data
@@ -164,6 +163,14 @@ def admin_panel():
                 <input type="hidden" id="current_slug">
                 <label class="text-sm text-slate-400">Nombre Interno de la Página</label>
                 <input type="text" id="page_name" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
+                
+                <label class="text-sm text-slate-400">ID del Chatbot para esta página (Chatbase)</label>
+                <div class="flex items-center gap-2 mb-4">
+                    <i class="fas fa-robot text-cyan-400"></i>
+                    <input type="text" id="chatbot_id" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none" placeholder="Ej: gzEjAzK1VCE72hJ_hBfA4">
+                </div>
+                <p class="text-xs text-slate-500 mb-4">Crea un bot nuevo en Chatbase para cada producto y pega su ID aquí. Esto hace que el bot hable SOLO de este producto.</p>
+
                 <label class="text-sm text-slate-400">Título Principal (H1)</label>
                 <input type="text" id="hero_title" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
                 <label class="text-sm text-slate-400">Subtítulo (H2)</label>
@@ -282,6 +289,7 @@ def admin_panel():
         
         document.getElementById('current_slug').value = slug;
         document.getElementById('page_name').value = p.page_name || '';
+        document.getElementById('chatbot_id').value = p.chatbot_id || 'gzEjAzK1VCE72hJ_hBfA4';
         document.getElementById('hero_title').value = p.hero_title || '';
         document.getElementById('hero_subtitle').value = p.hero_subtitle || '';
         document.getElementById('hero_text').value = p.hero_text || '';
@@ -313,7 +321,7 @@ def admin_panel():
         slug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '');
         if(allPages[slug]) {{ alert('Esa URL ya existe'); return; }}
         
-        allPages[slug] = {{ page_name: name, hero_title: name, hero_subtitle: '', hero_text: '', publications: [], plans: [], social_links: {{}} }};
+        allPages[slug] = {{ page_name: name, chatbot_id: 'gzEjAzK1VCE72hJ_hBfA4', hero_title: name, hero_subtitle: '', hero_text: '', publications: [], plans: [], social_links: {{}} }};
         saveData(true);
     }}
 
@@ -391,6 +399,7 @@ def admin_panel():
 
         allPages[slug] = {{
             page_name: document.getElementById('page_name').value,
+            chatbot_id: document.getElementById('chatbot_id').value || 'gzEjAzK1VCE72hJ_hBfA4',
             hero_title: document.getElementById('hero_title').value,
             hero_subtitle: document.getElementById('hero_subtitle').value,
             hero_text: document.getElementById('hero_text').value,
@@ -547,6 +556,8 @@ def render_landing_page(c):
     if social.get('telegram'): social_html += f'<a href="{social["telegram"]}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-telegram-plane"></i></a>'
     if social.get('instagram'): social_html += f'<a href="{social["instagram"]}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-instagram"></i></a>'
 
+    chatbot_id = c.get('chatbot_id', 'gzEjAzK1VCE72hJ_hBfA4')
+
     template = """<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -557,16 +568,16 @@ def render_landing_page(c):
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- 🤖 CHATBASE BOT (Script Oficial Limpio) -->
+    <!-- 🤖 CHATBASE BOT (Dinámico según el producto) -->
     <script>
       window.embeddedChatbotConfig = {
-        chatbotId: "gzEjAzK1VCE72hJ_hBfA4",
+        chatbotId: "{CHATBOT_ID}",
         domain: "www.chatbase.co"
       }
     </script>
     <script
       src="https://www.chatbase.co/embed.min.js"
-      chatbotId="gzEjAzK1VCE72hJ_hBfA4"
+      chatbotId="{CHATBOT_ID}"
       domain="www.chatbase.co"
       defer>
     </script>
@@ -576,16 +587,7 @@ def render_landing_page(c):
         body { font-family: 'Inter', sans-serif; background-color: #020617; }
         .glow { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }
         .hero-bg { background: linear-gradient(to bottom, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; }
-        
-        /* Forzar visibilidad del chatbot sobre Tailwind */
-        .chatbase-bubble-button, iframe[src*="chatbase.co"] {
-            z-index: 99999 !important;
-            display: block !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            pointer-events: auto !important;
-        }
-        
+        .chatbase-bubble-button, iframe[src*="chatbase.co"] { z-index: 99999 !important; display: block !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; }
         .goog-te-banner-frame.skiptranslate { display: none !important; } body { top: 0px !important; }
         .goog-tooltip, .goog-tooltip:hover { display: none !important; }
         .goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }
@@ -734,7 +736,8 @@ def render_landing_page(c):
     <script>fetch('/api/track_view', { method: 'POST' });</script>
 </body>
 </html>"""
-    return template.replace("{HERO_TITLE}", c.get('hero_title', ''))\
+    return template.replace("{CHATBOT_ID}", chatbot_id)\
+                   .replace("{HERO_TITLE}", c.get('hero_title', ''))\
                    .replace("{HERO_SUBTITLE}", c.get('hero_subtitle', ''))\
                    .replace("{HERO_TEXT}", c.get('hero_text', ''))\
                    .replace("{PUBLICATIONS_HTML}", pubs_html)\
