@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Response, Form
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -21,12 +21,14 @@ app.add_middleware(
 # ==========================================
 # 🔐 SISTEMA DE SEGURIDAD Y LOGIN
 # ==========================================
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123") # Pon tu clave real en las variables de entorno de Render
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123") 
 SESSION_TOKEN = "blenin_secure_session_2024"
 
+class AdminLoginData(BaseModel):
+    password: str
+
 @app.get("/admin/login", response_class=HTMLResponse)
-def admin_login_page(error: Optional[str] = None):
-    err_msg = "<p class='text-red-400 text-sm mb-4'>Contraseña incorrecta.</p>" if error else ""
+def admin_login_page():
     return f"""
     <html lang="es"><head><meta charset="UTF-8">
     <title>Login Admin - BLENIN77</title>
@@ -38,21 +40,34 @@ def admin_login_page(error: Optional[str] = None):
         <div class="bg-slate-800 p-8 rounded-xl shadow-2xl border border-slate-700 w-full max-w-sm text-center">
             <h1 class="text-2xl font-bold text-cyan-400 mb-2">🔒 Acceso Restringido</h1>
             <p class="text-slate-400 mb-6 text-sm">Panel de Control BLENIN77</p>
-            {err_msg}
-            <form action="/admin/login" method="POST">
-                <input type="password" name="password" placeholder="Contraseña de Administrador" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 outline-none focus:border-cyan-500" required>
-                <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Ingresar</button>
-            </form>
+            <p id="err_msg" class="text-red-400 text-sm mb-4 hidden">Contraseña incorrecta.</p>
+            <input type="password" id="pwd" placeholder="Contraseña de Administrador" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 outline-none focus:border-cyan-500">
+            <button onclick="doLogin()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Ingresar</button>
         </div>
+        <script>
+            async function doLogin() {{
+                const pwd = document.getElementById('pwd').value;
+                const res = await fetch('/api/login', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{ password: pwd }})
+                }});
+                if(res.ok) {{
+                    window.location.href = '/admin';
+                }} else {{
+                    document.getElementById('err_msg').classList.remove('hidden');
+                }}
+            }}
+        </script>
     </body></html>
     """
 
-@app.post("/admin/login")
-def admin_login_verify(password: str = Form(...), response: Response = None):
-    if password == ADMIN_PASSWORD:
+@app.post("/api/login")
+def admin_login_verify(data: AdminLoginData, response: Response):
+    if data.password == ADMIN_PASSWORD:
         response.set_cookie(key="blenin_session", value=SESSION_TOKEN, httponly=True, secure=True, samesite="strict", max_age=86400)
-        return RedirectResponse(url="/admin", status_code=303)
-    return RedirectResponse(url="/admin/login?error=1", status_code=303)
+        return {"status": "success"}
+    return {"status": "error"}
 
 @app.get("/admin/logout")
 def admin_logout(response: Response):
@@ -178,7 +193,6 @@ def save_all_pages(data):
 # ==========================================
 @app.get("/admin", response_class=HTMLResponse)
 def admin_panel(request: Request):
-    # 🔐 VERIFICACIÓN DE SEGURIDAD
     if not verify_admin(request):
         return RedirectResponse(url="/admin/login", status_code=303)
         
@@ -653,6 +667,13 @@ def admin_panel(request: Request):
     </script>
     </body></html>
     """
+
+@app.post("/api/save_pages")
+def api_save_pages(request: Request, data: dict):
+    if not verify_admin(request): return {"message": "❌ No autorizado."}
+    if save_all_pages({"pages": data}):
+        return {"message": "✅ Página guardada correctamente."}
+    return {"message": "❌ Error al guardar."}
 
 # ==========================================
 # 🌐 PÁGINA WEB DE RECUPERACIÓN DE CLAVE
@@ -1200,7 +1221,6 @@ def validate_license(data: LicenseCheck):
 
 @app.post("/api/create_license")
 def create_license(request: Request, data: LicenseCreate):
-    # 🔐 VERIFICACIÓN DE SEGURIDAD
     if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
     
     global licenses_db
@@ -1223,7 +1243,6 @@ def recover_by_email(req: RecoveryRequest):
 
 @app.post("/api/manage_license")
 def manage_license(request: Request, data: LicenseUpdate):
-    # 🔐 VERIFICACIÓN DE SEGURIDAD
     if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
     
     global licenses_db
@@ -1238,7 +1257,6 @@ def manage_license(request: Request, data: LicenseUpdate):
 
 @app.post("/api/reset_hwid")
 def reset_hwid(request: Request, data: ResetHWID):
-    # 🔐 VERIFICACIÓN DE SEGURIDAD
     if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
     
     global licenses_db
