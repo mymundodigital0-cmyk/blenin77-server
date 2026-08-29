@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -65,9 +65,9 @@ def admin_login_page():
 @app.post("/api/login")
 def admin_login_verify(data: AdminLoginData, response: Response):
     if data.password == ADMIN_PASSWORD:
-        response.set_cookie(key="blenin_session", value=SESSION_TOKEN, httponly=True, secure=True, samesite="strict", max_age=86400)
+        response.set_cookie(key="blenin_session", value=SESSION_TOKEN, httponly=True, secure=True, samesite="lax", max_age=86400)
         return {"status": "success"}
-    return {"status": "error"}
+    raise HTTPException(status_code=401, detail="Contraseña incorrecta")
 
 @app.get("/admin/logout")
 def admin_logout(response: Response):
