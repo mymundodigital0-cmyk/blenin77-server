@@ -21,11 +21,14 @@ app.add_middleware(
 # ==========================================
 # 🔐 SISTEMA DE SEGURIDAD Y LOGIN
 # ==========================================
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123") 
 SESSION_TOKEN = "blenin_secure_session_2024"
 
 class AdminLoginData(BaseModel):
     password: str
+
+class ChangePasswordData(BaseModel):
+    current_password: str
+    new_password: str
 
 @app.get("/admin/login", response_class=HTMLResponse)
 def admin_login_page():
@@ -64,7 +67,8 @@ def admin_login_page():
 
 @app.post("/api/login")
 def admin_login_verify(data: AdminLoginData, response: Response):
-    if data.password == ADMIN_PASSWORD:
+    global admin_password_db
+    if data.password == admin_password_db:
         response.set_cookie(key="blenin_session", value=SESSION_TOKEN, httponly=True, secure=True, samesite="lax", max_age=86400)
         return {"status": "success"}
     raise HTTPException(status_code=401, detail="Contraseña incorrecta")
@@ -118,18 +122,22 @@ def load_dbs():
         resp = requests.get(JSONBIN_DB_URL, headers=headers, timeout=5)
         if resp.status_code == 200:
             data = resp.json()["record"]
-            return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}})
+            # Si no existe la contraseña en la base de datos, usa la de Render o la por defecto
+            pwd = data.get("admin_password", os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"))
+            return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}}), pwd
     except: pass
-    return {}, {}, {"views": 0, "countries": {}}
+    return {}, {}, {"views": 0, "countries": {}}, os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123")
 
-def save_dbs(lic, trials, stats):
+def save_dbs(lic, trials, stats, pwd=None):
     try:
         headers = {"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}
         data = {"licenses_db": lic, "trials_db": trials, "stats_db": stats}
+        if pwd:
+            data["admin_password"] = pwd
         requests.put(JSONBIN_DB_URL, json=data, headers=headers, timeout=5)
     except: pass
 
-licenses_db, trials_db, stats_db = load_dbs()
+licenses_db, trials_db, stats_db, admin_password_db = load_dbs()
 
 if not licenses_db:
     licenses_db = {
@@ -137,7 +145,7 @@ if not licenses_db:
         "BLENIN-TEST-PLATA": {"hwid": None, "expires": "2026-09-15T00:00:00", "active": True, "plan": "PLATA", "email": "test-plata@blenin77.com"},
         "BLENIN-TEST-BRONCE": {"hwid": None, "expires": "2026-09-15T00:00:00", "active": True, "plan": "BRONCE", "email": "test-bronce@blenin77.com"}
     }
-    save_dbs(licenses_db, trials_db, stats_db)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
 
 def get_default_content(page_name="Principal"):
     return {
@@ -215,6 +223,7 @@ def admin_panel(request: Request):
             <button onclick="showTab('pages')" id="tab-pages" class="tab-active px-4 py-2 rounded text-sm font-medium transition">🚀 Páginas</button>
             <button onclick="showTab('stats')" id="tab-stats" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">📊 Estadísticas</button>
             <button onclick="showTab('lic')" id="tab-lic" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">Licencias</button>
+            <button onclick="showTab('settings')" id="tab-settings" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">⚙️ Ajustes</button>
             <a href="/admin/logout" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded text-sm font-bold transition ml-2"><i class="fas fa-sign-out-alt mr-1"></i>Salir</a>
         </div>
     </nav>
@@ -325,7 +334,7 @@ def admin_panel(request: Request):
         </div>
 
         <!-- PESTAÑA LICENCIAS -->
-        <div id="content-lic" class="space-y-6">
+        <div id="content-lic" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-emerald-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">➕ Crear Licencia Manualmente</h3>
                 <p class="text-sm text-slate-400 mb-4">Usa esta función cuando recibas el comprobante de transferencia bancaria de un cliente.</p>
@@ -364,6 +373,30 @@ def admin_panel(request: Request):
             </div>
         </div>
 
+        <!-- PESTAÑA AJUSTES (CAMBIAR CONTRASEÑA) -->
+        <div id="content-settings" class="hidden space-y-6">
+            <div class="bg-slate-800 p-6 rounded-xl border border-amber-700 shadow-lg">
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🔑 Cambiar Contraseña de Administrador</h3>
+                <p class="text-sm text-slate-400 mb-4">Cambia la contraseña de acceso al panel. La nueva contraseña se guardará de forma segura en la base de datos.</p>
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-sm text-slate-400">Contraseña Actual</label>
+                        <input type="password" id="current_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="••••••••">
+                    </div>
+                    <div>
+                        <label class="text-sm text-slate-400">Nueva Contraseña</label>
+                        <input type="password" id="new_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="••••••••">
+                    </div>
+                    <div>
+                        <label class="text-sm text-slate-400">Repetir Nueva Contraseña</label>
+                        <input type="password" id="confirm_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="••••••••">
+                    </div>
+                    <button onclick="changePassword()" class="w-full bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-save mr-2"></i>Actualizar Contraseña</button>
+                    <div id="pwd_msg" class="mt-4 font-bold text-sm hidden"></div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <footer class="bg-slate-950 p-4 sticky bottom-0 border-t border-slate-800">
@@ -381,7 +414,7 @@ def admin_panel(request: Request):
     const allPages = {pages_json};
     
     function showTab(tabId) {{
-        ['pages', 'stats', 'lic'].forEach(id => {{
+        ['pages', 'stats', 'lic', 'settings'].forEach(id => {{
             document.getElementById('content-' + id).classList.add('hidden');
             document.getElementById('tab-' + id).classList.remove('tab-active');
             document.getElementById('tab-' + id).classList.add('bg-slate-800', 'hover:bg-slate-700');
@@ -660,6 +693,39 @@ def admin_panel(request: Request):
         showToast(result.message);
     }}
 
+    async function changePassword() {{
+        const current_pwd = document.getElementById('current_pwd').value;
+        const new_pwd = document.getElementById('new_pwd').value;
+        const confirm_pwd = document.getElementById('confirm_pwd').value;
+
+        if(new_pwd !== confirm_pwd) {{
+            const msgDiv = document.getElementById('pwd_msg');
+            msgDiv.className = "mt-4 font-bold text-sm text-red-400";
+            msgDiv.innerText = "❌ Las nuevas contraseñas no coinciden.";
+            msgDiv.classList.remove('hidden');
+            return;
+        }}
+
+        const res = await fetch('/api/change_password', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{ current_password: current_pwd, new_password: new_pwd }})
+        }});
+        const result = await res.json();
+        
+        const msgDiv = document.getElementById('pwd_msg');
+        msgDiv.className = "mt-4 font-bold text-sm " + (result.status === 'success' ? 'text-emerald-400' : 'text-red-400');
+        msgDiv.innerText = result.message;
+        msgDiv.classList.remove('hidden');
+        showToast(result.message);
+        
+        if(result.status === 'success') {{
+            document.getElementById('current_pwd').value = '';
+            document.getElementById('new_pwd').value = '';
+            document.getElementById('confirm_pwd').value = '';
+        }}
+    }}
+
     // Init
     updateSelector();
     loadPageData();
@@ -674,6 +740,22 @@ def api_save_pages(request: Request, data: dict):
     if save_all_pages({"pages": data}):
         return {"message": "✅ Página guardada correctamente."}
     return {"message": "❌ Error al guardar."}
+
+@app.post("/api/change_password")
+def api_change_password(request: Request, data: ChangePasswordData):
+    global admin_password_db
+    if not verify_admin(request):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    
+    if data.current_password != admin_password_db:
+        return {"status": "error", "message": "❌ La contraseña actual es incorrecta."}
+    
+    if len(data.new_password) < 4:
+        return {"status": "error", "message": "❌ La nueva contraseña debe tener al menos 4 caracteres."}
+        
+    admin_password_db = data.new_password
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
+    return {"status": "success", "message": "✅ Contraseña actualizada correctamente."}
 
 # ==========================================
 # 🌐 PÁGINA WEB DE RECUPERACIÓN DE CLAVE
@@ -1161,7 +1243,7 @@ def track_view(request: Request):
     stats_db["views"] = stats_db.get("views", 0) + 1
     stats_db["countries"][country] = stats_db["countries"].get(country, 0) + 1
     
-    save_dbs(licenses_db, trials_db, stats_db)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
     return {"status": "tracked"}
 
 @app.get("/api/get_stats")
@@ -1198,7 +1280,7 @@ def start_trial(data: TrialRequest):
         return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": "BRONCE"}
     
     trials_db[data.hwid] = {"expires": (datetime.now() + timedelta(days=30)).isoformat()}
-    save_dbs(licenses_db, trials_db, stats_db)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
     return {"valid": True, "days_left": 30, "plan": "BRONCE"}
 
 @app.post("/api/validate_license")
@@ -1214,7 +1296,7 @@ def validate_license(data: LicenseCheck):
     
     if info["hwid"] is None:
         info["hwid"] = data.hwid
-        save_dbs(licenses_db, trials_db, stats_db)
+        save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
     elif info["hwid"] != data.hwid: return {"valid": False, "message": "🔒 En uso en otra PC."}
     
     return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": info["plan"]}
@@ -1230,7 +1312,7 @@ def create_license(request: Request, data: LicenseCreate):
         "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(), 
         "active": True, "plan": data.plan.upper(), "email": data.email.lower()
     }
-    save_dbs(licenses_db, trials_db, stats_db)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
     return {"status": "success", "key": key}
 
 @app.post("/api/recover_by_email")
@@ -1251,7 +1333,7 @@ def manage_license(request: Request, data: LicenseUpdate):
         return {"status": "error", "message": "❌ Licencia no encontrada."}
     
     licenses_db[key]["active"] = data.active
-    save_dbs(licenses_db, trials_db, stats_db)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
     status = "activada" if data.active else "suspendida"
     return {"status": "success", "message": f"✅ Licencia {key} {status} correctamente."}
 
@@ -1265,5 +1347,5 @@ def reset_hwid(request: Request, data: ResetHWID):
         return {"status": "error", "message": "❌ Licencia no encontrada."}
     
     licenses_db[key]["hwid"] = None
-    save_dbs(licenses_db, trials_db, stats_db)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
     return {"status": "success", "message": f"✅ HWID reseteado para {key}."}
