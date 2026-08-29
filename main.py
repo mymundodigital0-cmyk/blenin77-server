@@ -80,7 +80,7 @@ if not licenses_db:
 def get_default_content(page_name="Principal"):
     return {
         "page_name": page_name,
-        "chatbot_id": "gzEjAzK1VCE72hJ_hBfA4", # Bot principal por defecto
+        "chatbot_id": "gzEjAzK1VCE72hJ_hBfA4",
         "hero_title": "BLENIN.G.77",
         "hero_subtitle": "THE BEST FUTURE FOR YOU",
         "hero_text": "IA Predictiva, Enjambre de 500 Agentes y Análisis Global en Tiempo Real.",
@@ -146,7 +146,7 @@ def admin_panel():
     <div class="flex-1 container mx-auto p-6 md:p-10 max-w-4xl">
         
         <!-- GESTOR DE PÁGINAS -->
-        <div id="content-pages" class="space-y-6">
+        <div id="content-pages" class="space-y-6 hidden">
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Gestor de Landing Pages</h3>
                 <div class="flex gap-2 mb-4">
@@ -223,9 +223,36 @@ def admin_panel():
         </div>
 
         <!-- PESTAÑA LICENCIAS -->
-        <div id="content-lic" class="hidden space-y-6">
+        <div id="content-lic" class="space-y-6">
+            <!-- CREACIÓN MANUAL DE LICENCIA -->
+            <div class="bg-slate-800 p-6 rounded-xl border border-emerald-700 shadow-lg">
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">➕ Crear Licencia Manualmente</h3>
+                <p class="text-sm text-slate-400 mb-4">Si el sistema automático falla, puedes crear una licencia aquí. Se guardará en el servidor principal y el cliente podrá usarla de inmediato.</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                        <label class="text-sm text-slate-400">Plan</label>
+                        <select id="manual_plan" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500">
+                            <option value="BRONCE">Bronce</option>
+                            <option value="PLATA">Plata</option>
+                            <option value="ORO">Oro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm text-slate-400">Duración (días)</label>
+                        <input type="number" id="manual_days" value="30" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500">
+                    </div>
+                    <div>
+                        <label class="text-sm text-slate-400">Correo del Cliente</label>
+                        <input type="email" id="manual_email" placeholder="cliente@correo.com" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500">
+                    </div>
+                </div>
+                <button onclick="createManualLicense()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-key mr-2"></i>Generar y Guardar Licencia</button>
+                <div id="manual_lic_msg" class="mt-4 text-cyan-400 font-bold text-sm hidden bg-slate-900 p-3 rounded"></div>
+            </div>
+
+            <!-- GESTIÓN DE LICENCIAS EXISTENTES -->
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Gestión de Licencias</h3>
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Gestión de Licencias Existentes</h3>
                 <label class="text-sm text-slate-400">Clave de Licencia</label>
                 <input type="text" id="lic_key" placeholder="BLENIN-ORO-XXXX-XXXX" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
                 <div class="flex gap-2 flex-wrap">
@@ -437,8 +464,40 @@ def admin_panel():
         }} catch (e) {{ console.error(e); }}
     }}
 
+    async function createManualLicense() {{
+        const plan = document.getElementById('manual_plan').value;
+        const days = document.getElementById('manual_days').value;
+        const email = document.getElementById('manual_email').value;
+        
+        if(!email) {{
+            alert('Por favor ingresa el correo del cliente.');
+            return;
+        }}
+
+        const res = await fetch('/api/create_license', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{ plan: plan, duration_days: parseInt(days), email: email }})
+        }});
+        const result = await res.json();
+        
+        const msgDiv = document.getElementById('manual_lic_msg');
+        msgDiv.classList.remove('hidden');
+        if(result.status === 'success') {{
+            msgDiv.innerHTML = `✅ Licencia creada y guardada en el servidor: <br><br> <input type="text" value="${{result.key}}" readonly class="w-full bg-slate-950 text-cyan-400 p-2 rounded mt-2 cursor-pointer select-all" onclick="this.select()">`;
+            document.getElementById('lic_key').value = result.key; 
+        }} else {{
+            msgDiv.innerText = "❌ Error al crear la licencia. Revisa la consola.";
+        }}
+        showToast('Licencia creada manualmente con éxito.');
+    }}
+
     async function manageLic(activeStatus) {{
         const key = document.getElementById('lic_key').value;
+        if(!key) {{
+            alert('Por favor ingresa una clave de licencia.');
+            return;
+        }}
         const res = await fetch('/api/manage_license', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{key: key, active: activeStatus}}) }});
         const result = await res.json();
         document.getElementById('lic_msg').classList.remove('hidden');
@@ -448,6 +507,10 @@ def admin_panel():
 
     async function resetHwid() {{
         const key = document.getElementById('lic_key').value;
+        if(!key) {{
+            alert('Por favor ingresa una clave de licencia.');
+            return;
+        }}
         const res = await fetch('/api/reset_hwid', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{key: key}}) }});
         const result = await res.json();
         document.getElementById('lic_msg').classList.remove('hidden');
