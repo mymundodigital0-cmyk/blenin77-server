@@ -98,7 +98,9 @@ def get_default_content(page_name="Principal"):
             "beneficiary": "Lenin Benitez",
             "email_for_proof": "pagos@blenin77.com",
             "whatsapp_for_proof": "593999999999"
-        }
+        },
+        "download_link": "https://drive.google.com/tu-archivo-descarga",
+        "download_instructions": "1. Descarga el archivo .zip\n2. Extrae el contenido en tu PC\n3. Ejecuta el instalador Blenin77.exe\n4. Ingresa tu licencia al abrir el sistema."
     }
 
 def get_all_pages():
@@ -177,7 +179,6 @@ def admin_panel():
                     <i class="fas fa-robot text-cyan-400"></i>
                     <input type="text" id="chatbot_id" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none" placeholder="Ej: gzEjAzK1VCE72hJ_hBfA4">
                 </div>
-                <p class="text-xs text-slate-500 mb-4">Crea un bot nuevo en Chatbase para cada producto y pega su ID aquí.</p>
 
                 <label class="text-sm text-slate-400">Título Principal (H1)</label>
                 <input type="text" id="hero_title" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
@@ -187,17 +188,26 @@ def admin_panel():
                 <textarea id="hero_text" rows="3" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none"></textarea>
             </div>
 
-            <!-- SECCIÓN TRANSFERENCIA BANCARIA -->
+            <!-- SISTEMA DE DESCARGA -->
+            <div class="bg-slate-800 p-6 rounded-xl border border-indigo-700 shadow-lg">
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">📥 Sistema de Descarga para Clientes</h3>
+                <p class="text-sm text-slate-400 mb-4">Cuando el usuario deje su correo en la web, se le revelará el enlace de descarga y estas instrucciones.</p>
+                <label class="text-sm text-slate-400">Enlace de Descarga (Google Drive, Mega, etc.)</label>
+                <input type="text" id="download_link" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none" placeholder="https://drive.google.com/...">
+                <label class="text-sm text-slate-400">Instrucciones de Instalación/Referencia</label>
+                <textarea id="download_instructions" rows="4" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none" placeholder="Ej: 1. Descarga el archivo..."></textarea>
+            </div>
+
+            <!-- TRANSFERENCIA BANCARIA -->
             <div class="bg-slate-800 p-6 rounded-xl border border-amber-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">💳 Pagos por Transferencia Bancaria</h3>
-                <p class="text-sm text-slate-400 mb-4">Configura los datos bancarios para los usuarios sin tarjeta de crédito. Se aplicará a esta página.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div><label class="text-sm text-slate-400">Nombre del Banco</label><input type="text" id="bt_bank_name" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Bank of America"></div>
                     <div><label class="text-sm text-slate-400">Tipo de Cuenta</label><input type="text" id="bt_account_type" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Cuenta Corriente"></div>
                     <div><label class="text-sm text-slate-400">Número de Cuenta / IBAN</label><input type="text" id="bt_account_number" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: 0123456789"></div>
                     <div><label class="text-sm text-slate-400">Beneficiario</label><input type="text" id="bt_beneficiary" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Lenin Benitez"></div>
                     <div><label class="text-sm text-slate-400">Correo para enviar comprobante</label><input type="email" id="bt_email" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="pagos@blenin77.com"></div>
-                    <div><label class="text-sm text-slate-400">WhatsApp para enviar comprobante (con código de país)</label><input type="text" id="bt_whatsapp" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="593999999999"></div>
+                    <div><label class="text-sm text-slate-400">WhatsApp para enviar comprobante</label><input type="text" id="bt_whatsapp" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="593999999999"></div>
                 </div>
             </div>
 
@@ -341,6 +351,9 @@ def admin_panel():
         document.getElementById('hero_subtitle').value = p.hero_subtitle || '';
         document.getElementById('hero_text').value = p.hero_text || '';
         
+        document.getElementById('download_link').value = p.download_link || '';
+        document.getElementById('download_instructions').value = p.download_instructions || '';
+
         const bt = p.bank_transfer_info || {{}};
         document.getElementById('bt_bank_name').value = bt.bank_name || '';
         document.getElementById('bt_account_type').value = bt.account_type || '';
@@ -376,7 +389,7 @@ def admin_panel():
         slug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '');
         if(allPages[slug]) {{ alert('Esa URL ya existe'); return; }}
         
-        allPages[slug] = {{ page_name: name, chatbot_id: 'gzEjAzK1VCE72hJ_hBfA4', hero_title: name, hero_subtitle: '', hero_text: '', publications: [], plans: [], social_links: {{}}, bank_transfer_info: {{}} }};
+        allPages[slug] = {{ page_name: name, chatbot_id: 'gzEjAzK1VCE72hJ_hBfA4', hero_title: name, hero_subtitle: '', hero_text: '', publications: [], plans: [], social_links: {{}}, bank_transfer_info: {{}}, download_link: '', download_instructions: '' }};
         saveData(true);
     }}
 
@@ -475,7 +488,9 @@ def admin_panel():
                 beneficiary: document.getElementById('bt_beneficiary').value,
                 email_for_proof: document.getElementById('bt_email').value,
                 whatsapp_for_proof: document.getElementById('bt_whatsapp').value
-            }}
+            }},
+            download_link: document.getElementById('download_link').value,
+            download_instructions: document.getElementById('download_instructions').value
         }};
         
         const res = await fetch('/api/save_pages', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(allPages) }});
@@ -671,7 +686,7 @@ def render_landing_page(c):
     if social.get('instagram'): social_html += f'<a href="{social["instagram"]}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-instagram"></i></a>'
 
     chatbot_id = c.get('chatbot_id', 'gzEjAzK1VCE72hJ_hBfA4')
-
+    
     # Generar HTML del Modal de Transferencia
     bank_modal_html = ""
     if has_bank_info:
@@ -726,6 +741,9 @@ def render_landing_page(c):
         </script>
         """
 
+    download_instructions_html = c.get('download_instructions', 'Descarga el archivo, extrae y ejecuta el instalador.').replace('\n', '<br>')
+    download_link = c.get('download_link', '#')
+
     template = """<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -749,7 +767,6 @@ def render_landing_page(c):
       domain="www.chatbase.co"
       defer>
     </script>
-    <!-- 🤖 FIN CHATBASE BOT -->
 
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #020617; }
@@ -847,6 +864,81 @@ def render_landing_page(c):
         </div>
     </section>
 
+    <!-- INICIO FORMULARIO MAILERLITE Y DESCARGA -->
+    <div class="py-16 px-6 bg-slate-950">
+        <div class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-lg text-center" id="ml-form-wrapper">
+            <h3 class="text-2xl font-bold text-white mb-2">¿Quieres ver al Bot operando en vivo?</h3>
+            <p class="text-slate-400 text-sm mb-6">Deja tu correo y te enviaremos un video de cómo el Enjambre de Agentes abre operaciones reales, además de darte acceso al sistema.</p>
+            
+            <!-- MailerLite Embed Estilizado -->
+            <div class="ml-form-embedContainer ml-subscribe-form ml-subscribe-form-44360624">
+                <div class="ml-form-align-center">
+                    <div class="ml-form-embedWrapper embedForm">
+                        <div class="ml-form-embedBody ml-form-embedBodyDefault row-form">
+                            <div class="ml-form-embedContent">
+                                <p style="color: #94a3b8; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 400; line-height: 20px; margin: 0 0 10px 0; text-align: center;">Ingresa tu correo para continuar.</p>
+                            </div>
+                            <form class="ml-block-form" action="https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/subscribe" data-code="" method="post" target="_blank" onsubmit="return ml_reveal_download()">
+                                <div class="ml-form-formContent">
+                                    <div class="ml-form-fieldRow ml-last-item">
+                                        <div class="ml-field-group ml-field-email ml-validate-email ml-validate-required">
+                                            <input aria-label="email" aria-required="true" type="email" class="form-control" data-inputmask="" name="fields[email]" placeholder="Email" autocomplete="email" style="background-color: #0f172a !important; color: #fff !important; border: 1px solid #334155 !important; border-radius: 6px !important; padding: 12px !important; width: 100% !important; margin-bottom: 10px !important;">
+                                        </div>
+                                    </div>
+                                </div>
+                                <input type="hidden" name="ml-submit" value="1">
+                                <div class="ml-form-embedSubmit" style="margin-top: 0;">
+                                    <button type="submit" class="primary" style="background-color: #00e5ff !important; color: #020617 !important; border-radius: 6px !important; font-weight: 700; font-family: 'Inter', sans-serif; padding: 12px !important; width: 100% !important; border: none !important; cursor: pointer;">Quiero Acceso y Descargar</button>
+                                    <button disabled="disabled" style="display: none;" type="button" class="loading">
+                                        <div class="ml-form-embedSubmitLoad"></div>
+                                        <span class="sr-only">Loading...</span>
+                                    </button>
+                                </div>
+                                <input type="hidden" name="anticsrf" value="true">
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <script>
+                function ml_webform_success_44360624() {
+                    var $ = ml_jQuery || jQuery;
+                    $('.ml-subscribe-form-44360624 .row-success').show();
+                    $('.ml-subscribe-form-44360624 .row-form').hide();
+                }
+            </script>
+            <script src="https://groot.mailerlite.com/js/w/webforms.min.js?v83147fa8ce2d95cb73ece7f28b469519" type="text/javascript"></script>
+            <script>
+                fetch("https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/takel")
+            </script>
+        </div>
+
+        <!-- CUADRO DE DESCARGA REVELADO -->
+        <div id="download-box" class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-cyan-500 shadow-cyan-500/10 shadow-lg text-center mt-6" style="display: none;">
+            <i class="fas fa-check-circle text-emerald-400 text-4xl mb-4"></i>
+            <h4 class="text-xl font-bold text-cyan-400 mb-4">¡Listo! Aquí tienes tu descarga:</h4>
+            <div class="text-slate-300 text-sm mb-6 text-left bg-slate-900 p-4 rounded-lg border border-slate-700">
+                {DOWNLOAD_INSTRUCTIONS_HTML}
+            </div>
+            <a href="{DOWNLOAD_LINK}" target="_blank" class="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block">
+                <i class="fas fa-download mr-2"></i> Descargar Blenin77
+            </a>
+        </div>
+        
+        <script>
+            function ml_reveal_download() {
+                // Wait a brief moment for Mailerlite to process, then show download box
+                setTimeout(function() {
+                    document.getElementById('download-box').style.display = 'block';
+                    document.getElementById('ml-form-wrapper').style.display = 'none';
+                    document.getElementById('download-box').scrollIntoView({behavior: "smooth", block: "center"});
+                }, 1000);
+                return true; // allow Mailerlite form to submit normally
+            }
+        </script>
+    </div>
+    <!-- FIN FORMULARIO MAILERLITE Y DESCARGA -->
+
     <section class="py-12 border-t border-slate-800">
         <div class="container mx-auto px-6 text-center">
             <h3 class="text-xl font-bold text-white mb-6">Síguenos en nuestras redes</h3>
@@ -913,7 +1005,9 @@ def render_landing_page(c):
                    .replace("{PUBLICATIONS_HTML}", pubs_html)\
                    .replace("{PLANS_HTML}", plans_html)\
                    .replace("{SOCIAL_HTML}", social_html)\
-                   .replace("{BANK_MODAL_HTML}", bank_modal_html)
+                   .replace("{BANK_MODAL_HTML}", bank_modal_html)\
+                   .replace("{DOWNLOAD_LINK}", download_link)\
+                   .replace("{DOWNLOAD_INSTRUCTIONS_HTML}", download_instructions_html)
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
