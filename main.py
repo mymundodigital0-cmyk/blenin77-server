@@ -472,16 +472,25 @@ def read_root():
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- 🤖 INICIO CHATBASE BOT (Agente de Soporte IA) - Movido al Head para asegurar su carga -->
+    <script>
+        (function(){if(!window.chatbase||window.chatbase("getState")!=="initialized"){window.chatbase=(...arguments)=>{if(!window.chatbase.q){window.chatbase.q=[]}window.chatbase.q.push(arguments)};window.chatbase=new Proxy(window.chatbase,{get(target,prop){if(prop==="q"){return target.q}return(...args)=>target(prop,...args)}})}}const onLoad=function(){const script=document.createElement("script");script.src="https://www.chatbase.co/embed.min.js";script.id="gzEjAzK1VCE72hJ_hBfA4";script.domain="www.chatbase.co";document.body.appendChild(script)};if(document.readyState==="complete"){onLoad()}else{window.addEventListener("load",onLoad)}})();
+    </script>
+    <!-- 🤖 FIN CHATBASE BOT -->
+
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #020617; }
         .glow { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }
         .hero-bg { background: linear-gradient(to bottom, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; }
+        
         /* Ocultar la barra superior de Google Translate pero mantener el motor activo */
         .goog-te-banner-frame.skiptranslate { display: none !important; } 
         body { top: 0px !important; }
         .goog-tooltip, .goog-tooltip:hover { display: none !important; }
         .goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }
-        /* Mover el widget nativo fuera de la pantalla en lugar de usar display:none para evitar errores de Google */
+        
+        /* Mover el widget nativo de Google Translate fuera de la pantalla */
         #google_translate_element {
             position: absolute;
             top: -9999px;
@@ -489,6 +498,16 @@ def read_root():
             opacity: 0;
         }
         .goog-te-gadget { font-size: 0 !important; }
+
+        /* ASEGURAR VISIBILIDAD DEL CHAT DE CHATBASE */
+        .chatbase-bubble-button, iframe[src*="chatbase.co"] {
+            z-index: 99999 !important;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+        
         /* Scrollbar styling para el menú de idiomas */
         #lang-menu::-webkit-scrollbar { width: 6px; }
         #lang-menu::-webkit-scrollbar-track { background: #1e293b; border-radius: 10px; }
@@ -724,12 +743,6 @@ def read_root():
             <p class="text-slate-600 text-xs">&copy; 2024 BLENIN.G.77 THE BEST FUTURE FOR YOU. Creado por Lenin Benitez.</p>
         </div>
     </footer>
-
-    <!-- 🤖 CHATBASE BOT (Agente de Soporte IA) -->
-    <script>
-    (function(){if(!window.chatbase||window.chatbase("getState")!=="initialized"){window.chatbase=(...arguments)=>{if(!window.chatbase.q){window.chatbase.q=[]}window.chatbase.q.push(arguments)};window.chatbase=new Proxy(window.chatbase,{get(target,prop){if(prop==="q"){return target.q}return(...args)=>target(prop,...args)}})}}const onLoad=function(){const script=document.createElement("script");script.src="https://www.chatbase.co/embed.min.js";script.id="gzEjAzK1VCE72hJ_hBfA4";script.domain="www.chatbase.co";document.body.appendChild(script)};if(document.readyState==="complete"){onLoad()}else{window.addEventListener("load",onLoad)}})();
-    </script>
-    <!-- 🤖 FIN CHATBASE BOT -->
 
     <!-- GOOGLE TRANSLATE WIDGET (Oculto visualmente pero activo) Y SCRIPT DE TRADUCCIÓN POR COOKIE -->
     <div id="google_translate_element"></div>
