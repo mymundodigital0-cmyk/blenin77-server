@@ -557,16 +557,35 @@ def render_landing_page(c):
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- 🤖 CHATBASE BOT (Se inyecta en todas las páginas automáticamente) -->
+    <!-- 🤖 CHATBASE BOT (Script Oficial Limpio) -->
     <script>
-        (function(){if(!window.chatbase||window.chatbase("getState")!=="initialized"){window.chatbase=(...arguments)=>{if(!window.chatbase.q){window.chatbase.q=[]}window.chatbase.q.push(arguments)};window.chatbase=new Proxy(window.chatbase,{get(target,prop){if(prop==="q"){return target.q}return(...args)=>target(prop,...args)}})}}const onLoad=function(){const script=document.createElement("script");script.src="https://www.chatbase.co/embed.min.js";script.id="gzEjAzK1VCE72hJ_hBfA4";script.domain="www.chatbase.co";document.body.appendChild(script)};if(document.readyState==="complete"){onLoad()}else{window.addEventListener("load",onLoad)}})();
+      window.embeddedChatbotConfig = {
+        chatbotId: "gzEjAzK1VCE72hJ_hBfA4",
+        domain: "www.chatbase.co"
+      }
     </script>
+    <script
+      src="https://www.chatbase.co/embed.min.js"
+      chatbotId="gzEjAzK1VCE72hJ_hBfA4"
+      domain="www.chatbase.co"
+      defer>
+    </script>
+    <!-- 🤖 FIN CHATBASE BOT -->
 
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #020617; }
         .glow { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }
         .hero-bg { background: linear-gradient(to bottom, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; }
-        .chatbase-bubble-button, iframe[src*="chatbase.co"] { z-index: 99999 !important; display: block !important; visibility: visible !important; opacity: 1 !important; }
+        
+        /* Forzar visibilidad del chatbot sobre Tailwind */
+        .chatbase-bubble-button, iframe[src*="chatbase.co"] {
+            z-index: 99999 !important;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+        
         .goog-te-banner-frame.skiptranslate { display: none !important; } body { top: 0px !important; }
         .goog-tooltip, .goog-tooltip:hover { display: none !important; }
         .goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }
