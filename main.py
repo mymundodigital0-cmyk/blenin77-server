@@ -99,7 +99,7 @@ def get_default_content(page_name="Principal"):
             "email_for_proof": "pagos@blenin77.com",
             "whatsapp_for_proof": "593999999999"
         },
-        "download_link": "https://drive.google.com/tu-archivo-descarga",
+        "download_links": ["https://drive.google.com/tu-archivo-descarga"],
         "download_instructions": "1. Descarga el archivo .zip\n2. Extrae el contenido en tu PC\n3. Ejecuta el instalador Blenin77.exe\n4. Ingresa tu licencia al abrir el sistema."
     }
 
@@ -191,11 +191,15 @@ def admin_panel():
             <!-- SISTEMA DE DESCARGA -->
             <div class="bg-slate-800 p-6 rounded-xl border border-indigo-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">📥 Sistema de Descarga para Clientes</h3>
-                <p class="text-sm text-slate-400 mb-4">Cuando el usuario deje su correo en la web, se le revelará el enlace de descarga y estas instrucciones.</p>
-                <label class="text-sm text-slate-400">Enlace de Descarga (Google Drive, Mega, etc.)</label>
-                <input type="text" id="download_link" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none" placeholder="https://drive.google.com/...">
-                <label class="text-sm text-slate-400">Instrucciones de Instalación/Referencia</label>
-                <textarea id="download_instructions" rows="4" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none" placeholder="Ej: 1. Descarga el archivo..."></textarea>
+                <p class="text-sm text-slate-400 mb-4">Agrega uno o varios enlaces (servidores espejo) por si uno principal se cae. El usuario verá botones de "Servidor 1", "Servidor 2", etc.</p>
+                <label class="text-sm text-slate-400">Enlaces de Descarga</label>
+                <div id="dl-links-container" class="space-y-2 mb-4"></div>
+                <button onclick="addDlLink()" class="mt-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-plus mr-2"></i>Agregar Enlace</button>
+                
+                <div class="mt-6">
+                    <label class="text-sm text-slate-400">Instrucciones de Instalación/Referencia</label>
+                    <textarea id="download_instructions" rows="4" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none" placeholder="Ej: 1. Descarga el archivo..."></textarea>
+                </div>
             </div>
 
             <!-- TRANSFERENCIA BANCARIA -->
@@ -351,8 +355,11 @@ def admin_panel():
         document.getElementById('hero_subtitle').value = p.hero_subtitle || '';
         document.getElementById('hero_text').value = p.hero_text || '';
         
-        document.getElementById('download_link').value = p.download_link || '';
         document.getElementById('download_instructions').value = p.download_instructions || '';
+        
+        document.getElementById('dl-links-container').innerHTML = '';
+        (p.download_links || [p.download_link || '']).forEach(url => addDlLink(url)); // Soporta formato nuevo y antiguo
+        if((p.download_links || []).length === 0) addDlLink();
 
         const bt = p.bank_transfer_info || {{}};
         document.getElementById('bt_bank_name').value = bt.bank_name || '';
@@ -389,7 +396,7 @@ def admin_panel():
         slug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '');
         if(allPages[slug]) {{ alert('Esa URL ya existe'); return; }}
         
-        allPages[slug] = {{ page_name: name, chatbot_id: 'gzEjAzK1VCE72hJ_hBfA4', hero_title: name, hero_subtitle: '', hero_text: '', publications: [], plans: [], social_links: {{}}, bank_transfer_info: {{}}, download_link: '', download_instructions: '' }};
+        allPages[slug] = {{ page_name: name, chatbot_id: 'gzEjAzK1VCE72hJ_hBfA4', hero_title: name, hero_subtitle: '', hero_text: '', publications: [], plans: [], social_links: {{}}, bank_transfer_info: {{}}, download_links: [], download_instructions: '' }};
         saveData(true);
     }}
 
@@ -412,6 +419,17 @@ def admin_panel():
             delete allPages[slug];
             saveData(true);
         }}
+    }}
+
+    function addDlLink(url = '') {{
+        const c = document.getElementById('dl-links-container');
+        const div = document.createElement('div');
+        div.className = 'flex gap-2';
+        div.innerHTML = `
+            <input type="text" class="dl-url w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="https://drive.google.com/..." value="${{url}}">
+            <button onclick="this.parentElement.remove()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-sm font-bold whitespace-nowrap"><i class="fas fa-trash"></i></button>
+        `;
+        c.appendChild(div);
     }}
 
     function addPubRow(type = 'video', url = '', desc = '') {{
@@ -465,6 +483,13 @@ def admin_panel():
             }}
         }});
 
+        let dlLinksArray = [];
+        document.querySelectorAll('#dl-links-container > div').forEach(div => {{
+            if(div.querySelector('.dl-url').value.trim()) {{
+                dlLinksArray.push(div.querySelector('.dl-url').value);
+            }}
+        }});
+
         allPages[slug] = {{
             page_name: document.getElementById('page_name').value,
             chatbot_id: document.getElementById('chatbot_id').value || 'gzEjAzK1VCE72hJ_hBfA4',
@@ -489,7 +514,7 @@ def admin_panel():
                 email_for_proof: document.getElementById('bt_email').value,
                 whatsapp_for_proof: document.getElementById('bt_whatsapp').value
             }},
-            download_link: document.getElementById('download_link').value,
+            download_links: dlLinksArray,
             download_instructions: document.getElementById('download_instructions').value
         }};
         
@@ -742,7 +767,27 @@ def render_landing_page(c):
         """
 
     download_instructions_html = c.get('download_instructions', 'Descarga el archivo, extrae y ejecuta el instalador.').replace('\n', '<br>')
-    download_link = c.get('download_link', '#')
+    
+    # Generar botones de descarga múltiples
+    download_links = c.get('download_links', [])
+    if not download_links and c.get('download_link'):
+        download_links = [c.get('download_link')] # Migración si existe el formato antiguo
+
+    download_buttons_html = ""
+    if download_links:
+        if len(download_links) == 1:
+            download_buttons_html = f"""
+            <a href="{download_links[0]}" target="_blank" class="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block w-full">
+                <i class="fas fa-download mr-2"></i> Descargar Blenin77
+            </a>
+            """
+        else:
+            for i, link in enumerate(download_links):
+                download_buttons_html += f"""
+                <a href="{link}" target="_blank" class="bg-slate-700 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block w-full mb-2">
+                    <i class="fas fa-server mr-2"></i> Servidor de Descarga {i+1}
+                </a>
+                """
 
     template = """<!DOCTYPE html>
 <html lang="es">
@@ -920,9 +965,9 @@ def render_landing_page(c):
             <div class="text-slate-300 text-sm mb-6 text-left bg-slate-900 p-4 rounded-lg border border-slate-700">
                 {DOWNLOAD_INSTRUCTIONS_HTML}
             </div>
-            <a href="{DOWNLOAD_LINK}" target="_blank" class="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block">
-                <i class="fas fa-download mr-2"></i> Descargar Blenin77
-            </a>
+            <div class="flex flex-col gap-3">
+                {DOWNLOAD_BUTTONS_HTML}
+            </div>
         </div>
         
         <script>
@@ -1006,7 +1051,7 @@ def render_landing_page(c):
                    .replace("{PLANS_HTML}", plans_html)\
                    .replace("{SOCIAL_HTML}", social_html)\
                    .replace("{BANK_MODAL_HTML}", bank_modal_html)\
-                   .replace("{DOWNLOAD_LINK}", download_link)\
+                   .replace("{DOWNLOAD_BUTTONS_HTML}", download_buttons_html)\
                    .replace("{DOWNLOAD_INSTRUCTIONS_HTML}", download_instructions_html)
 
 @app.get("/", response_class=HTMLResponse)
