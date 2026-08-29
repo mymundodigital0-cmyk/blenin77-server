@@ -1,9 +1,10 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response, Form
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from collections import defaultdict
 from datetime import datetime, timedelta
+from typing import Optional
 import random, string, smtplib, os, requests, json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -16,6 +17,52 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ==========================================
+# 🔐 SISTEMA DE SEGURIDAD Y LOGIN
+# ==========================================
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123") # Pon tu clave real en las variables de entorno de Render
+SESSION_TOKEN = "blenin_secure_session_2024"
+
+@app.get("/admin/login", response_class=HTMLResponse)
+def admin_login_page(error: Optional[str] = None):
+    err_msg = "<p class='text-red-400 text-sm mb-4'>Contraseña incorrecta.</p>" if error else ""
+    return f"""
+    <html lang="es"><head><meta charset="UTF-8">
+    <title>Login Admin - BLENIN77</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>body {{ font-family: 'Inter', sans-serif; }}</style>
+    </head>
+    <body class="bg-slate-900 text-slate-300 flex items-center justify-center min-h-screen">
+        <div class="bg-slate-800 p-8 rounded-xl shadow-2xl border border-slate-700 w-full max-w-sm text-center">
+            <h1 class="text-2xl font-bold text-cyan-400 mb-2">🔒 Acceso Restringido</h1>
+            <p class="text-slate-400 mb-6 text-sm">Panel de Control BLENIN77</p>
+            {err_msg}
+            <form action="/admin/login" method="POST">
+                <input type="password" name="password" placeholder="Contraseña de Administrador" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 outline-none focus:border-cyan-500" required>
+                <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Ingresar</button>
+            </form>
+        </div>
+    </body></html>
+    """
+
+@app.post("/admin/login")
+def admin_login_verify(password: str = Form(...), response: Response = None):
+    if password == ADMIN_PASSWORD:
+        response.set_cookie(key="blenin_session", value=SESSION_TOKEN, httponly=True, secure=True, samesite="strict", max_age=86400)
+        return RedirectResponse(url="/admin", status_code=303)
+    return RedirectResponse(url="/admin/login?error=1", status_code=303)
+
+@app.get("/admin/logout")
+def admin_logout(response: Response):
+    response.delete_cookie(key="blenin_session")
+    return RedirectResponse(url="/admin/login", status_code=303)
+
+def verify_admin(request: Request):
+    if request.cookies.get("blenin_session") != SESSION_TOKEN:
+        return False
+    return True
 
 # ==========================================
 # 🔧 CONFIGURACIÓN JSONBIN Y CORREO
@@ -130,7 +177,11 @@ def save_all_pages(data):
 # 🎛️ PANEL DE ADMINISTRACIÓN (CMS MULTI-PÁGINA)
 # ==========================================
 @app.get("/admin", response_class=HTMLResponse)
-def admin_panel():
+def admin_panel(request: Request):
+    # 🔐 VERIFICACIÓN DE SEGURIDAD
+    if not verify_admin(request):
+        return RedirectResponse(url="/admin/login", status_code=303)
+        
     pages_data = get_all_pages()
     pages_dict = pages_data.get("pages", {})
     pages_json = json.dumps(pages_dict)
@@ -146,10 +197,11 @@ def admin_panel():
 
     <nav class="bg-slate-950 p-4 shadow-lg border-b border-slate-800 flex justify-between items-center">
         <h1 class="text-xl font-bold text-cyan-400">🎛️ Panel BLENIN77</h1>
-        <div class="flex gap-2 flex-wrap">
+        <div class="flex gap-2 flex-wrap items-center">
             <button onclick="showTab('pages')" id="tab-pages" class="tab-active px-4 py-2 rounded text-sm font-medium transition">🚀 Páginas</button>
             <button onclick="showTab('stats')" id="tab-stats" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">📊 Estadísticas</button>
             <button onclick="showTab('lic')" id="tab-lic" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">Licencias</button>
+            <a href="/admin/logout" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded text-sm font-bold transition ml-2"><i class="fas fa-sign-out-alt mr-1"></i>Salir</a>
         </div>
     </nav>
 
@@ -358,7 +410,7 @@ def admin_panel():
         document.getElementById('download_instructions').value = p.download_instructions || '';
         
         document.getElementById('dl-links-container').innerHTML = '';
-        (p.download_links || [p.download_link || '']).forEach(url => addDlLink(url)); // Soporta formato nuevo y antiguo
+        (p.download_links || [p.download_link || '']).forEach(url => addDlLink(url)); 
         if((p.download_links || []).length === 0) addDlLink();
 
         const bt = p.bank_transfer_info || {{}};
@@ -563,9 +615,9 @@ def admin_panel():
             msgDiv.innerHTML = `✅ Licencia creada y guardada en el servidor: <br><br> <input type="text" value="${{result.key}}" readonly class="w-full bg-slate-950 text-cyan-400 p-2 rounded mt-2 cursor-pointer select-all" onclick="this.select()">`;
             document.getElementById('lic_key').value = result.key; 
         }} else {{
-            msgDiv.innerText = "❌ Error al crear la licencia.";
+            msgDiv.innerText = "❌ " + (result.message || "Error al crear la licencia.");
         }}
-        showToast('Licencia creada manualmente con éxito.');
+        showToast('Proceso de licencia manual completado.');
     }}
 
     async function manageLic(activeStatus) {{
@@ -601,12 +653,6 @@ def admin_panel():
     </script>
     </body></html>
     """
-
-@app.post("/api/save_pages")
-def api_save_pages(data: dict):
-    if save_all_pages({"pages": data}):
-        return {"message": "✅ Página guardada correctamente."}
-    return {"message": "❌ Error al guardar."}
 
 # ==========================================
 # 🌐 PÁGINA WEB DE RECUPERACIÓN DE CLAVE
@@ -1153,7 +1199,10 @@ def validate_license(data: LicenseCheck):
     return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": info["plan"]}
 
 @app.post("/api/create_license")
-def create_license(data: LicenseCreate):
+def create_license(request: Request, data: LicenseCreate):
+    # 🔐 VERIFICACIÓN DE SEGURIDAD
+    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
+    
     global licenses_db
     key = generate_license_key(data.plan)
     licenses_db[key] = {
@@ -1173,7 +1222,10 @@ def recover_by_email(req: RecoveryRequest):
     return {"status": "error", "message": "Correo no encontrado."}
 
 @app.post("/api/manage_license")
-def manage_license(data: LicenseUpdate):
+def manage_license(request: Request, data: LicenseUpdate):
+    # 🔐 VERIFICACIÓN DE SEGURIDAD
+    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
+    
     global licenses_db
     key = data.key.upper().strip()
     if key not in licenses_db:
@@ -1185,7 +1237,10 @@ def manage_license(data: LicenseUpdate):
     return {"status": "success", "message": f"✅ Licencia {key} {status} correctamente."}
 
 @app.post("/api/reset_hwid")
-def reset_hwid(data: ResetHWID):
+def reset_hwid(request: Request, data: ResetHWID):
+    # 🔐 VERIFICACIÓN DE SEGURIDAD
+    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
+    
     global licenses_db
     key = data.key.upper().strip()
     if key not in licenses_db:
