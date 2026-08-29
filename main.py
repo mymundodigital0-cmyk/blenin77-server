@@ -313,7 +313,7 @@ def admin_panel():
         slug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '');
         if(allPages[slug]) {{ alert('Esa URL ya existe'); return; }}
         
-        allPages[slug] = {page_name: name, hero_title: name, hero_subtitle: '', hero_text: '', publications: [], plans: [], social_links: {{}}};
+        allPages[slug] = {{ page_name: name, hero_title: name, hero_subtitle: '', hero_text: '', publications: [], plans: [], social_links: {{}} }};
         saveData(true);
     }}
 
