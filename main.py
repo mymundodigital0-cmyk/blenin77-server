@@ -122,7 +122,6 @@ def load_dbs():
         resp = requests.get(JSONBIN_DB_URL, headers=headers, timeout=5)
         if resp.status_code == 200:
             data = resp.json()["record"]
-            # Si no existe la contraseña en la base de datos, usa la de Render o la por defecto
             pwd = data.get("admin_password", os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"))
             return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}}), pwd
     except: pass
@@ -169,6 +168,10 @@ def get_default_content(page_name="Principal"):
             "email_for_proof": "pagos@blenin77.com",
             "whatsapp_for_proof": "593999999999"
         },
+        "crypto_payments": [
+            {"name": "Bitcoin (BTC)", "address": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"},
+            {"name": "USDT (TRC20)", "address": "TXYZ1234567890ABCDEF"}
+        ],
         "download_links": ["https://drive.google.com/tu-archivo-descarga"],
         "download_instructions": "1. Descarga el archivo .zip\n2. Extrae el contenido en tu PC\n3. Ejecuta el instalador Blenin77.exe\n4. Ingresa tu licencia al abrir el sistema."
     }
@@ -290,6 +293,14 @@ def admin_panel(request: Request):
                 </div>
             </div>
 
+            <!-- CRIPTOMONEDAS Y DINERO ELECTRÓNICO -->
+            <div class="bg-slate-800 p-6 rounded-xl border border-purple-700 shadow-lg">
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">💸 Criptomonedas y Dinero Electrónico</h3>
+                <p class="text-sm text-slate-400 mb-4">Agrega tus billeteras de BTC, USDT, o correos de PayPal/Skrill. El usuario podrá copiar la dirección para enviarte el pago.</p>
+                <div id="crypto-container" class="space-y-2 mb-4"></div>
+                <button onclick="addCryptoRow()" class="mt-2 bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-plus mr-2"></i>Agregar Billetera</button>
+            </div>
+
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Publicaciones (Galería)</h3>
                 <div id="pubs-container" class="space-y-4"></div>
@@ -337,7 +348,7 @@ def admin_panel(request: Request):
         <div id="content-lic" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-emerald-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">➕ Crear Licencia Manualmente</h3>
-                <p class="text-sm text-slate-400 mb-4">Usa esta función cuando recibas el comprobante de transferencia bancaria de un cliente.</p>
+                <p class="text-sm text-slate-400 mb-4">Usa esta función cuando recibas el comprobante de transferencia bancaria o cripto de un cliente.</p>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <div>
                         <label class="text-sm text-slate-400">Plan</label>
@@ -373,11 +384,10 @@ def admin_panel(request: Request):
             </div>
         </div>
 
-        <!-- PESTAÑA AJUSTES (CAMBIAR CONTRASEÑA) -->
+        <!-- PESTAÑA AJUSTES -->
         <div id="content-settings" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-amber-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🔑 Cambiar Contraseña de Administrador</h3>
-                <p class="text-sm text-slate-400 mb-4">Cambia la contraseña de acceso al panel. La nueva contraseña se guardará de forma segura en la base de datos.</p>
                 <div class="space-y-4">
                     <div>
                         <label class="text-sm text-slate-400">Contraseña Actual</label>
@@ -468,6 +478,10 @@ def admin_panel(request: Request):
         document.getElementById('bt_email').value = bt.email_for_proof || '';
         document.getElementById('bt_whatsapp').value = bt.whatsapp_for_proof || '';
 
+        document.getElementById('crypto-container').innerHTML = '';
+        (p.crypto_payments || []).forEach(c => addCryptoRow(c.name, c.address));
+        if((p.crypto_payments || []).length === 0) addCryptoRow();
+
         document.getElementById('fb_link').value = p.social_links?.facebook || '';
         document.getElementById('wa_link').value = p.social_links?.whatsapp || '';
         document.getElementById('yt_link').value = p.social_links?.youtube || '';
@@ -495,7 +509,7 @@ def admin_panel(request: Request):
         slug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '');
         if(allPages[slug]) {{ alert('Esa URL ya existe'); return; }}
         
-        allPages[slug] = {{ page_name: name, chatbot_id: 'gzEjAzK1VCE72hJ_hBfA4', hero_title: name, hero_subtitle: '', hero_text: '', publications: [], plans: [], social_links: {{}}, bank_transfer_info: {{}}, download_links: [], download_instructions: '' }};
+        allPages[slug] = {{ page_name: name, chatbot_id: 'gzEjAzK1VCE72hJ_hBfA4', hero_title: name, hero_subtitle: '', hero_text: '', publications: [], plans: [], social_links: {{}}, bank_transfer_info: {{}}, crypto_payments: [], download_links: [], download_instructions: '' }};
         saveData(true);
     }}
 
@@ -526,6 +540,18 @@ def admin_panel(request: Request):
         div.className = 'flex gap-2';
         div.innerHTML = `
             <input type="text" class="dl-url w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="https://drive.google.com/..." value="${{url}}">
+            <button onclick="this.parentElement.remove()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-sm font-bold whitespace-nowrap"><i class="fas fa-trash"></i></button>
+        `;
+        c.appendChild(div);
+    }}
+
+    function addCryptoRow(name = '', address = '') {{
+        const c = document.getElementById('crypto-container');
+        const div = document.createElement('div');
+        div.className = 'flex gap-2';
+        div.innerHTML = `
+            <input type="text" class="crypto-name w-1/3 bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-purple-500" placeholder="Nombre (Ej: BTC)" value="${{name}}">
+            <input type="text" class="crypto-address w-2/3 bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-purple-500" placeholder="Dirección de billetera o email" value="${{address}}">
             <button onclick="this.parentElement.remove()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-sm font-bold whitespace-nowrap"><i class="fas fa-trash"></i></button>
         `;
         c.appendChild(div);
@@ -589,6 +615,13 @@ def admin_panel(request: Request):
             }}
         }});
 
+        let cryptoArray = [];
+        document.querySelectorAll('#crypto-container > div').forEach(div => {{
+            if(div.querySelector('.crypto-name').value.trim()) {{
+                cryptoArray.push({{ name: div.querySelector('.crypto-name').value, address: div.querySelector('.crypto-address').value }});
+            }}
+        }});
+
         allPages[slug] = {{
             page_name: document.getElementById('page_name').value,
             chatbot_id: document.getElementById('chatbot_id').value || 'gzEjAzK1VCE72hJ_hBfA4',
@@ -613,6 +646,7 @@ def admin_panel(request: Request):
                 email_for_proof: document.getElementById('bt_email').value,
                 whatsapp_for_proof: document.getElementById('bt_whatsapp').value
             }},
+            crypto_payments: cryptoArray,
             download_links: dlLinksArray,
             download_instructions: document.getElementById('download_instructions').value
         }};
@@ -821,6 +855,8 @@ def render_landing_page(c):
 
     bt = c.get('bank_transfer_info', {})
     has_bank_info = bt.get('account_number')
+    crypto_payments = c.get('crypto_payments', [])
+    has_crypto_info = len(crypto_payments) > 0
     
     plans_html = ""
     for p in c.get('plans', []):
@@ -829,11 +865,17 @@ def render_landing_page(c):
             badge = '<span class="absolute top-0 right-0 bg-cyan-500 text-slate-900 text-xs font-bold px-3 py-1 rounded-bl-lg">MÁS POPULAR</span>' if p.get('highlight') else ''
             features_html = p.get('features', '').replace('\n', '<br>')
             
-            bank_btn_html = ""
+            extra_btns_html = ""
             if has_bank_info:
-                bank_btn_html = f"""
+                extra_btns_html += f"""
                 <button onclick="openBankModal('{p.get('name', '')}', '{p.get('price', '')}')" class="block text-center w-full bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium py-2 rounded text-sm transition mt-2">
                     <i class="fas fa-university mr-2"></i>Pagar por Transferencia Bancaria
+                </button>
+                """
+            if has_crypto_info:
+                extra_btns_html += f"""
+                <button onclick="openCryptoModal('{p.get('name', '')}', '{p.get('price', '')}')" class="block text-center w-full bg-purple-700 hover:bg-purple-600 text-white font-medium py-2 rounded text-sm transition mt-2">
+                    <i class="fab fa-bitcoin mr-2"></i>Pagar con Cripto / Otros
                 </button>
                 """
 
@@ -845,7 +887,7 @@ def render_landing_page(c):
                 <p class="text-slate-300 text-sm mb-6 flex-grow">{features_html}</p>
                 <div class="mt-auto">
                     <a href="{p.get('link', '#')}" class="block text-center w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Suscribirme con Tarjeta</a>
-                    {bank_btn_html}
+                    {extra_btns_html}
                 </div>
             </div>
             """
@@ -915,12 +957,83 @@ def render_landing_page(c):
         </script>
         """
 
+    # Generar HTML del Modal de Criptomonedas
+    crypto_modal_html = ""
+    if has_crypto_info:
+        crypto_rows_html = ""
+        for idx, crypto in enumerate(crypto_payments):
+            crypto_rows_html += f"""
+                <div class="bg-slate-900 p-4 rounded-lg border border-slate-700 mb-3">
+                    <p class="text-slate-400 text-sm mb-1">{crypto.get('name', '')}</p>
+                    <div class="flex items-center gap-2">
+                        <p class="text-purple-400 font-mono text-sm break-all flex-grow">{crypto.get('address', '')}</p>
+                        <button onclick="copyText('crypto_addr_{idx}')" class="bg-slate-700 hover:bg-cyan-500 text-white p-2 rounded text-xs"><i class="fas fa-copy"></i></button>
+                    </div>
+                    <input type="hidden" id="crypto_addr_{idx}" value="{crypto.get('address', '')}">
+                </div>
+            """
+
+        wa_link = f"https://wa.me/{bt.get('whatsapp_for_proof', '')}?text=Hola%2C%20adjunto%20el%20comprobante%20de%20pago%20cripto%20para%20el%20plan%20"
+        mail_link = f"mailto:{bt.get('email_for_proof', '')}?subject=Comprobante%20de%20Pago%20Cripto%20Plan%20"
+
+        crypto_modal_html = f"""
+        <div id="cryptoModal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
+            <div class="bg-slate-800 p-8 rounded-xl max-w-md w-full border border-slate-700 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+                <button onclick="closeCryptoModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">&times;</button>
+                <h3 class="text-2xl font-bold text-purple-400 mb-2">Pago con Criptomonedas</h3>
+                <p class="text-slate-400 text-sm mb-6">Estás comprando el plan: <span id="crypto_modal_plan_name" class="font-bold text-white"></span> por <span id="crypto_modal_plan_price" class="font-bold text-white"></span></p>
+                
+                <div class="space-y-3 mb-6">
+                    {crypto_rows_html}
+                </div>
+
+                <div class="mt-6">
+                    <h4 class="text-white font-bold mb-2">¿Qué hacer después?</h4>
+                    <p class="text-slate-400 text-sm mb-4">1. Copia la dirección de la billetera seleccionada.<br>2. Envía el monto exacto en criptomoneda equivalente al precio del plan.<br>3. Envía el comprobante (Hash de la transacción) por WhatsApp o Correo.<br>4. Recibirás tu licencia en cuanto se confirme en la blockchain.</p>
+                </div>
+
+                <div class="flex flex-col gap-2 mt-4">
+                    <a id="crypto_wa_send_btn" href="{wa_link}" target="_blank" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-center font-bold py-3 rounded transition">
+                        <i class="fab fa-whatsapp mr-2"></i> Enviar comprobante por WhatsApp
+                    </a>
+                    <a id="crypto_mail_send_btn" href="{mail_link}" class="w-full bg-slate-600 hover:bg-slate-500 text-white text-center font-bold py-3 rounded transition">
+                        <i class="fas fa-envelope mr-2"></i> Enviar comprobante por Correo
+                    </a>
+                </div>
+            </div>
+        </div>
+        <script>
+            function openCryptoModal(planName, planPrice) {{
+                document.getElementById('crypto_modal_plan_name').innerText = planName;
+                document.getElementById('crypto_modal_plan_price').innerText = planPrice;
+                
+                let waLink = "{wa_link}" + encodeURIComponent(planName);
+                let mailLink = "{mail_link}" + encodeURIComponent(planName);
+                
+                document.getElementById('crypto_wa_send_btn').href = waLink;
+                document.getElementById('crypto_mail_send_btn').href = mailLink;
+                
+                document.getElementById('cryptoModal').classList.remove('hidden');
+            }}
+            function closeCryptoModal() {{
+                document.getElementById('cryptoModal').classList.add('hidden');
+            }}
+            function copyText(elementId) {{
+                const text = document.getElementById(elementId).value;
+                navigator.clipboard.writeText(text).then(function() {{
+                    alert('¡Dirección copiada al portapapeles!');
+                }}, function(err) {{
+                    prompt('Copia manualmente:', text);
+                }});
+            }}
+        </script>
+        """
+
     download_instructions_html = c.get('download_instructions', 'Descarga el archivo, extrae y ejecuta el instalador.').replace('\n', '<br>')
     
-    # Generar botones de descarga múltiples
     download_links = c.get('download_links', [])
     if not download_links and c.get('download_link'):
-        download_links = [c.get('download_link')] # Migración si existe el formato antiguo
+        download_links = [c.get('download_link')]
 
     download_buttons_html = ""
     if download_links:
@@ -1064,7 +1177,6 @@ def render_landing_page(c):
             <h3 class="text-2xl font-bold text-white mb-2">¿Quieres ver al Bot operando en vivo?</h3>
             <p class="text-slate-400 text-sm mb-6">Deja tu correo y te enviaremos un video de cómo el Enjambre de Agentes abre operaciones reales, además de darte acceso al sistema.</p>
             
-            <!-- MailerLite Embed Estilizado -->
             <div class="ml-form-embedContainer ml-subscribe-form ml-subscribe-form-44360624">
                 <div class="ml-form-align-center">
                     <div class="ml-form-embedWrapper embedForm">
@@ -1107,7 +1219,6 @@ def render_landing_page(c):
             </script>
         </div>
 
-        <!-- CUADRO DE DESCARGA REVELADO -->
         <div id="download-box" class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-cyan-500 shadow-cyan-500/10 shadow-lg text-center mt-6" style="display: none;">
             <i class="fas fa-check-circle text-emerald-400 text-4xl mb-4"></i>
             <h4 class="text-xl font-bold text-cyan-400 mb-4">¡Listo! Aquí tienes tu descarga:</h4>
@@ -1121,17 +1232,15 @@ def render_landing_page(c):
         
         <script>
             function ml_reveal_download() {
-                // Wait a brief moment for Mailerlite to process, then show download box
                 setTimeout(function() {
                     document.getElementById('download-box').style.display = 'block';
                     document.getElementById('ml-form-wrapper').style.display = 'none';
                     document.getElementById('download-box').scrollIntoView({behavior: "smooth", block: "center"});
                 }, 1000);
-                return true; // allow Mailerlite form to submit normally
+                return true;
             }
         </script>
     </div>
-    <!-- FIN FORMULARIO MAILERLITE Y DESCARGA -->
 
     <section class="py-12 border-t border-slate-800">
         <div class="container mx-auto px-6 text-center">
@@ -1152,6 +1261,7 @@ def render_landing_page(c):
     </footer>
 
     {BANK_MODAL_HTML}
+    {CRYPTO_MODAL_HTML}
 
     <div id="google_translate_element"></div>
     <script type="text/javascript">
@@ -1200,6 +1310,7 @@ def render_landing_page(c):
                    .replace("{PLANS_HTML}", plans_html)\
                    .replace("{SOCIAL_HTML}", social_html)\
                    .replace("{BANK_MODAL_HTML}", bank_modal_html)\
+                   .replace("{CRYPTO_MODAL_HTML}", crypto_modal_html)\
                    .replace("{DOWNLOAD_BUTTONS_HTML}", download_buttons_html)\
                    .replace("{DOWNLOAD_INSTRUCTIONS_HTML}", download_instructions_html)
 
