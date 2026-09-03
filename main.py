@@ -8,6 +8,7 @@ from typing import Optional
 import random, string, smtplib, os, requests, json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = FastAPI()
 
@@ -332,7 +333,7 @@ def admin_panel(request: Request):
             </div>
             <!-- NUEVA SECCIÓN: LEADS CAPTURADOS -->
             <div class="bg-slate-800 p-6 rounded-xl border border-cyan-700 shadow-lg">
-                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">📧 Leads Capturados (Algoritmo de Persuasión)</h3>
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">📧 Leads Capturados (Agente IA de Seguimiento)</h3>
                 <div id="stat_leads" class="space-y-2 max-h-96 overflow-y-auto"></div>
             </div>
         </div>
@@ -648,7 +649,17 @@ def admin_panel(request: Request):
                 leadsHtml = '<p class="text-slate-500 text-sm">Aún no se han capturado correos.</p>';
             }} else {{
                 leads.slice().reverse().forEach(l => {{
-                    leadsHtml += `<div class="bg-slate-900 p-3 rounded border border-slate-700"><div class="flex justify-between"><span class="text-cyan-400 font-bold text-sm">${{l.email}}</span><span class="text-slate-500 text-xs">${{l.date.split('T')[0]}}</span></div><span class="text-slate-400 text-xs">Interacción: ${{l.interaction}}</span></div>`;
+                    let stageText = l.follow_up_stage === 0 ? 'Email Inicial Enviado' : 
+                                    l.follow_up_stage === 1 ? 'Seguimiento 1 Enviado' : 
+                                    l.follow_up_stage === 2 ? 'Seguimiento 2 Enviado' : 'Embudo Finalizado';
+                    leadsHtml += `<div class="bg-slate-900 p-3 rounded border border-slate-700">
+                        <div class="flex justify-between">
+                            <span class="text-cyan-400 font-bold text-sm">${{l.name}} - ${{l.email}}</span>
+                            <span class="text-slate-500 text-xs">${{l.date.split('T')[0]}}</span>
+                        </div>
+                        <div class="text-slate-400 text-xs mt-1">Interés: ${{l.interaction}}</div>
+                        <div class="text-emerald-400 text-xs mt-1">🤖 IA: ${{stageText}}</div>
+                    </div>`;
                 }});
             }}
             document.getElementById('stat_leads').innerHTML = leadsHtml;
@@ -1232,7 +1243,7 @@ def render_landing_page(c):
     <!-- 🧠 ALGORITMO DE PERSUASIÓN Y CAPTACIÓN DE LEADS          -->
     <!-- ======================================================== -->
 
-    <!-- 1. PRUEBA SOCIAL (NOTIFICACIONES FALSAS PERO REALES) -->
+    <!-- 1. PRUEBA SOCIAL (NOTIFICACIONES) -->
     <div id="social-proof-toast" class="fixed bottom-5 left-5 bg-slate-800 border border-cyan-500 text-slate-300 p-4 rounded-lg shadow-2xl flex items-center gap-3 transition-all duration-500 opacity-0 translate-y-10 z-[9998] max-w-xs">
         <i class="fas fa-check-circle text-cyan-400 text-2xl"></i>
         <div>
@@ -1267,6 +1278,7 @@ def render_landing_page(c):
             <i class="fas fa-gift text-cyan-400 text-5xl mb-4"></i>
             <h3 class="text-2xl font-bold text-white mb-2">¡Espera! No te vayas sin tu regalo</h3>
             <p class="text-slate-400 mb-6 text-sm">Suscríbete ahora y recibe un <strong class="text-cyan-400">Ebook Gratuito</strong> además de un descuento del 10% en tu primer mes.</p>
+            <input type="text" id="exit_name_input" placeholder="Tu Nombre" class="w-full bg-slate-900 rounded p-3 mb-3 border border-slate-700 text-white">
             <input type="email" id="exit_email_input" placeholder="Tu mejor correo" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 text-white">
             <button onclick="submitLead('Modal de Abandono')" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Quiero mi Descuento</button>
         </div>
@@ -1286,8 +1298,9 @@ def render_landing_page(c):
         <div class="text-center mb-4">
             <i class="fas fa-robot text-cyan-400 text-3xl mb-2"></i>
             <h4 class="text-white font-bold text-lg">¿Te gusta lo que ves?</h4>
-            <p class="text-slate-400 text-sm">Déjanos tu correo y te enviamos un video privado de cómo opera la IA + un descuento.</p>
+            <p class="text-slate-400 text-sm">Déjanos tu nombre y correo. Nuestra IA te enviará un video privado de cómo opera + un descuento.</p>
         </div>
+        <input type="text" id="lead_name_input" placeholder="Tu Nombre" class="w-full bg-slate-900 rounded p-2 mb-3 border border-slate-700 text-white outline-none focus:border-cyan-500">
         <input type="email" id="lead_email_input" placeholder="tu.correo@gmail.com" class="w-full bg-slate-900 rounded p-2 mb-3 border border-slate-700 text-white outline-none focus:border-cyan-500">
         <button onclick="submitLead('Widget Flotante')" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-2 rounded transition">
             Quiero el Video y Descuento
@@ -1317,9 +1330,13 @@ def render_landing_page(c):
 
         async function submitLead(source) {
             let email = '';
+            let name = '';
+            
             if(source === 'Modal de Abandono') {
+                name = document.getElementById('exit_name_input').value || 'Usuario';
                 email = document.getElementById('exit_email_input').value;
             } else {
+                name = document.getElementById('lead_name_input').value || 'Usuario';
                 email = document.getElementById('lead_email_input').value;
             }
 
@@ -1337,12 +1354,13 @@ def render_landing_page(c):
                 await fetch('/api/capture_lead', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: email, interaction: interaction })
+                    body: JSON.stringify({ name: name, email: email, interaction: interaction })
                 });
 
                 if(source === 'Modal de Abandono') {
                     document.getElementById('exit-modal').classList.add('hidden');
                 } else {
+                    document.getElementById('lead_name_input').style.display = 'none';
                     document.getElementById('lead_email_input').style.display = 'none';
                     document.querySelector('#lead-capture-widget button[onclick^="submitLead"]').style.display = 'none';
                     document.getElementById('lead_thanks').classList.remove('hidden');
@@ -1427,7 +1445,10 @@ class RecoveryRequest(BaseModel): email: str
 class TrialRequest(BaseModel): hwid: str
 class LicenseUpdate(BaseModel): key: str; active: bool = False
 class ResetHWID(BaseModel): key: str
-class LeadCapture(BaseModel): email: str; interaction: str = "Visualizó demo"
+class LeadCapture(BaseModel): 
+    name: str = "Usuario"
+    email: str
+    interaction: str = "Visualizó demo"
 
 @app.post("/api/track_view")
 def track_view(request: Request):
@@ -1550,7 +1571,7 @@ def reset_hwid(request: Request, data: ResetHWID):
     return {"status": "success", "message": f"✅ HWID reseteado para {key}."}
 
 # ==========================================
-# 🎯 NUEVA RUTA: ALGORITMO DE CAPTACIÓN DE LEADS
+# 🎯 ALGORITMO DE CAPTACIÓN DE LEADS Y AGENTE IA
 # ==========================================
 @app.post("/api/capture_lead")
 def capture_lead(lead: LeadCapture):
@@ -1562,22 +1583,82 @@ def capture_lead(lead: LeadCapture):
         existing_emails = [l.get("email") for l in stats_db["captured_leads"]]
         if lead.email.lower() not in existing_emails:
             stats_db["captured_leads"].append({
+                "name": lead.name,
                 "email": lead.email.lower(),
                 "interaction": lead.interaction,
-                "date": datetime.now().isoformat()
+                "date": datetime.now().isoformat(),
+                "follow_up_stage": 0,
+                "last_email_sent": datetime.now().isoformat()
             })
             save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
         
-        # CORREO AL CLIENTE
-        client_subject = "🚀 Tu acceso a BLENIN.G.77 - Información Exclusiva"
-        client_body = f"Hola,\n\nGracias por tu interés en BLENIN.G.77.\nDetectamos que te interesa nuestro sistema de IA Predictiva.\n\nAdjuntamos información exclusiva para ti. Si deseas agendar una llamada o tienes dudas, responde a este correo.\n\nSaludos,\nEl equipo de BLENIN77."
+        # CORREO INMEDIATO AL CLIENTE (Etapa 0)
+        client_subject = f"🚀 ¡Bienvenido {lead.name}! Tu acceso a BLENIN.G.77"
+        client_body = f"Hola {lead.name},\n\nGracias por tu interés en BLENIN.G.77.\nDetectamos que te interesa nuestro sistema de IA Predictiva por tu interacción: '{lead.interaction}'.\n\nAquí tienes información exclusiva para ti. Si deseas agendar una llamada, responde a este correo.\n\nSaludos,\nEl equipo de BLENIN77."
         send_email(lead.email, client_subject, client_body)
         
         # ALERTA AL ADMINISTRADOR
-        admin_subject = f"🔥 Nuevo Lead Interesado: {lead.email}"
-        admin_body = f"¡Alerta de captación!\n\nUn usuario ha interactuado con la página.\nCorreo: {lead.email}\nInteracción: {lead.interaction}\n\n¡Contáctalo lo antes posible para cerrar la venta!"
+        admin_subject = f"🔥 Nuevo Lead Interesado: {lead.name}"
+        admin_body = f"¡Alerta de captación!\n\nNombre: {lead.name}\nCorreo: {lead.email}\nInteracción: {lead.interaction}\n\nEl Agente IA ha iniciado el seguimiento automático."
         send_email(SMTP_EMAIL, admin_subject, admin_body)
         
         return {"status": "success", "message": "Información enviada al correo."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# ==========================================
+# 🧠 AGENTE IA DE SEGUIMIENTO AUTOMÁTICO (SCHEDULER)
+# ==========================================
+def ai_follow_up_agent():
+    global stats_db
+    if "captured_leads" not in stats_db:
+        return
+
+    leads_updated = False
+    now = datetime.now()
+
+    for lead in stats_db["captured_leads"]:
+        stage = lead.get("follow_up_stage", 0)
+        last_sent_str = lead.get("last_email_sent")
+        
+        if not last_sent_str:
+            continue
+            
+        last_sent = datetime.fromisoformat(last_sent_str)
+        days_since_last = (now - last_sent).days
+
+        # SECUENCIA DE PERSUASIÓN DEL AGENTE (Día 2, Día 5, Día 10)
+        if stage == 0 and days_since_last >= 2:
+            # Etapa 1: Resolución de dudas
+            subject = f"{lead['name']}, ¿tienes dudas sobre la IA de BLENIN77? 🤖"
+            body = f"Hola {lead['name']},\n\nHace un par de días te interesó nuestro sistema. Muchas personas nos preguntan si la IA reemplaza por completo su trabajo. La respuesta es no: es un copiloto que trabaja por ti.\n\n¿Tienes alguna duda sobre los planes? Simplemente responde a este correo.\n\nUn saludo,\nAgente BLENIN77."
+            if send_email(lead["email"], subject, body):
+                lead["follow_up_stage"] = 1
+                lead["last_email_sent"] = now.isoformat()
+                leads_updated = True
+
+        elif stage == 1 and days_since_last >= 3:
+            # Etapa 2: Prueba Social y Urgencia
+            subject = f"🔥 {lead['name']}, mira esto antes de decidir..."
+            body = f"Hola {lead['name']},\n\nQueríamos mostrarte lo que está logrando la comunidad. Nuestros usuarios del Plan Oro están reportando resultados increíbles gracias al Enjambre de 500 Agentes.\n\nRecuerda que la oferta de lanzamiento termina pronto. ¡No te quedes fuera!\n\nMira los planes aquí: tudominio.com/#pricing\n\nAgente BLENIN77."
+            if send_email(lead["email"], subject, body):
+                lead["follow_up_stage"] = 2
+                lead["last_email_sent"] = now.isoformat()
+                leads_updated = True
+
+        elif stage == 2 and days_since_last >= 5:
+            # Etapa 3: Última oportunidad (Descuento)
+            subject = f"⏳ Última oportunidad para ti, {lead['name']}"
+            body = f"Hola {lead['name']},\n\nHemos notado que aún no das el paso. Sabemos que el trading requiere confianza.\n\nPor eso, como último intento de ayudarte, hemos habilitado un descuento especial del 10% si adquieres cualquier plan en las próximas 48 horas.\n\nUsa el código: BLENIN10 al momento de tu transferencia o escríbenos para ayudarte.\n\nAgente BLENIN77."
+            if send_email(lead["email"], subject, body):
+                lead["follow_up_stage"] = 3 # Fin del embudo
+                lead["last_email_sent"] = now.isoformat()
+                leads_updated = True
+
+    if leads_updated:
+        save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
+
+# Inicializar el agente para que corra en segundo plano cada hora
+scheduler = BackgroundScheduler()
+scheduler.add_job(ai_follow_up_agent, 'interval', hours=1)
+scheduler.start()
