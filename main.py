@@ -358,7 +358,7 @@ def admin_panel(request: Request):
         <div id="content-ai" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-cyan-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🤖 Configuración del Agente IA (Seguimiento de Leads)</h3>
-                <p class="text-sm text-slate-400 mb-6">Usa la variable <code class="bg-slate-900 p-1 rounded text-cyan-400">{name}</code> en los mensajes para personalizarlos con el nombre del cliente.</p>
+                <p class="text-sm text-slate-400 mb-6">Usa la variable <code class="bg-slate-900 p-1 rounded text-cyan-400">{{name}}</code> en los mensajes para personalizarlos con el nombre del cliente.</p>
                 
                 <div class="space-y-8">
                     <!-- Etapa 1 -->
