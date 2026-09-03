@@ -30,7 +30,7 @@ JSONBIN_DB_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_DB_ID}"
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SMTP_EMAIL = "mymundodigital0@gmail.com"
-SMTP_PASSWORD = "ysdoqcmnevrnnogy"
+SMTP_PASSWORD = "ysdoqcmnevrnnogy" 
 
 def send_email(to_email, subject, body):
     try:
@@ -45,8 +45,7 @@ def send_email(to_email, subject, body):
         server.send_message(msg)
         server.quit()
         return True
-    except:
-        return False
+    except: return False
 
 # ==========================================
 # 🧠 SISTEMA DE BASE DE DATOS EN LA NUBE
@@ -58,8 +57,7 @@ def load_dbs():
         if resp.status_code == 200:
             data = resp.json()["record"]
             return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}})
-    except:
-        pass
+    except: pass
     return {}, {}, {"views": 0, "countries": {}}
 
 def save_dbs(lic, trials, stats):
@@ -67,8 +65,7 @@ def save_dbs(lic, trials, stats):
         headers = {"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}
         data = {"licenses_db": lic, "trials_db": trials, "stats_db": stats}
         requests.put(JSONBIN_DB_URL, json=data, headers=headers, timeout=5)
-    except:
-        pass
+    except: pass
 
 licenses_db, trials_db, stats_db = load_dbs()
 
@@ -86,15 +83,11 @@ def get_content():
         resp = requests.get(JSONBIN_URL, headers=headers, timeout=5)
         if resp.status_code == 200:
             data = resp.json()["record"]
-            if "publications" not in data:
-                data["publications"] = []
-            if "plans" not in data:
-                data["plans"] = []
-            if "social_links" not in data:
-                data["social_links"] = {}
+            if "publications" not in data: data["publications"] = []
+            if "plans" not in data: data["plans"] = []
+            if "social_links" not in data: data["social_links"] = {}
             return data
-    except:
-        pass
+    except: pass
     return {
         "hero_title": "BLENIN.G.77",
         "hero_subtitle": "THE BEST FUTURE FOR YOU",
@@ -113,11 +106,10 @@ def save_content(data):
         headers = {"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}
         requests.put(JSONBIN_URL, json=data, headers=headers, timeout=5)
         return True
-    except:
-        return False
+    except: return False
 
 # ==========================================
-# 🎛️ PANEL DE ADMINISTRACIÓN (TAILWIND UI) — MEJORADO
+# 🎛️ PANEL DE ADMINISTRACIÓN (TAILWIND UI)
 # ==========================================
 @app.get("/admin", response_class=HTMLResponse)
 def admin_panel():
@@ -125,10 +117,10 @@ def admin_panel():
     pubs = c.get('publications', [])
     plans = c.get('plans', [])
     social = c.get('social_links', {})
-
+    
     pubs_json = json.dumps(pubs)
     plans_json = json.dumps(plans)
-
+    
     return f"""
     <html lang="es"><head><meta charset="UTF-8"><title>Admin - BLENIN77</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -150,8 +142,8 @@ def admin_panel():
     </nav>
 
     <div class="flex-1 container mx-auto p-6 md:p-10 max-w-4xl">
-
-        <!-- PESTAÑA ESTADÍSTICAS — MEJORADA -->
+        
+        <!-- PESTAÑA ESTADÍSTICAS -->
         <div id="content-stats" class="space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-gradient-to-br from-cyan-500/10 to-slate-800 p-6 rounded-xl border border-cyan-500/30 shadow-lg text-center">
@@ -247,7 +239,7 @@ def admin_panel():
     <script>
     const existingPubs = {pubs_json};
     const existingPlans = {plans_json};
-
+    
     function showTab(tabId) {{
         ['stats', 'web', 'plans', 'lic', 'social'].forEach(id => {{
             document.getElementById('content-' + id).classList.add('hidden');
@@ -266,9 +258,7 @@ def admin_panel():
         setTimeout(() => t.classList.add('opacity-0'), 3000);
     }}
 
-    // ==========================================
     // 🗺️ MAPA DE CÓDIGOS ISO → NOMBRES EN ESPAÑOL
-    // ==========================================
     const COUNTRY_MAP = {{
         'CO':'Colombia','ES':'España','MX':'México','AR':'Argentina','PE':'Perú',
         'CL':'Chile','EC':'Ecuador','VE':'Venezuela','BO':'Bolivia','PY':'Paraguay',
@@ -287,13 +277,13 @@ def admin_panel():
         'CZ':'República Checa','HU':'Hungría','RO':'Rumanía','UA':'Ucrania',
         'QA':'Catar','KW':'Kuwait','OM':'Omán','JO':'Jordania','LB':'Líbano',
         'DZ':'Argelia','TN':'Túnez','GH':'Ghana','CM':'Camerún','AO':'Angola',
-        'PK':'Pakistán','BD':'Bangladés','LK':'Sri Lanka','KZ':'Kazajistán'
+        'PK':'Pakistán','BD':'Bangladés','LK':'Sri Lanka','KZ':'Kazajistán',
+        'UY':'Uruguay','PY':'Paraguay'
     }};
 
-    // Convierte código ISO (CO, ES, US) a emoji de bandera 🇨🇴 🇪🇸 🇺🇸
     function codeToFlag(code) {{
         if(!code || code === 'Unknown') return '🌍';
-        return code.toUpperCase().replace(/./g, c =>
+        return code.toUpperCase().replace(/./g, c => 
             String.fromCodePoint(127397 + c.charCodeAt())
         );
     }}
@@ -303,9 +293,6 @@ def admin_panel():
         return COUNTRY_MAP[code.toUpperCase()] || code.toUpperCase();
     }}
 
-    // ==========================================
-    // 📊 FUNCIÓN loadStats MEJORADA
-    // ==========================================
     async function loadStats() {{
         try {{
             const res = await fetch('/api/get_stats');
@@ -332,7 +319,7 @@ def admin_panel():
                         <div class="flex-1">
                             <p class="text-white font-bold text-sm">${{name}}</p>
                             <p class="text-cyan-400 text-xs mt-1">
-                                <span class="text-lg font-extrabold">${{count}}</span>
+                                <span class="text-lg font-extrabold">${{count}}</span> 
                                 ${{plural}} de ${{name}} vieron tu página
                             </p>
                         </div>
@@ -415,7 +402,7 @@ def admin_panel():
                 instagram: document.getElementById('ig_link').value
             }}
         }};
-
+        
         const res = await fetch('/api/save_content', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(data) }});
         const result = await res.json();
         showToast(result.message);
@@ -487,12 +474,12 @@ def recover_page():
     """
 
 # ==========================================
-# 🌐 PÁGINA WEB DE VENTAS (LANDING PAGE) — MEJORADA
+# 🌐 PÁGINA WEB DE VENTAS (LANDING PAGE)
 # ==========================================
 @app.get("/", response_class=HTMLResponse)
 def read_root():
     c = get_content()
-
+    
     pubs_html = ""
     for p in c.get('publications', []):
         if p.get('url'):
@@ -552,13 +539,11 @@ def read_root():
         .glow { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }
         .hero-bg { background: linear-gradient(to bottom, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; }
         /* Ocultar la barra superior de Google Translate */
-        .goog-te-banner-frame.skiptranslate {display: none !important;}
-        body {top: 0px !important;}
+        .goog-te-banner-frame.skiptranslate {display: none !important;} body {top: 0px !important;}
         .goog-te-gadget {font-size: 0 !important;}
         #google_translate_element {display: none !important;}
         .goog-tooltip {display: none !important;}
         .goog-tooltip:hover {display: none !important;}
-        /* Scrollbar personalizada del menú de idiomas */
         #lang-dropdown::-webkit-scrollbar { width: 6px; }
         #lang-dropdown::-webkit-scrollbar-track { background: #1e293b; }
         #lang-dropdown::-webkit-scrollbar-thumb { background: #06b6d4; border-radius: 3px; }
@@ -593,7 +578,7 @@ def read_root():
         </div>
     </nav>
 
-    <!-- Hero Section -->
+    <!-- Hero Section (Con tu imagen de fondo) -->
     <header class="relative overflow-hidden py-24 md:py-32 hero-bg">
         <div class="container mx-auto px-6 text-center relative z-10">
             <div class="inline-block bg-slate-800/50 border border-slate-700 px-4 py-1 rounded-full text-xs font-medium text-cyan-400 mb-6">🚀 SISTEMA INSTITUCIONAL ACTIVO</div>
@@ -646,8 +631,8 @@ def read_root():
         </div>
     </section>
 
-    <!-- INICIO FORMULARIO MAILERLITE -->
-    <div class="section py-16 px-6 bg-slate-950">
+    <!-- INICIO FORMULARIO MAILERLITE (Clase notranslate agregada para arreglar el bug del correo) -->
+    <div class="section py-16 px-6 bg-slate-950 notranslate">
         <style type="text/css">@import url("https://assets.mlcdn.com/fonts.css?version=1785409");</style>
         <style type="text/css">
             .ml-form-embedSubmitLoad { display: inline-block; width: 20px; height: 20px; }
@@ -865,56 +850,33 @@ def read_root():
                    .replace("{SOCIAL_HTML}", social_html)
 
 # ==========================================
-# 🧠 BASES DE DATOS Y RUTAS API
+# 🧠 BASES DE DATOS Y RUTAS API (Licencias, IA, etc.)
 # ==========================================
 db_trades = []
 
-class TradeData(BaseModel):
-    strategy: str
-    symbol: str
-    timeframe: str
-    outcome: bool
-    profit_pips: float
-    session: str
-
-class LicenseCheck(BaseModel):
-    key: str
-    hwid: str
-
-class LicenseCreate(BaseModel):
-    plan: str
-    duration_days: int = 30
-    email: str = ""
-
-class LicenseAction(BaseModel):
-    key: str
-
-class RecoveryRequest(BaseModel):
-    email: str
-
-class TrialRequest(BaseModel):
-    hwid: str
-
-class LicenseUpdate(BaseModel):
-    key: str
-    active: bool = False
-
-class ResetHWID(BaseModel):
-    key: str
+class TradeData(BaseModel): strategy: str; symbol: str; timeframe: str; outcome: bool; profit_pips: float; session: str
+class LicenseCheck(BaseModel): key: str; hwid: str
+class LicenseCreate(BaseModel): plan: str; duration_days: int = 30; email: str = ""
+class LicenseAction(BaseModel): key: str
+class RecoveryRequest(BaseModel): email: str
+class TrialRequest(BaseModel): hwid: str
+class LicenseUpdate(BaseModel): key: str; active: bool = False
+class ResetHWID(BaseModel): key: str
 
 @app.post("/api/track_view")
 def track_view(request: Request):
     global stats_db
     try:
         ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "8.8.8.8").split(",")[0]
+        # Usamos GeoJS (gratuito, sin límites e indefinido para uso general)
         geo_resp = requests.get(f"https://get.geojs.io/v1/ip/country.json?ip={ip}", timeout=2)
         country = geo_resp.json().get("country", "Unknown") if geo_resp.status_code == 200 else "Unknown"
     except:
         country = "Unknown"
-
+    
     stats_db["views"] = stats_db.get("views", 0) + 1
     stats_db["countries"][country] = stats_db["countries"].get(country, 0) + 1
-
+    
     save_dbs(licenses_db, trials_db, stats_db)
     return {"status": "tracked"}
 
@@ -934,14 +896,12 @@ def receive_intel(trade: TradeData):
 
 @app.get("/api/get_global_intel")
 def get_intel():
-    if not db_trades:
-        return {}
+    if not db_trades: return {}
     stats = defaultdict(lambda: {"wins": 0, "total": 0})
     for t in db_trades:
         k = f"{t.strategy}_{t.symbol}_{t.session}"
         stats[k]["total"] += 1
-        if t.outcome:
-            stats[k]["wins"] += 1
+        if t.outcome: stats[k]["wins"] += 1
     return {k: {"win_rate": v["wins"]/v["total"], "trades": v["total"]} for k, v in stats.items() if v["total"] > 0}
 
 @app.post("/api/start_trial")
@@ -952,7 +912,7 @@ def start_trial(data: TrialRequest):
         if datetime.now() > expires:
             return {"valid": False, "message": "⏳ Prueba expirada."}
         return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": "BRONCE"}
-
+    
     trials_db[data.hwid] = {"expires": (datetime.now() + timedelta(days=30)).isoformat()}
     save_dbs(licenses_db, trials_db, stats_db)
     return {"valid": True, "days_left": 30, "plan": "BRONCE"}
@@ -961,22 +921,18 @@ def start_trial(data: TrialRequest):
 def validate_license(data: LicenseCheck):
     global licenses_db
     key = data.key.upper().strip()
-    if key not in licenses_db:
-        return {"valid": False, "message": "❌ Licencia no encontrada."}
+    if key not in licenses_db: return {"valid": False, "message": "❌ Licencia no encontrada."}
     info = licenses_db[key]
-    if not info["active"]:
-        return {"valid": False, "message": "🚫 Licencia suspendida."}
-
+    if not info["active"]: return {"valid": False, "message": "🚫 Licencia suspendida."}
+    
     expires = datetime.fromisoformat(info["expires"])
-    if datetime.now() > expires:
-        return {"valid": False, "message": "⏳ Expirada."}
-
+    if datetime.now() > expires: return {"valid": False, "message": "⏳ Expirada."}
+    
     if info["hwid"] is None:
         info["hwid"] = data.hwid
         save_dbs(licenses_db, trials_db, stats_db)
-    elif info["hwid"] != data.hwid:
-        return {"valid": False, "message": "🔒 En uso en otra PC."}
-
+    elif info["hwid"] != data.hwid: return {"valid": False, "message": "🔒 En uso en otra PC."}
+    
     return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": info["plan"]}
 
 @app.post("/api/create_license")
@@ -984,11 +940,9 @@ def create_license(data: LicenseCreate):
     global licenses_db
     key = generate_license_key(data.plan)
     licenses_db[key] = {
-        "hwid": None,
-        "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(),
-        "active": True,
-        "plan": data.plan.upper(),
-        "email": data.email.lower()
+        "hwid": None, 
+        "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(), 
+        "active": True, "plan": data.plan.upper(), "email": data.email.lower()
     }
     save_dbs(licenses_db, trials_db, stats_db)
     return {"status": "success", "key": key}
@@ -1007,7 +961,7 @@ def manage_license(data: LicenseUpdate):
     key = data.key.upper().strip()
     if key not in licenses_db:
         return {"status": "error", "message": "❌ Licencia no encontrada."}
-
+    
     licenses_db[key]["active"] = data.active
     save_dbs(licenses_db, trials_db, stats_db)
     status = "activada" if data.active else "suspendida"
@@ -1019,7 +973,7 @@ def reset_hwid(data: ResetHWID):
     key = data.key.upper().strip()
     if key not in licenses_db:
         return {"status": "error", "message": "❌ Licencia no encontrada."}
-
+    
     licenses_db[key]["hwid"] = None
     save_dbs(licenses_db, trials_db, stats_db)
     return {"status": "success", "message": f"✅ HWID reseteado para {key}."}
