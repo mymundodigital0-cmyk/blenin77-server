@@ -1,10 +1,9 @@
-from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Optional
 import random, string, smtplib, os, requests, json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -19,71 +18,6 @@ app.add_middleware(
 )
 
 # ==========================================
-# 🔐 SISTEMA DE SEGURIDAD Y LOGIN
-# ==========================================
-SESSION_TOKEN = "blenin_secure_session_2024"
-
-class AdminLoginData(BaseModel):
-    password: str
-
-class ChangePasswordData(BaseModel):
-    current_password: str
-    new_password: str
-
-@app.get("/admin/login", response_class=HTMLResponse)
-def admin_login_page():
-    return f"""
-    <html lang="es"><head><meta charset="UTF-8">
-    <title>Login Admin - BLENIN77</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
-    <style>body {{ font-family: 'Inter', sans-serif; }}</style>
-    </head>
-    <body class="bg-slate-900 text-slate-300 flex items-center justify-center min-h-screen">
-        <div class="bg-slate-800 p-8 rounded-xl shadow-2xl border border-slate-700 w-full max-w-sm text-center">
-            <h1 class="text-2xl font-bold text-cyan-400 mb-2">🔒 Acceso Restringido</h1>
-            <p class="text-slate-400 mb-6 text-sm">Panel de Control BLENIN77</p>
-            <p id="err_msg" class="text-red-400 text-sm mb-4 hidden">Contraseña incorrecta.</p>
-            <input type="password" id="pwd" placeholder="Contraseña de Administrador" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 outline-none focus:border-cyan-500">
-            <button onclick="doLogin()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Ingresar</button>
-        </div>
-        <script>
-            async function doLogin() {{
-                const pwd = document.getElementById('pwd').value;
-                const res = await fetch('/api/login', {{
-                    method: 'POST',
-                    headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify({{ password: pwd }})
-                }});
-                if(res.ok) {{
-                    window.location.href = '/admin';
-                }} else {{
-                    document.getElementById('err_msg').classList.remove('hidden');
-                }}
-            }}
-        </script>
-    </body></html>
-    """
-
-@app.post("/api/login")
-def admin_login_verify(data: AdminLoginData, response: Response):
-    global admin_password_db
-    if data.password == admin_password_db:
-        response.set_cookie(key="blenin_session", value=SESSION_TOKEN, httponly=True, secure=True, samesite="lax", max_age=86400)
-        return {"status": "success"}
-    raise HTTPException(status_code=401, detail="Contraseña incorrecta")
-
-@app.get("/admin/logout")
-def admin_logout(response: Response):
-    response.delete_cookie(key="blenin_session")
-    return RedirectResponse(url="/admin/login", status_code=303)
-
-def verify_admin(request: Request):
-    if request.cookies.get("blenin_session") != SESSION_TOKEN:
-        return False
-    return True
-
-# ==========================================
 # 🔧 CONFIGURACIÓN JSONBIN Y CORREO
 # ==========================================
 JSONBIN_BIN_ID = os.environ.get("JSONBIN_BIN_ID", "")
@@ -96,7 +30,7 @@ JSONBIN_DB_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_DB_ID}"
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SMTP_EMAIL = "mymundodigital0@gmail.com"
-SMTP_PASSWORD = "ysdoqcmnevrnnogy" 
+SMTP_PASSWORD = "ysdoqcmnevrnnogy"
 
 def send_email(to_email, subject, body):
     try:
@@ -111,10 +45,11 @@ def send_email(to_email, subject, body):
         server.send_message(msg)
         server.quit()
         return True
-    except: return False
+    except:
+        return False
 
 # ==========================================
-# 🧠 SISTEMA DE BASE DE DATOS MULTI-PÁGINA
+# 🧠 SISTEMA DE BASE DE DATOS EN LA NUBE
 # ==========================================
 def load_dbs():
     try:
@@ -122,21 +57,20 @@ def load_dbs():
         resp = requests.get(JSONBIN_DB_URL, headers=headers, timeout=5)
         if resp.status_code == 200:
             data = resp.json()["record"]
-            pwd = data.get("admin_password", os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"))
-            return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}}), pwd
-    except: pass
-    return {}, {}, {"views": 0, "countries": {}}, os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123")
+            return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}}), data.get("leads_db", [])
+    except:
+        pass
+    return {}, {}, {"views": 0, "countries": {}}, []
 
-def save_dbs(lic, trials, stats, pwd=None):
+def save_dbs(lic, trials, stats, leads):
     try:
         headers = {"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}
-        data = {"licenses_db": lic, "trials_db": trials, "stats_db": stats}
-        if pwd:
-            data["admin_password"] = pwd
+        data = {"licenses_db": lic, "trials_db": trials, "stats_db": stats, "leads_db": leads}
         requests.put(JSONBIN_DB_URL, json=data, headers=headers, timeout=5)
-    except: pass
+    except:
+        pass
 
-licenses_db, trials_db, stats_db, admin_password_db = load_dbs()
+licenses_db, trials_db, stats_db, leads_db = load_dbs()
 
 if not licenses_db:
     licenses_db = {
@@ -144,12 +78,24 @@ if not licenses_db:
         "BLENIN-TEST-PLATA": {"hwid": None, "expires": "2026-09-15T00:00:00", "active": True, "plan": "PLATA", "email": "test-plata@blenin77.com"},
         "BLENIN-TEST-BRONCE": {"hwid": None, "expires": "2026-09-15T00:00:00", "active": True, "plan": "BRONCE", "email": "test-bronce@blenin77.com"}
     }
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
+    save_dbs(licenses_db, trials_db, stats_db, leads_db)
 
-def get_default_content(page_name="Principal"):
+def get_content():
+    try:
+        headers = {"X-Master-Key": JSONBIN_API_KEY}
+        resp = requests.get(JSONBIN_URL, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()["record"]
+            if "publications" not in data:
+                data["publications"] = []
+            if "plans" not in data:
+                data["plans"] = []
+            if "social_links" not in data:
+                data["social_links"] = {}
+            return data
+    except:
+        pass
     return {
-        "page_name": page_name,
-        "chatbot_id": "gzEjAzK1VCE72hJ_hBfA4",
         "hero_title": "BLENIN.G.77",
         "hero_subtitle": "THE BEST FUTURE FOR YOU",
         "hero_text": "IA Predictiva, Enjambre de 500 Agentes y Análisis Global en Tiempo Real.",
@@ -159,58 +105,30 @@ def get_default_content(page_name="Principal"):
             {"name": "Plata", "price": "$99", "features": "✅ 2 Cuentas MT5\n✅ Modo Híbrido + Enjambre", "link": "https://paypal.me/plata", "highlight": True},
             {"name": "Oro", "price": "$199", "features": "✅ Cuentas Ilimitadas\n✅ Deep Learning (PyTorch)", "link": "https://paypal.me/oro", "highlight": False}
         ],
-        "social_links": {"facebook": "", "whatsapp": "", "youtube": "", "tiktok": "", "telegram": "", "instagram": ""},
-        "bank_transfer_info": {
-            "bank_name": "Banco Ejemplo S.A.",
-            "account_type": "Cuenta Corriente",
-            "account_number": "01234567890123456789",
-            "beneficiary": "Lenin Benitez",
-            "email_for_proof": "pagos@blenin77.com",
-            "whatsapp_for_proof": "593999999999"
-        },
-        "crypto_payments": [
-            {"name": "Bitcoin (BTC)", "address": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"},
-            {"name": "USDT (TRC20)", "address": "TXYZ1234567890ABCDEF"}
-        ],
-        "download_links": ["https://drive.google.com/tu-archivo-descarga"],
-        "download_instructions": "1. Descarga el archivo .zip\n2. Extrae el contenido en tu PC\n3. Ejecuta el instalador Blenin77.exe\n4. Ingresa tu licencia al abrir el sistema."
+        "social_links": {"facebook": "", "whatsapp": "", "youtube": "", "tiktok": "", "telegram": "", "instagram": ""}
     }
 
-def get_all_pages():
-    try:
-        headers = {"X-Master-Key": JSONBIN_API_KEY}
-        resp = requests.get(JSONBIN_URL, headers=headers, timeout=5)
-        if resp.status_code == 200:
-            data = resp.json()["record"]
-            if "hero_title" in data and "pages" not in data:
-                new_data = {"pages": {"main": data}}
-                save_all_pages(new_data)
-                return new_data
-            return data
-    except: pass
-    default_data = {"pages": {"main": get_default_content()}}
-    save_all_pages(default_data)
-    return default_data
-
-def save_all_pages(data):
+def save_content(data):
     try:
         headers = {"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}
         requests.put(JSONBIN_URL, json=data, headers=headers, timeout=5)
         return True
-    except: return False
+    except:
+        return False
 
 # ==========================================
-# 🎛️ PANEL DE ADMINISTRACIÓN (CMS MULTI-PÁGINA)
+# 🎛️ PANEL DE ADMINISTRACIÓN (TAILWIND UI)
 # ==========================================
 @app.get("/admin", response_class=HTMLResponse)
-def admin_panel(request: Request):
-    if not verify_admin(request):
-        return RedirectResponse(url="/admin/login", status_code=303)
-        
-    pages_data = get_all_pages()
-    pages_dict = pages_data.get("pages", {})
-    pages_json = json.dumps(pages_dict)
-    
+def admin_panel():
+    c = get_content()
+    pubs = c.get('publications', [])
+    plans = c.get('plans', [])
+    social = c.get('social_links', {})
+
+    pubs_json = json.dumps(pubs)
+    plans_json = json.dumps(plans)
+
     return f"""
     <html lang="es"><head><meta charset="UTF-8"><title>Admin - BLENIN77</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -222,83 +140,49 @@ def admin_panel(request: Request):
 
     <nav class="bg-slate-950 p-4 shadow-lg border-b border-slate-800 flex justify-between items-center">
         <h1 class="text-xl font-bold text-cyan-400">🎛️ Panel BLENIN77</h1>
-        <div class="flex gap-2 flex-wrap items-center">
-            <button onclick="showTab('pages')" id="tab-pages" class="tab-active px-4 py-2 rounded text-sm font-medium transition">🚀 Páginas</button>
-            <button onclick="showTab('stats')" id="tab-stats" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">📊 Estadísticas</button>
+        <div class="flex gap-2 flex-wrap">
+            <button onclick="showTab('stats')" id="tab-stats" class="tab-active px-4 py-2 rounded text-sm font-medium transition">📊 Estadísticas</button>
+            <button onclick="showTab('web')" id="tab-web" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">Página Web</button>
+            <button onclick="showTab('plans')" id="tab-plans" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">Planes</button>
             <button onclick="showTab('lic')" id="tab-lic" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">Licencias</button>
-            <button onclick="showTab('settings')" id="tab-settings" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">⚙️ Ajustes</button>
-            <a href="/admin/logout" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded text-sm font-bold transition ml-2"><i class="fas fa-sign-out-alt mr-1"></i>Salir</a>
+            <button onclick="showTab('social')" id="tab-social" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">Redes</button>
         </div>
     </nav>
 
     <div class="flex-1 container mx-auto p-6 md:p-10 max-w-4xl">
-        
-        <!-- GESTOR DE PÁGINAS -->
-        <div id="content-pages" class="space-y-6 hidden">
-            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Gestor de Landing Pages</h3>
-                <div class="flex gap-2 mb-4">
-                    <select id="page_selector" onchange="loadPageData()" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></select>
-                    <button onclick="createPage()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold whitespace-nowrap"><i class="fas fa-plus"></i> Nueva</button>
-                    <button onclick="duplicatePage()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded text-sm font-bold whitespace-nowrap"><i class="fas fa-copy"></i> Duplicar</button>
-                    <button onclick="deletePage()" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded text-sm font-bold whitespace-nowrap"><i class="fas fa-trash"></i></button>
-                </div>
-                <p class="text-xs text-slate-400 mb-4">URL de la página: <span id="page_url_preview" class="text-cyan-400"></span></p>
-            </div>
 
+        <!-- PESTAÑA ESTADÍSTICAS -->
+        <div id="content-stats" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-gradient-to-br from-cyan-500/10 to-slate-800 p-6 rounded-xl border border-cyan-500/30 shadow-lg text-center">
+                    <div class="text-3xl mb-2">👁️</div>
+                    <h3 class="text-sm text-slate-400 uppercase tracking-wider mb-2">Visitas Totales</h3>
+                    <p id="stat_views" class="text-5xl font-extrabold text-cyan-400">0</p>
+                    <p class="text-xs text-slate-500 mt-2">personas vieron tu página</p>
+                </div>
+                <div class="bg-gradient-to-br from-emerald-500/10 to-slate-800 p-6 rounded-xl border border-emerald-500/30 shadow-lg text-center">
+                    <div class="text-3xl mb-2">🌍</div>
+                    <h3 class="text-sm text-slate-400 uppercase tracking-wider mb-2">Países Alcanzados</h3>
+                    <p id="stat_countries_count" class="text-5xl font-extrabold text-emerald-400">0</p>
+                    <p class="text-xs text-slate-500 mt-2">países diferentes te visitan</p>
+                </div>
+            </div>
+            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Visitantes por País</h3>
+                <div id="stat_countries" class="space-y-2"></div>
+            </div>
+        </div>
+
+        <!-- PESTAÑA WEB -->
+        <div id="content-web" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Textos Principales (Hero)</h3>
-                <input type="hidden" id="current_slug">
-                <label class="text-sm text-slate-400">Nombre Interno de la Página</label>
-                <input type="text" id="page_name" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
-                
-                <label class="text-sm text-slate-400">ID del Chatbot para esta página (Chatbase)</label>
-                <div class="flex items-center gap-2 mb-4">
-                    <i class="fas fa-robot text-cyan-400"></i>
-                    <input type="text" id="chatbot_id" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none" placeholder="Ej: gzEjAzK1VCE72hJ_hBfA4">
-                </div>
-
                 <label class="text-sm text-slate-400">Título Principal (H1)</label>
-                <input type="text" id="hero_title" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
+                <input type="text" id="hero_title" value="{c.get('hero_title', '')}" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
                 <label class="text-sm text-slate-400">Subtítulo (H2)</label>
-                <input type="text" id="hero_subtitle" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
+                <input type="text" id="hero_subtitle" value="{c.get('hero_subtitle', '')}" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
                 <label class="text-sm text-slate-400">Texto Descriptivo</label>
-                <textarea id="hero_text" rows="3" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none"></textarea>
-            </div>
-
-            <!-- SISTEMA DE DESCARGA -->
-            <div class="bg-slate-800 p-6 rounded-xl border border-indigo-700 shadow-lg">
-                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">📥 Sistema de Descarga para Clientes</h3>
-                <p class="text-sm text-slate-400 mb-4">Agrega uno o varios enlaces (servidores espejo) por si uno principal se cae. El usuario verá botones de "Servidor 1", "Servidor 2", etc.</p>
-                <label class="text-sm text-slate-400">Enlaces de Descarga</label>
-                <div id="dl-links-container" class="space-y-2 mb-4"></div>
-                <button onclick="addDlLink()" class="mt-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-plus mr-2"></i>Agregar Enlace</button>
-                
-                <div class="mt-6">
-                    <label class="text-sm text-slate-400">Instrucciones de Instalación/Referencia</label>
-                    <textarea id="download_instructions" rows="4" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none" placeholder="Ej: 1. Descarga el archivo..."></textarea>
-                </div>
-            </div>
-
-            <!-- TRANSFERENCIA BANCARIA -->
-            <div class="bg-slate-800 p-6 rounded-xl border border-amber-700 shadow-lg">
-                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">💳 Pagos por Transferencia Bancaria</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><label class="text-sm text-slate-400">Nombre del Banco</label><input type="text" id="bt_bank_name" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Bank of America"></div>
-                    <div><label class="text-sm text-slate-400">Tipo de Cuenta</label><input type="text" id="bt_account_type" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Cuenta Corriente"></div>
-                    <div><label class="text-sm text-slate-400">Número de Cuenta / IBAN</label><input type="text" id="bt_account_number" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: 0123456789"></div>
-                    <div><label class="text-sm text-slate-400">Beneficiario</label><input type="text" id="bt_beneficiary" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Lenin Benitez"></div>
-                    <div><label class="text-sm text-slate-400">Correo para enviar comprobante</label><input type="email" id="bt_email" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="pagos@blenin77.com"></div>
-                    <div><label class="text-sm text-slate-400">WhatsApp para enviar comprobante</label><input type="text" id="bt_whatsapp" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="593999999999"></div>
-                </div>
-            </div>
-
-            <!-- CRIPTOMONEDAS Y DINERO ELECTRÓNICO -->
-            <div class="bg-slate-800 p-6 rounded-xl border border-purple-700 shadow-lg">
-                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">💸 Criptomonedas y Dinero Electrónico</h3>
-                <p class="text-sm text-slate-400 mb-4">Agrega tus billeteras de BTC, USDT, o correos de PayPal/Skrill. El usuario podrá copiar la dirección para enviarte el pago.</p>
-                <div id="crypto-container" class="space-y-2 mb-4"></div>
-                <button onclick="addCryptoRow()" class="mt-2 bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-plus mr-2"></i>Agregar Billetera</button>
+                <textarea id="hero_text" rows="3" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none">{c.get('hero_text', '')}</textarea>
             </div>
 
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
@@ -306,73 +190,21 @@ def admin_panel(request: Request):
                 <div id="pubs-container" class="space-y-4"></div>
                 <button onclick="addPubRow()" class="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-plus mr-2"></i>Agregar Publicación</button>
             </div>
+        </div>
 
+        <!-- PESTAÑA PLANES -->
+        <div id="content-plans" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Planes de Suscripción (PayPal)</h3>
                 <div id="plans-container" class="space-y-6"></div>
                 <button onclick="addPlanRow()" class="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-plus mr-2"></i>Agregar Plan</button>
             </div>
-
-            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Redes Sociales</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><label class="text-sm text-slate-400">Facebook URL</label><input type="text" id="fb_link" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></div>
-                    <div><label class="text-sm text-slate-400">WhatsApp URL</label><input type="text" id="wa_link" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></div>
-                    <div><label class="text-sm text-slate-400">YouTube URL</label><input type="text" id="yt_link" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></div>
-                    <div><label class="text-sm text-slate-400">TikTok URL</label><input type="text" id="tt_link" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></div>
-                    <div><label class="text-sm text-slate-400">Telegram URL</label><input type="text" id="tg_link" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></div>
-                    <div><label class="text-sm text-slate-400">Instagram URL</label><input type="text" id="ig_link" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- PESTAÑA ESTADÍSTICAS -->
-        <div id="content-stats" class="hidden space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg text-center">
-                    <h3 class="text-sm text-slate-400 uppercase tracking-wider mb-2">Visitas Totales</h3>
-                    <p id="stat_views" class="text-5xl font-extrabold text-cyan-400">0</p>
-                </div>
-                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg text-center">
-                    <h3 class="text-sm text-slate-400 uppercase tracking-wider mb-2">Países Alcanzados</h3>
-                    <p id="stat_countries_count" class="text-5xl font-extrabold text-emerald-400">0</p>
-                </div>
-            </div>
-            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Top Países de Origen</h3>
-                <div id="stat_countries" class="space-y-2"></div>
-            </div>
         </div>
 
         <!-- PESTAÑA LICENCIAS -->
         <div id="content-lic" class="hidden space-y-6">
-            <div class="bg-slate-800 p-6 rounded-xl border border-emerald-700 shadow-lg">
-                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">➕ Crear Licencia Manualmente</h3>
-                <p class="text-sm text-slate-400 mb-4">Usa esta función cuando recibas el comprobante de transferencia bancaria o cripto de un cliente.</p>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <div>
-                        <label class="text-sm text-slate-400">Plan</label>
-                        <select id="manual_plan" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500">
-                            <option value="BRONCE">Bronce</option>
-                            <option value="PLATA">Plata</option>
-                            <option value="ORO">Oro</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="text-sm text-slate-400">Duración (días)</label>
-                        <input type="number" id="manual_days" value="30" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500">
-                    </div>
-                    <div>
-                        <label class="text-sm text-slate-400">Correo del Cliente</label>
-                        <input type="email" id="manual_email" placeholder="cliente@correo.com" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500">
-                    </div>
-                </div>
-                <button onclick="createManualLicense()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-key mr-2"></i>Generar y Guardar Licencia</button>
-                <div id="manual_lic_msg" class="mt-4 text-cyan-400 font-bold text-sm hidden bg-slate-900 p-3 rounded"></div>
-            </div>
-
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Gestión de Licencias Existentes</h3>
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Gestión de Licencias</h3>
                 <label class="text-sm text-slate-400">Clave de Licencia</label>
                 <input type="text" id="lic_key" placeholder="BLENIN-ORO-XXXX-XXXX" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
                 <div class="flex gap-2 flex-wrap">
@@ -384,25 +216,17 @@ def admin_panel(request: Request):
             </div>
         </div>
 
-        <!-- PESTAÑA AJUSTES -->
-        <div id="content-settings" class="hidden space-y-6">
-            <div class="bg-slate-800 p-6 rounded-xl border border-amber-700 shadow-lg">
-                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🔑 Cambiar Contraseña de Administrador</h3>
-                <div class="space-y-4">
-                    <div>
-                        <label class="text-sm text-slate-400">Contraseña Actual</label>
-                        <input type="password" id="current_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="••••••••">
-                    </div>
-                    <div>
-                        <label class="text-sm text-slate-400">Nueva Contraseña</label>
-                        <input type="password" id="new_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="••••••••">
-                    </div>
-                    <div>
-                        <label class="text-sm text-slate-400">Repetir Nueva Contraseña</label>
-                        <input type="password" id="confirm_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="••••••••">
-                    </div>
-                    <button onclick="changePassword()" class="w-full bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-save mr-2"></i>Actualizar Contraseña</button>
-                    <div id="pwd_msg" class="mt-4 font-bold text-sm hidden"></div>
+        <!-- PESTAÑA REDES -->
+        <div id="content-social" class="hidden space-y-6">
+            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Redes Sociales</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label class="text-sm text-slate-400">Facebook URL</label><input type="text" id="fb_link" value="{social.get('facebook', '')}" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></div>
+                    <div><label class="text-sm text-slate-400">WhatsApp URL</label><input type="text" id="wa_link" value="{social.get('whatsapp', '')}" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></div>
+                    <div><label class="text-sm text-slate-400">YouTube URL</label><input type="text" id="yt_link" value="{social.get('youtube', '')}" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></div>
+                    <div><label class="text-sm text-slate-400">TikTok URL</label><input type="text" id="tt_link" value="{social.get('tiktok', '')}" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></div>
+                    <div><label class="text-sm text-slate-400">Telegram URL</label><input type="text" id="tg_link" value="{social.get('telegram', '')}" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></div>
+                    <div><label class="text-sm text-slate-400">Instagram URL</label><input type="text" id="ig_link" value="{social.get('instagram', '')}" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></div>
                 </div>
             </div>
         </div>
@@ -421,10 +245,11 @@ def admin_panel(request: Request):
     </div>
 
     <script>
-    const allPages = {pages_json};
-    
+    const existingPubs = {pubs_json};
+    const existingPlans = {plans_json};
+
     function showTab(tabId) {{
-        ['pages', 'stats', 'lic', 'settings'].forEach(id => {{
+        ['stats', 'web', 'plans', 'lic', 'social'].forEach(id => {{
             document.getElementById('content-' + id).classList.add('hidden');
             document.getElementById('tab-' + id).classList.remove('tab-active');
             document.getElementById('tab-' + id).classList.add('bg-slate-800', 'hover:bg-slate-700');
@@ -441,121 +266,79 @@ def admin_panel(request: Request):
         setTimeout(() => t.classList.add('opacity-0'), 3000);
     }}
 
-    function updateSelector() {{
-        const selector = document.getElementById('page_selector');
-        selector.innerHTML = '';
-        Object.keys(allPages).forEach(slug => {{
-            let opt = document.createElement('option');
-            opt.value = slug;
-            opt.innerText = allPages[slug].page_name || slug;
-            selector.appendChild(opt);
-        }});
+    const COUNTRY_MAP = {{
+        'CO':'Colombia','ES':'España','MX':'México','AR':'Argentina','PE':'Perú',
+        'CL':'Chile','EC':'Ecuador','VE':'Venezuela','BO':'Bolivia','PY':'Paraguay',
+        'UY':'Uruguay','CR':'Costa Rica','PA':'Panamá','DO':'Rep. Dominicana',
+        'GT':'Guatemala','HN':'Honduras','SV':'El Salvador','NI':'Nicaragua',
+        'CU':'Cuba','PR':'Puerto Rico','US':'Estados Unidos','CA':'Canadá',
+        'BR':'Brasil','GB':'Reino Unido','FR':'Francia','DE':'Alemania',
+        'IT':'Italia','PT':'Portugal','RU':'Rusia','CN':'China','JP':'Japón',
+        'KR':'Corea del Sur','IN':'India','AU':'Australia','NL':'Países Bajos',
+        'BE':'Bélgica','CH':'Suiza','AT':'Austria','SE':'Suecia','NO':'Noruega',
+        'DK':'Dinamarca','FI':'Finlandia','PL':'Polonia','GR':'Grecia',
+        'TR':'Turquía','SA':'Arabia Saudita','AE':'Emiratos Árabes','IL':'Israel',
+        'EG':'Egipto','ZA':'Sudáfrica','MA':'Marruecos','NG':'Nigeria','KE':'Kenia',
+        'NZ':'Nueva Zelanda','ID':'Indonesia','TH':'Tailandia','VN':'Vietnam',
+        'PH':'Filipinas','MY':'Malasia','SG':'Singapur','IE':'Irlanda',
+        'CZ':'República Checa','HU':'Hungría','RO':'Rumanía','UA':'Ucrania',
+        'QA':'Catar','KW':'Kuwait','OM':'Omán','JO':'Jordania','LB':'Líbano',
+        'DZ':'Argelia','TN':'Túnez','GH':'Ghana','CM':'Camerún','AO':'Angola',
+        'PK':'Pakistán','BD':'Bangladés','LK':'Sri Lanka','KZ':'Kazajistán'
+    }};
+
+    function codeToFlag(code) {{
+        if(!code || code === 'Unknown') return '🌍';
+        return code.toUpperCase().replace(/./g, c =>
+            String.fromCodePoint(127397 + c.charCodeAt())
+        );
     }}
 
-    function loadPageData() {{
-        const slug = document.getElementById('page_selector').value;
-        const p = allPages[slug];
-        if(!p) return;
-        
-        document.getElementById('current_slug').value = slug;
-        document.getElementById('page_name').value = p.page_name || '';
-        document.getElementById('chatbot_id').value = p.chatbot_id || 'gzEjAzK1VCE72hJ_hBfA4';
-        document.getElementById('hero_title').value = p.hero_title || '';
-        document.getElementById('hero_subtitle').value = p.hero_subtitle || '';
-        document.getElementById('hero_text').value = p.hero_text || '';
-        
-        document.getElementById('download_instructions').value = p.download_instructions || '';
-        
-        document.getElementById('dl-links-container').innerHTML = '';
-        (p.download_links || [p.download_link || '']).forEach(url => addDlLink(url)); 
-        if((p.download_links || []).length === 0) addDlLink();
-
-        const bt = p.bank_transfer_info || {{}};
-        document.getElementById('bt_bank_name').value = bt.bank_name || '';
-        document.getElementById('bt_account_type').value = bt.account_type || '';
-        document.getElementById('bt_account_number').value = bt.account_number || '';
-        document.getElementById('bt_beneficiary').value = bt.beneficiary || '';
-        document.getElementById('bt_email').value = bt.email_for_proof || '';
-        document.getElementById('bt_whatsapp').value = bt.whatsapp_for_proof || '';
-
-        document.getElementById('crypto-container').innerHTML = '';
-        (p.crypto_payments || []).forEach(c => addCryptoRow(c.name, c.address));
-        if((p.crypto_payments || []).length === 0) addCryptoRow();
-
-        document.getElementById('fb_link').value = p.social_links?.facebook || '';
-        document.getElementById('wa_link').value = p.social_links?.whatsapp || '';
-        document.getElementById('yt_link').value = p.social_links?.youtube || '';
-        document.getElementById('tt_link').value = p.social_links?.tiktok || '';
-        document.getElementById('tg_link').value = p.social_links?.telegram || '';
-        document.getElementById('ig_link').value = p.social_links?.instagram || '';
-
-        document.getElementById('pubs-container').innerHTML = '';
-        (p.publications || []).forEach(pub => addPubRow(pub.type, pub.url, pub.desc));
-        if((p.publications || []).length === 0) addPubRow();
-
-        document.getElementById('plans-container').innerHTML = '';
-        (p.plans || []).forEach(plan => addPlanRow(plan.name, plan.price, plan.features, plan.link, plan.highlight));
-        if((p.plans || []).length === 0) addPlanRow();
-
-        const urlText = slug === 'main' ? 'tudominio.com/' : 'tudominio.com/p/' + slug;
-        document.getElementById('page_url_preview').innerText = urlText;
+    function getCountryName(code) {{
+        if(!code || code === 'Unknown') return 'Desconocido';
+        return COUNTRY_MAP[code.toUpperCase()] || code.toUpperCase();
     }}
 
-    function createPage() {{
-        const name = prompt('Nombre de la nueva página (ej: Promo Black Friday):');
-        if(!name) return;
-        let slug = prompt('URL de la página (solo letras, números y guiones, ej: black-friday):');
-        if(!slug) return;
-        slug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '');
-        if(allPages[slug]) {{ alert('Esa URL ya existe'); return; }}
-        
-        allPages[slug] = {{ page_name: name, chatbot_id: 'gzEjAzK1VCE72hJ_hBfA4', hero_title: name, hero_subtitle: '', hero_text: '', publications: [], plans: [], social_links: {{}}, bank_transfer_info: {{}}, crypto_payments: [], download_links: [], download_instructions: '' }};
-        saveData(true);
-    }}
+    async function loadStats() {{
+        try {{
+            const res = await fetch('/api/get_stats');
+            const data = await res.json();
+            document.getElementById('stat_views').innerText = data.views || 0;
+            const countries = data.countries || {{}};
+            const countryKeys = Object.keys(countries);
+            document.getElementById('stat_countries_count').innerText = countryKeys.length;
 
-    function duplicatePage() {{
-        const currentSlug = document.getElementById('page_selector').value;
-        const newSlug = prompt('URL para la copia (ej: promo-v2):');
-        if(!newSlug) return;
-        const slug = newSlug.toLowerCase().replace(/[^a-z0-9-]/g, '');
-        if(allPages[slug]) {{ alert('Esa URL ya existe'); return; }}
-        
-        allPages[slug] = JSON.parse(JSON.stringify(allPages[currentSlug]));
-        allPages[slug].page_name += ' (Copia)';
-        saveData(true);
-    }}
+            const sorted = countryKeys.sort((a,b) => countries[b] - countries[a]);
 
-    function deletePage() {{
-        const slug = document.getElementById('page_selector').value;
-        if(slug === 'main') {{ alert('No puedes eliminar la página principal.'); return; }}
-        if(confirm('¿Seguro que quieres eliminar esta página?')) {{
-            delete allPages[slug];
-            saveData(true);
-        }}
+            let html = '';
+            if(sorted.length === 0) {{
+                html = '<p class="text-slate-500 text-sm text-center py-4">Aún no hay datos de visitantes.</p>';
+            }} else {{
+                sorted.forEach(c => {{
+                    const count = countries[c];
+                    const flag = codeToFlag(c);
+                    const name = getCountryName(c);
+                    const plural = count === 1 ? 'persona' : 'personas';
+                    html += `
+                    <div class="flex items-center gap-4 bg-slate-900 p-4 rounded-lg border border-slate-700 hover:border-cyan-500 transition">
+                        <span class="text-3xl leading-none">${{flag}}</span>
+                        <div class="flex-1">
+                            <p class="text-white font-bold text-sm">${{name}}</p>
+                            <p class="text-cyan-400 text-xs mt-1">
+                                <span class="text-lg font-extrabold">${{count}}</span>
+                                ${{plural}} de ${{name}} vieron tu página
+                            </p>
+                        </div>
+                        <span class="bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap">
+                            ${{count}} ${{plural}}
+                        </span>
+                    </div>`;
+                }});
+            }}
+            document.getElementById('stat_countries').innerHTML = html;
+        }} catch (e) {{ console.error(e); }}
     }}
-
-    function addDlLink(url = '') {{
-        const c = document.getElementById('dl-links-container');
-        const div = document.createElement('div');
-        div.className = 'flex gap-2';
-        div.innerHTML = `
-            <input type="text" class="dl-url w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="https://drive.google.com/..." value="${{url}}">
-            <button onclick="this.parentElement.remove()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-sm font-bold whitespace-nowrap"><i class="fas fa-trash"></i></button>
-        `;
-        c.appendChild(div);
-    }}
-
-    function addCryptoRow(name = '', address = '') {{
-        const c = document.getElementById('crypto-container');
-        const div = document.createElement('div');
-        div.className = 'flex gap-2';
-        div.innerHTML = `
-            <input type="text" class="crypto-name w-1/3 bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-purple-500" placeholder="Nombre (Ej: BTC)" value="${{name}}">
-            <input type="text" class="crypto-address w-2/3 bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-purple-500" placeholder="Dirección de billetera o email" value="${{address}}">
-            <button onclick="this.parentElement.remove()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-sm font-bold whitespace-nowrap"><i class="fas fa-trash"></i></button>
-        `;
-        c.appendChild(div);
-    }}
+    loadStats();
 
     function addPubRow(type = 'video', url = '', desc = '') {{
         const c = document.getElementById('pubs-container');
@@ -592,8 +375,10 @@ def admin_panel(request: Request):
         c.appendChild(div);
     }}
 
-    async function saveData(reloadSelector = false) {{
-        const slug = document.getElementById('current_slug').value || document.getElementById('page_selector').value;
+    if(existingPubs.length === 0) addPubRow(); else existingPubs.forEach(p => addPubRow(p.type, p.url, p.desc));
+    if(existingPlans.length === 0) addPlanRow(); else existingPlans.forEach(p => addPlanRow(p.name, p.price, p.features, p.link, p.highlight));
+
+    async function saveData() {{
         let pubsArray = [];
         document.querySelectorAll('#pubs-container > div').forEach(div => {{
             if(div.querySelector('.pub-url').value.trim()) {{
@@ -608,23 +393,7 @@ def admin_panel(request: Request):
             }}
         }});
 
-        let dlLinksArray = [];
-        document.querySelectorAll('#dl-links-container > div').forEach(div => {{
-            if(div.querySelector('.dl-url').value.trim()) {{
-                dlLinksArray.push(div.querySelector('.dl-url').value);
-            }}
-        }});
-
-        let cryptoArray = [];
-        document.querySelectorAll('#crypto-container > div').forEach(div => {{
-            if(div.querySelector('.crypto-name').value.trim()) {{
-                cryptoArray.push({{ name: div.querySelector('.crypto-name').value, address: div.querySelector('.crypto-address').value }});
-            }}
-        }});
-
-        allPages[slug] = {{
-            page_name: document.getElementById('page_name').value,
-            chatbot_id: document.getElementById('chatbot_id').value || 'gzEjAzK1VCE72hJ_hBfA4',
+        const data = {{
             hero_title: document.getElementById('hero_title').value,
             hero_subtitle: document.getElementById('hero_subtitle').value,
             hero_text: document.getElementById('hero_text').value,
@@ -637,76 +406,16 @@ def admin_panel(request: Request):
                 tiktok: document.getElementById('tt_link').value,
                 telegram: document.getElementById('tg_link').value,
                 instagram: document.getElementById('ig_link').value
-            }},
-            bank_transfer_info: {{
-                bank_name: document.getElementById('bt_bank_name').value,
-                account_type: document.getElementById('bt_account_type').value,
-                account_number: document.getElementById('bt_account_number').value,
-                beneficiary: document.getElementById('bt_beneficiary').value,
-                email_for_proof: document.getElementById('bt_email').value,
-                whatsapp_for_proof: document.getElementById('bt_whatsapp').value
-            }},
-            crypto_payments: cryptoArray,
-            download_links: dlLinksArray,
-            download_instructions: document.getElementById('download_instructions').value
+            }}
         }};
-        
-        const res = await fetch('/api/save_pages', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(allPages) }});
+
+        const res = await fetch('/api/save_content', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(data) }});
         const result = await res.json();
         showToast(result.message);
-        if(reloadSelector) {{ updateSelector(); document.getElementById('page_selector').value = Object.keys(allPages).pop(); loadPageData(); }}
-    }}
-
-    async function loadStats() {{
-        try {{
-            const res = await fetch('/api/get_stats');
-            const data = await res.json();
-            document.getElementById('stat_views').innerText = data.views || 0;
-            const countries = data.countries || {{}};
-            const countryKeys = Object.keys(countries);
-            document.getElementById('stat_countries_count').innerText = countryKeys.length;
-            let html = '';
-            countryKeys.sort((a,b) => countries[b] - countries[a]).forEach(c => {{
-                html += `<div class="flex justify-between items-center bg-slate-900 p-2 rounded"><span class="text-sm text-slate-300">${{c}}</span><span class="text-cyan-400 font-bold">${{countries[c]}}</span></div>`;
-            }});
-            document.getElementById('stat_countries').innerHTML = html || '<p class="text-slate-500 text-sm">Aún no hay datos.</p>';
-        }} catch (e) {{ console.error(e); }}
-    }}
-
-    async function createManualLicense() {{
-        const plan = document.getElementById('manual_plan').value;
-        const days = document.getElementById('manual_days').value;
-        const email = document.getElementById('manual_email').value;
-        
-        if(!email) {{
-            alert('Por favor ingresa el correo del cliente.');
-            return;
-        }}
-
-        const res = await fetch('/api/create_license', {{
-            method: 'POST',
-            headers: {{'Content-Type': 'application/json'}},
-            body: JSON.stringify({{ plan: plan, duration_days: parseInt(days), email: email }})
-        }});
-        const result = await res.json();
-        
-        const msgDiv = document.getElementById('manual_lic_msg');
-        msgDiv.classList.remove('hidden');
-        if(result.status === 'success') {{
-            msgDiv.innerHTML = `✅ Licencia creada y guardada en el servidor: <br><br> <input type="text" value="${{result.key}}" readonly class="w-full bg-slate-950 text-cyan-400 p-2 rounded mt-2 cursor-pointer select-all" onclick="this.select()">`;
-            document.getElementById('lic_key').value = result.key; 
-        }} else {{
-            msgDiv.innerText = "❌ " + (result.message || "Error al crear la licencia.");
-        }}
-        showToast('Proceso de licencia manual completado.');
     }}
 
     async function manageLic(activeStatus) {{
         const key = document.getElementById('lic_key').value;
-        if(!key) {{
-            alert('Por favor ingresa una clave de licencia.');
-            return;
-        }}
         const res = await fetch('/api/manage_license', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{key: key, active: activeStatus}}) }});
         const result = await res.json();
         document.getElementById('lic_msg').classList.remove('hidden');
@@ -716,80 +425,21 @@ def admin_panel(request: Request):
 
     async function resetHwid() {{
         const key = document.getElementById('lic_key').value;
-        if(!key) {{
-            alert('Por favor ingresa una clave de licencia.');
-            return;
-        }}
         const res = await fetch('/api/reset_hwid', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{key: key}}) }});
         const result = await res.json();
         document.getElementById('lic_msg').classList.remove('hidden');
         document.getElementById('lic_msg').innerText = result.message;
         showToast(result.message);
     }}
-
-    async function changePassword() {{
-        const current_pwd = document.getElementById('current_pwd').value;
-        const new_pwd = document.getElementById('new_pwd').value;
-        const confirm_pwd = document.getElementById('confirm_pwd').value;
-
-        if(new_pwd !== confirm_pwd) {{
-            const msgDiv = document.getElementById('pwd_msg');
-            msgDiv.className = "mt-4 font-bold text-sm text-red-400";
-            msgDiv.innerText = "❌ Las nuevas contraseñas no coinciden.";
-            msgDiv.classList.remove('hidden');
-            return;
-        }}
-
-        const res = await fetch('/api/change_password', {{
-            method: 'POST',
-            headers: {{'Content-Type': 'application/json'}},
-            body: JSON.stringify({{ current_password: current_pwd, new_password: new_pwd }})
-        }});
-        const result = await res.json();
-        
-        const msgDiv = document.getElementById('pwd_msg');
-        msgDiv.className = "mt-4 font-bold text-sm " + (result.status === 'success' ? 'text-emerald-400' : 'text-red-400');
-        msgDiv.innerText = result.message;
-        msgDiv.classList.remove('hidden');
-        showToast(result.message);
-        
-        if(result.status === 'success') {{
-            document.getElementById('current_pwd').value = '';
-            document.getElementById('new_pwd').value = '';
-            document.getElementById('confirm_pwd').value = '';
-        }}
-    }}
-
-    // Init
-    updateSelector();
-    loadPageData();
-    loadStats();
     </script>
     </body></html>
     """
 
-@app.post("/api/save_pages")
-def api_save_pages(request: Request, data: dict):
-    if not verify_admin(request): return {"message": "❌ No autorizado."}
-    if save_all_pages({"pages": data}):
-        return {"message": "✅ Página guardada correctamente."}
-    return {"message": "❌ Error al guardar."}
-
-@app.post("/api/change_password")
-def api_change_password(request: Request, data: ChangePasswordData):
-    global admin_password_db
-    if not verify_admin(request):
-        raise HTTPException(status_code=401, detail="No autorizado")
-    
-    if data.current_password != admin_password_db:
-        return {"status": "error", "message": "❌ La contraseña actual es incorrecta."}
-    
-    if len(data.new_password) < 4:
-        return {"status": "error", "message": "❌ La nueva contraseña debe tener al menos 4 caracteres."}
-        
-    admin_password_db = data.new_password
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
-    return {"status": "success", "message": "✅ Contraseña actualizada correctamente."}
+@app.post("/api/save_content")
+def api_save_content(data: dict):
+    if save_content(data):
+        return {"message": "✅ Cambios guardados y publicados correctamente."}
+    return {"message": "❌ Error al guardar. Revisa variables de entorno."}
 
 # ==========================================
 # 🌐 PÁGINA WEB DE RECUPERACIÓN DE CLAVE
@@ -830,9 +480,12 @@ def recover_page():
     """
 
 # ==========================================
-# 🌐 RENDERIZADO DE LANDING PAGES (MULTI-PÁGINA)
+# 🌐 PÁGINA WEB DE VENTAS (LANDING PAGE)
 # ==========================================
-def render_landing_page(c):
+@app.get("/", response_class=HTMLResponse)
+def read_root():
+    c = get_content()
+
     pubs_html = ""
     for p in c.get('publications', []):
         if p.get('url'):
@@ -853,42 +506,19 @@ def render_landing_page(c):
                 </div>
                 """
 
-    bt = c.get('bank_transfer_info', {})
-    has_bank_info = bt.get('account_number')
-    crypto_payments = c.get('crypto_payments', [])
-    has_crypto_info = len(crypto_payments) > 0
-    
     plans_html = ""
     for p in c.get('plans', []):
         if p.get('name'):
             highlight_classes = "lg:scale-105 border-cyan-500 shadow-cyan-500/20" if p.get('highlight') else "border-slate-800"
             badge = '<span class="absolute top-0 right-0 bg-cyan-500 text-slate-900 text-xs font-bold px-3 py-1 rounded-bl-lg">MÁS POPULAR</span>' if p.get('highlight') else ''
             features_html = p.get('features', '').replace('\n', '<br>')
-            
-            extra_btns_html = ""
-            if has_bank_info:
-                extra_btns_html += f"""
-                <button onclick="openBankModal('{p.get('name', '')}', '{p.get('price', '')}')" class="block text-center w-full bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium py-2 rounded text-sm transition mt-2">
-                    <i class="fas fa-university mr-2"></i>Pagar por Transferencia Bancaria
-                </button>
-                """
-            if has_crypto_info:
-                extra_btns_html += f"""
-                <button onclick="openCryptoModal('{p.get('name', '')}', '{p.get('price', '')}')" class="block text-center w-full bg-purple-700 hover:bg-purple-600 text-white font-medium py-2 rounded text-sm transition mt-2">
-                    <i class="fab fa-bitcoin mr-2"></i>Pagar con Cripto / Otros
-                </button>
-                """
-
             plans_html += f"""
-            <div class="relative bg-slate-800 p-8 rounded-xl border {highlight_classes} transition-all duration-300 hover:-translate-y-2 hover:shadow-xl flex flex-col">
+            <div class="relative bg-slate-800 p-8 rounded-xl border {highlight_classes} transition-all duration-300 hover:-translate-y-2 hover:shadow-xl">
                 {badge}
                 <h3 class="text-xl font-bold text-white mb-2">{p.get('name', '')}</h3>
                 <div class="text-4xl font-extrabold text-cyan-400 mb-4">{p.get('price', '')}<span class="text-base font-normal text-slate-500">/mes</span></div>
-                <p class="text-slate-300 text-sm mb-6 flex-grow">{features_html}</p>
-                <div class="mt-auto">
-                    <a href="{p.get('link', '#')}" class="block text-center w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Suscribirme con Tarjeta</a>
-                    {extra_btns_html}
-                </div>
+                <p class="text-slate-300 text-sm mb-6">{features_html}</p>
+                <a href="{p.get('link', '#')}" class="block text-center w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Suscribirme</a>
             </div>
             """
 
@@ -901,156 +531,6 @@ def render_landing_page(c):
     if social.get('telegram'): social_html += f'<a href="{social["telegram"]}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-telegram-plane"></i></a>'
     if social.get('instagram'): social_html += f'<a href="{social["instagram"]}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-instagram"></i></a>'
 
-    chatbot_id = c.get('chatbot_id', 'gzEjAzK1VCE72hJ_hBfA4')
-    
-    # Generar HTML del Modal de Transferencia
-    bank_modal_html = ""
-    if has_bank_info:
-        wa_link = f"https://wa.me/{bt.get('whatsapp_for_proof', '')}?text=Hola%2C%20adjunto%20el%20comprobante%20de%20pago%20para%20el%20plan%20"
-        mail_link = f"mailto:{bt.get('email_for_proof', '')}?subject=Comprobante%20de%20Pago%20Plan%20"
-        
-        bank_modal_html = f"""
-        <div id="bankModal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
-            <div class="bg-slate-800 p-8 rounded-xl max-w-md w-full border border-slate-700 shadow-2xl relative">
-                <button onclick="closeBankModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">&times;</button>
-                <h3 class="text-2xl font-bold text-cyan-400 mb-2">Instrucciones de Pago</h3>
-                <p class="text-slate-400 text-sm mb-6">Estás comprando el plan: <span id="modal_plan_name" class="font-bold text-white"></span> por <span id="modal_plan_price" class="font-bold text-white"></span></p>
-                
-                <div class="bg-slate-900 p-4 rounded-lg border border-slate-700 space-y-3 text-sm">
-                    <p><strong class="text-slate-400">Banco:</strong> <span class="text-white">{bt.get('bank_name', '')}</span></p>
-                    <p><strong class="text-slate-400">Tipo de Cuenta:</strong> <span class="text-white">{bt.get('account_type', '')}</span></p>
-                    <p><strong class="text-slate-400">Número de Cuenta:</strong> <span class="text-cyan-400 font-mono">{bt.get('account_number', '')}</span></p>
-                    <p><strong class="text-slate-400">Beneficiario:</strong> <span class="text-white">{bt.get('beneficiary', '')}</span></p>
-                </div>
-
-                <div class="mt-6">
-                    <h4 class="text-white font-bold mb-2">¿Qué hacer después?</h4>
-                    <p class="text-slate-400 text-sm mb-4">1. Realiza la transferencia por el monto exacto del plan.<br>2. Envía el comprobante de pago por WhatsApp o Correo.<br>3. Recibirás tu licencia de activación en cuanto confirmemos el pago.</p>
-                </div>
-
-                <div class="flex flex-col gap-2 mt-4">
-                    <a id="wa_send_btn" href="{wa_link}" target="_blank" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-center font-bold py-3 rounded transition">
-                        <i class="fab fa-whatsapp mr-2"></i> Enviar comprobante por WhatsApp
-                    </a>
-                    <a id="mail_send_btn" href="{mail_link}" class="w-full bg-slate-600 hover:bg-slate-500 text-white text-center font-bold py-3 rounded transition">
-                        <i class="fas fa-envelope mr-2"></i> Enviar comprobante por Correo
-                    </a>
-                </div>
-            </div>
-        </div>
-        <script>
-            function openBankModal(planName, planPrice) {{
-                document.getElementById('modal_plan_name').innerText = planName;
-                document.getElementById('modal_plan_price').innerText = planPrice;
-                
-                let waLink = "{wa_link}" + encodeURIComponent(planName);
-                let mailLink = "{mail_link}" + encodeURIComponent(planName);
-                
-                document.getElementById('wa_send_btn').href = waLink;
-                document.getElementById('mail_send_btn').href = mailLink;
-                
-                document.getElementById('bankModal').classList.remove('hidden');
-            }}
-            function closeBankModal() {{
-                document.getElementById('bankModal').classList.add('hidden');
-            }}
-        </script>
-        """
-
-    # Generar HTML del Modal de Criptomonedas
-    crypto_modal_html = ""
-    if has_crypto_info:
-        crypto_rows_html = ""
-        for idx, crypto in enumerate(crypto_payments):
-            crypto_rows_html += f"""
-                <div class="bg-slate-900 p-4 rounded-lg border border-slate-700 mb-3">
-                    <p class="text-slate-400 text-sm mb-1">{crypto.get('name', '')}</p>
-                    <div class="flex items-center gap-2">
-                        <p class="text-purple-400 font-mono text-sm break-all flex-grow">{crypto.get('address', '')}</p>
-                        <button onclick="copyText('crypto_addr_{idx}')" class="bg-slate-700 hover:bg-cyan-500 text-white p-2 rounded text-xs"><i class="fas fa-copy"></i></button>
-                    </div>
-                    <input type="hidden" id="crypto_addr_{idx}" value="{crypto.get('address', '')}">
-                </div>
-            """
-
-        wa_link = f"https://wa.me/{bt.get('whatsapp_for_proof', '')}?text=Hola%2C%20adjunto%20el%20comprobante%20de%20pago%20cripto%20para%20el%20plan%20"
-        mail_link = f"mailto:{bt.get('email_for_proof', '')}?subject=Comprobante%20de%20Pago%20Cripto%20Plan%20"
-
-        crypto_modal_html = f"""
-        <div id="cryptoModal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
-            <div class="bg-slate-800 p-8 rounded-xl max-w-md w-full border border-slate-700 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-                <button onclick="closeCryptoModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">&times;</button>
-                <h3 class="text-2xl font-bold text-purple-400 mb-2">Pago con Criptomonedas</h3>
-                <p class="text-slate-400 text-sm mb-6">Estás comprando el plan: <span id="crypto_modal_plan_name" class="font-bold text-white"></span> por <span id="crypto_modal_plan_price" class="font-bold text-white"></span></p>
-                
-                <div class="space-y-3 mb-6">
-                    {crypto_rows_html}
-                </div>
-
-                <div class="mt-6">
-                    <h4 class="text-white font-bold mb-2">¿Qué hacer después?</h4>
-                    <p class="text-slate-400 text-sm mb-4">1. Copia la dirección de la billetera seleccionada.<br>2. Envía el monto exacto en criptomoneda equivalente al precio del plan.<br>3. Envía el comprobante (Hash de la transacción) por WhatsApp o Correo.<br>4. Recibirás tu licencia en cuanto se confirme en la blockchain.</p>
-                </div>
-
-                <div class="flex flex-col gap-2 mt-4">
-                    <a id="crypto_wa_send_btn" href="{wa_link}" target="_blank" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-center font-bold py-3 rounded transition">
-                        <i class="fab fa-whatsapp mr-2"></i> Enviar comprobante por WhatsApp
-                    </a>
-                    <a id="crypto_mail_send_btn" href="{mail_link}" class="w-full bg-slate-600 hover:bg-slate-500 text-white text-center font-bold py-3 rounded transition">
-                        <i class="fas fa-envelope mr-2"></i> Enviar comprobante por Correo
-                    </a>
-                </div>
-            </div>
-        </div>
-        <script>
-            function openCryptoModal(planName, planPrice) {{
-                document.getElementById('crypto_modal_plan_name').innerText = planName;
-                document.getElementById('crypto_modal_plan_price').innerText = planPrice;
-                
-                let waLink = "{wa_link}" + encodeURIComponent(planName);
-                let mailLink = "{mail_link}" + encodeURIComponent(planName);
-                
-                document.getElementById('crypto_wa_send_btn').href = waLink;
-                document.getElementById('crypto_mail_send_btn').href = mailLink;
-                
-                document.getElementById('cryptoModal').classList.remove('hidden');
-            }}
-            function closeCryptoModal() {{
-                document.getElementById('cryptoModal').classList.add('hidden');
-            }}
-            function copyText(elementId) {{
-                const text = document.getElementById(elementId).value;
-                navigator.clipboard.writeText(text).then(function() {{
-                    alert('¡Dirección copiada al portapapeles!');
-                }}, function(err) {{
-                    prompt('Copia manualmente:', text);
-                }});
-            }}
-        </script>
-        """
-
-    download_instructions_html = c.get('download_instructions', 'Descarga el archivo, extrae y ejecuta el instalador.').replace('\n', '<br>')
-    
-    download_links = c.get('download_links', [])
-    if not download_links and c.get('download_link'):
-        download_links = [c.get('download_link')]
-
-    download_buttons_html = ""
-    if download_links:
-        if len(download_links) == 1:
-            download_buttons_html = f"""
-            <a href="{download_links[0]}" target="_blank" class="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block w-full">
-                <i class="fas fa-download mr-2"></i> Descargar Blenin77
-            </a>
-            """
-        else:
-            for i, link in enumerate(download_links):
-                download_buttons_html += f"""
-                <a href="{link}" target="_blank" class="bg-slate-700 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block w-full mb-2">
-                    <i class="fas fa-server mr-2"></i> Servidor de Descarga {i+1}
-                </a>
-                """
-
     template = """<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -1060,68 +540,49 @@ def render_landing_page(c):
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- 🤖 CHATBASE BOT (Dinámico según el producto) -->
-    <script>
-      window.embeddedChatbotConfig = {
-        chatbotId: "{CHATBOT_ID}",
-        domain: "www.chatbase.co"
-      }
-    </script>
-    <script
-      src="https://www.chatbase.co/embed.min.js"
-      chatbotId="{CHATBOT_ID}"
-      domain="www.chatbase.co"
-      defer>
-    </script>
-
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #020617; }
         .glow { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }
         .hero-bg { background: linear-gradient(to bottom, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; }
-        .chatbase-bubble-button, iframe[src*="chatbase.co"] { z-index: 99999 !important; display: block !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; }
-        .goog-te-banner-frame.skiptranslate { display: none !important; } body { top: 0px !important; }
-        .goog-tooltip, .goog-tooltip:hover { display: none !important; }
-        .goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }
-        #google_translate_element { position: absolute; top: -9999px; left: -9999px; opacity: 0; }
-        .goog-te-gadget { font-size: 0 !important; }
-        #lang-menu::-webkit-scrollbar { width: 6px; }
-        #lang-menu::-webkit-scrollbar-track { background: #1e293b; border-radius: 10px; }
-        #lang-menu::-webkit-scrollbar-thumb { background: #0e7490; border-radius: 10px; }
+        .goog-te-banner-frame.skiptranslate {display: none !important;}
+        body {top: 0px !important;}
+        .goog-te-gadget {font-size: 0 !important;}
+        #google_translate_element {display: none !important;}
+        .goog-tooltip {display: none !important;}
+        .goog-tooltip:hover {display: none !important;}
+        #lang-dropdown::-webkit-scrollbar { width: 6px; }
+        #lang-dropdown::-webkit-scrollbar-track { background: #1e293b; }
+        #lang-dropdown::-webkit-scrollbar-thumb { background: #06b6d4; border-radius: 3px; }
     </style>
 </head>
 <body class="text-slate-300">
+
+    <!-- Navbar -->
     <nav class="bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-800">
         <div class="container mx-auto px-6 py-4 flex justify-between items-center">
-            <a href="/" class="text-xl font-extrabold text-cyan-400 glow">BLENIN.G.77</a>
+            <a href="#" class="text-xl font-extrabold text-cyan-400 glow">BLENIN.G.77</a>
             <div class="hidden md:flex space-x-6 text-sm font-medium items-center">
                 <a href="#features" class="hover:text-cyan-400 transition">Tecnología</a>
                 <a href="#videos" class="hover:text-cyan-400 transition">Galería</a>
                 <a href="#pricing" class="hover:text-cyan-400 transition">Precios</a>
-                <div class="relative inline-block text-left">
-                    <button id="lang-btn" class="inline-flex justify-center items-center gap-2 rounded-md border border-slate-700 px-3 py-1.5 bg-slate-800 text-sm font-medium text-slate-300 hover:bg-slate-700 transition">
-                        <i class="fas fa-globe text-cyan-400"></i> <span id="current-lang-name">🇪🇸 Español</span> <i class="fas fa-chevron-down text-xs"></i>
+            </div>
+            <div class="flex items-center gap-3">
+                <div id="google_translate_element"></div>
+                <div class="relative" id="lang-wrapper">
+                    <button id="lang-btn" type="button" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition border border-slate-700">
+                        <span class="text-lg leading-none" id="lang-flag">🇪🇸</span>
+                        <span id="lang-name" class="hidden sm:inline">Español</span>
+                        <i class="fas fa-chevron-down text-[10px] opacity-70"></i>
                     </button>
-                    <div id="lang-menu" class="hidden absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-slate-800 ring-1 ring-black ring-opacity-5 z-50 max-h-80 overflow-y-auto">
-                        <div class="py-1">
-                            <a href="#" onclick="changeLang('es', '🇪🇸 Español'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇪🇸 Español</a>
-                            <a href="#" onclick="changeLang('en', '🇬🇧 English'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇬🇧 English</a>
-                            <a href="#" onclick="changeLang('fr', '🇫🇷 Français'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇫🇷 Français</a>
-                            <a href="#" onclick="changeLang('pt', '🇵🇹 Português'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇵🇹 Português</a>
-                            <a href="#" onclick="changeLang('ru', '🇷🇺 Русский'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇷🇺 Русский</a>
-                            <a href="#" onclick="changeLang('it', '🇮🇹 Italiano'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇮🇹 Italiano</a>
-                            <a href="#" onclick="changeLang('de', '🇩🇪 Deutsch'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇩🇪 Deutsch</a>
-                            <a href="#" onclick="changeLang('zh-CN', '🇨🇳 中文'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇨🇳 中文</a>
-                            <a href="#" onclick="changeLang('ko', '🇰🇷 한국어'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇰🇷 한국어</a>
-                            <a href="#" onclick="changeLang('hi', '🇮🇳 हिन्दी'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇮🇳 हिन्दी</a>
-                        </div>
+                    <div id="lang-dropdown" class="hidden absolute right-0 mt-2 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-[60] w-52 max-h-80 overflow-y-auto py-1">
                     </div>
                 </div>
+                <a href="#pricing" class="bg-cyan-500 text-slate-900 px-4 py-2 rounded text-sm font-bold hover:bg-cyan-400 transition">Comprar Ahora</a>
             </div>
-            <a href="#pricing" class="bg-cyan-500 text-slate-900 px-4 py-2 rounded text-sm font-bold hover:bg-cyan-400 transition">Comprar Ahora</a>
         </div>
     </nav>
 
+    <!-- Hero Section -->
     <header class="relative overflow-hidden py-24 md:py-32 hero-bg">
         <div class="container mx-auto px-6 text-center relative z-10">
             <div class="inline-block bg-slate-800/50 border border-slate-700 px-4 py-1 rounded-full text-xs font-medium text-cyan-400 mb-6">🚀 SISTEMA INSTITUCIONAL ACTIVO</div>
@@ -1135,6 +596,7 @@ def render_landing_page(c):
         </div>
     </header>
 
+    <!-- Features -->
     <section id="features" class="py-20 container mx-auto px-6">
         <h2 class="text-3xl font-bold text-center text-white mb-12">Tecnología de Nivel Institucional</h2>
         <div class="grid md:grid-cols-3 gap-8">
@@ -1156,6 +618,7 @@ def render_landing_page(c):
         </div>
     </section>
 
+    <!-- Videos / Gallery -->
     <section id="videos" class="py-20 bg-slate-950">
         <div class="container mx-auto px-6">
             <h2 class="text-3xl font-bold text-center text-white mb-12">Mira al Sistema en Acción</h2>
@@ -1163,6 +626,7 @@ def render_landing_page(c):
         </div>
     </section>
 
+    <!-- Pricing -->
     <section id="pricing" class="py-20 container mx-auto px-6">
         <h2 class="text-3xl font-bold text-center text-white mb-4">Planes de Suscripción</h2>
         <p class="text-slate-400 text-center mb-12">Elige el plan que se adapte a tu capital y estilo de trading.</p>
@@ -1171,77 +635,23 @@ def render_landing_page(c):
         </div>
     </section>
 
-    <!-- INICIO FORMULARIO MAILERLITE Y DESCARGA -->
-    <div class="py-16 px-6 bg-slate-950">
-        <div class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-lg text-center" id="ml-form-wrapper">
-            <h3 class="text-2xl font-bold text-white mb-2">¿Quieres ver al Bot operando en vivo?</h3>
-            <p class="text-slate-400 text-sm mb-6">Deja tu correo y te enviaremos un video de cómo el Enjambre de Agentes abre operaciones reales, además de darte acceso al sistema.</p>
+    <!-- INICIO FORMULARIO DE DESCARGA NATIVO (Reemplaza a MailerLite) -->
+    <div class="section py-16 px-6 bg-slate-950">
+        <div class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-2xl text-center">
+            <h4 class="text-2xl font-bold text-cyan-400 mb-3">¿Quieres descargar el sistema?</h4>
+            <p class="text-slate-400 mb-6">Deja tu correo y te enviaremos el enlace de descarga del sistema completo.</p>
             
-            <div class="ml-form-embedContainer ml-subscribe-form ml-subscribe-form-44360624">
-                <div class="ml-form-align-center">
-                    <div class="ml-form-embedWrapper embedForm">
-                        <div class="ml-form-embedBody ml-form-embedBodyDefault row-form">
-                            <div class="ml-form-embedContent">
-                                <p style="color: #94a3b8; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 400; line-height: 20px; margin: 0 0 10px 0; text-align: center;">Ingresa tu correo para continuar.</p>
-                            </div>
-                            <form class="ml-block-form" action="https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/subscribe" data-code="" method="post" target="_blank" onsubmit="return ml_reveal_download()">
-                                <div class="ml-form-formContent">
-                                    <div class="ml-form-fieldRow ml-last-item">
-                                        <div class="ml-field-group ml-field-email ml-validate-email ml-validate-required">
-                                            <input aria-label="email" aria-required="true" type="email" class="form-control" data-inputmask="" name="fields[email]" placeholder="Email" autocomplete="email" style="background-color: #0f172a !important; color: #fff !important; border: 1px solid #334155 !important; border-radius: 6px !important; padding: 12px !important; width: 100% !important; margin-bottom: 10px !important;">
-                                        </div>
-                                    </div>
-                                </div>
-                                <input type="hidden" name="ml-submit" value="1">
-                                <div class="ml-form-embedSubmit" style="margin-top: 0;">
-                                    <button type="submit" class="primary" style="background-color: #00e5ff !important; color: #020617 !important; border-radius: 6px !important; font-weight: 700; font-family: 'Inter', sans-serif; padding: 12px !important; width: 100% !important; border: none !important; cursor: pointer;">Quiero Acceso y Descargar</button>
-                                    <button disabled="disabled" style="display: none;" type="button" class="loading">
-                                        <div class="ml-form-embedSubmitLoad"></div>
-                                        <span class="sr-only">Loading...</span>
-                                    </button>
-                                </div>
-                                <input type="hidden" name="anticsrf" value="true">
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <script>
-                function ml_webform_success_44360624() {
-                    var $ = ml_jQuery || jQuery;
-                    $('.ml-subscribe-form-44360624 .row-success').show();
-                    $('.ml-subscribe-form-44360624 .row-form').hide();
-                }
-            </script>
-            <script src="https://groot.mailerlite.com/js/w/webforms.min.js?v83147fa8ce2d95cb73ece7f28b469519" type="text/javascript"></script>
-            <script>
-                fetch("https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/takel")
-            </script>
+            <input type="email" id="lead_email_input" placeholder="tu.correo@gmail.com" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 outline-none focus:border-cyan-500 text-white text-center">
+            <button onclick="requestDownload()" id="lead_submit_btn" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">
+                Quiero mi enlace de descarga
+            </button>
+            
+            <div id="lead_msg" class="mt-6 hidden"></div>
         </div>
-
-        <div id="download-box" class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-cyan-500 shadow-cyan-500/10 shadow-lg text-center mt-6" style="display: none;">
-            <i class="fas fa-check-circle text-emerald-400 text-4xl mb-4"></i>
-            <h4 class="text-xl font-bold text-cyan-400 mb-4">¡Listo! Aquí tienes tu descarga:</h4>
-            <div class="text-slate-300 text-sm mb-6 text-left bg-slate-900 p-4 rounded-lg border border-slate-700">
-                {DOWNLOAD_INSTRUCTIONS_HTML}
-            </div>
-            <div class="flex flex-col gap-3">
-                {DOWNLOAD_BUTTONS_HTML}
-            </div>
-        </div>
-        
-        <script>
-            function ml_reveal_download() {
-                setTimeout(function() {
-                    document.getElementById('download-box').style.display = 'block';
-                    document.getElementById('ml-form-wrapper').style.display = 'none';
-                    document.getElementById('download-box').scrollIntoView({behavior: "smooth", block: "center"});
-                }, 1000);
-                return true;
-            }
-        </script>
     </div>
+    <!-- FIN FORMULARIO DE DESCARGA -->
 
+    <!-- Social Footer -->
     <section class="py-12 border-t border-slate-800">
         <div class="container mx-auto px-6 text-center">
             <h3 class="text-xl font-bold text-white mb-6">Síguenos en nuestras redes</h3>
@@ -1251,6 +661,7 @@ def render_landing_page(c):
         </div>
     </section>
 
+    <!-- Footer -->
     <footer class="bg-slate-950 py-10 border-t border-slate-800">
         <div class="container mx-auto px-6 text-center">
             <p class="text-slate-500 text-sm mb-4 max-w-3xl mx-auto">
@@ -1260,86 +671,172 @@ def render_landing_page(c):
         </div>
     </footer>
 
-    {BANK_MODAL_HTML}
-    {CRYPTO_MODAL_HTML}
+    <!-- CHATBASE BOT -->
+    <script>
+    (function(){if(!window.chatbase||window.chatbase("getState")!=="initialized"){window.chatbase=(...arguments)=>{if(!window.chatbase.q){window.chatbase.q=[]}window.chatbase.q.push(arguments)};window.chatbase=new Proxy(window.chatbase,{get(target,prop){if(prop==="q"){return target.q}return(...args)=>target(prop,...args)}})}}const onLoad=function(){const script=document.createElement("script");script.src="https://www.chatbase.co/embed.min.js";script.id="gzEjAzK1VCE72hJ_hBfA4";script.domain="www.chatbase.co";document.body.appendChild(script)};if(document.readyState==="complete"){onLoad()}else{window.addEventListener("load",onLoad)}})();
+    </script>
 
-    <div id="google_translate_element"></div>
+    <!-- TRADUCTOR PERSONALIZADO CON BANDERAS -->
+    <script>
+    const LANGUAGES = [
+        {code: 'es',     name: 'Español',    flag: '🇪🇸'},
+        {code: 'en',     name: 'English',    flag: '🇬🇧'},
+        {code: 'fr',     name: 'Français',   flag: '🇫🇷'},
+        {code: 'pt',     name: 'Português',  flag: '🇵🇹'},
+        {code: 'ru',     name: 'Русский',     flag: '🇷🇺'},
+        {code: 'it',     name: 'Italiano',   flag: '🇮🇹'},
+        {code: 'de',     name: 'Deutsch',    flag: '🇩🇪'},
+        {code: 'zh-CN',  name: '中文',        flag: '🇨🇳'},
+        {code: 'ko',     name: '한국어',      flag: '🇰🇷'},
+        {code: 'hi',     name: 'हिन्दी',      flag: '🇮🇳'}
+    ];
+
+    function buildLangMenu() {
+        const dd = document.getElementById('lang-dropdown');
+        dd.innerHTML = LANGUAGES.map(l => `
+            <button type="button" data-lang="${l.code}" class="lang-option w-full flex items-center gap-3 px-3 py-2 hover:bg-slate-700 transition text-left">
+                <span class="text-lg">${l.flag}</span>
+                <span>${l.name}</span>
+            </button>
+        `).join('');
+        dd.querySelectorAll('.lang-option').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const opt = LANGUAGES.find(l => l.code === btn.dataset.lang);
+                if (opt) selectLang(opt);
+            });
+        });
+    }
+
+    function selectLang(opt) {
+        const select = document.querySelector('.goog-te-combo');
+        if (select) {
+            select.value = opt.code;
+            select.dispatchEvent(new Event('change'));
+        }
+        document.getElementById('lang-flag').textContent = opt.flag;
+        document.getElementById('lang-name').textContent = opt.name;
+        document.getElementById('lang-dropdown').classList.add('hidden');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        buildLangMenu();
+        const btn = document.getElementById('lang-btn');
+        const dd = document.getElementById('lang-dropdown');
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            dd.classList.toggle('hidden');
+        });
+        document.addEventListener('click', () => dd.classList.add('hidden'));
+    });
+    </script>
+
+    <!-- GOOGLE TRANSLATE WIDGET (oculto, controlado por el menú personalizado) -->
     <script type="text/javascript">
-    function googleTranslateElementInit() { new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'en,fr,pt,ru,it,de,zh-CN,ko,hi', layout: google.translate.TranslateElement.InlineLayout.SIMPLE, autoDisplay: false}, 'google_translate_element'); }
+    function googleTranslateElementInit() {
+      new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'en,fr,pt,ru,it,de,zh-CN,ko,hi', layout: google.translate.TranslateElement.InlineLayout.SIMPLE, autoDisplay: false}, 'google_translate_element');
+    }
     </script>
     <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
-    
+
+    <!-- TRACKING Y FORMULARIO DE DESCARGA SCRIPTS -->
     <script>
-        const langBtn = document.getElementById('lang-btn');
-        const langMenu = document.getElementById('lang-menu');
-        langBtn.addEventListener('click', (e) => { e.stopPropagation(); langMenu.classList.toggle('hidden'); });
-        window.addEventListener('click', (e) => { if (!langMenu.contains(e.target) && !langBtn.contains(e.target)) { langMenu.classList.add('hidden'); } });
-        function changeLang(langCode, langName) {
-            document.getElementById('current-lang-name').innerText = langName;
-            langMenu.classList.add('hidden');
-            var date = new Date(); date.setTime(date.getTime() + (365 * 24 * 60 * 60 * 1000)); var expires = "; expires=" + date.toUTCString();
-            var hostname = window.location.hostname;
-            if (langCode === 'es') {
-                document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";
-                document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + hostname;
-                document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=." + hostname;
-            } else {
-                var cookieValue = "/es/" + langCode;
-                document.cookie = "googtrans=" + cookieValue + expires + "; path=/";
-                document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=" + hostname;
-                document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=." + hostname;
+        fetch('/api/track_view', { method: 'POST' });
+
+        async function requestDownload() {
+            const email = document.getElementById('lead_email_input').value;
+            const btn = document.getElementById('lead_submit_btn');
+            const msgDiv = document.getElementById('lead_msg');
+            
+            if(!email) {
+                msgDiv.innerHTML = '<p class="text-red-400 font-bold">❌ Por favor ingresa un correo.</p>';
+                msgDiv.classList.remove('hidden');
+                return;
             }
-            window.location.reload();
+
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Enviando...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/request_download', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email: email})
+                });
+                const data = await res.json();
+                
+                let extraHtml = '';
+                if(data.download_link) {
+                    extraHtml = `<a href="${data.download_link}" target="_blank" class="inline-block mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-6 rounded transition"><i class="fas fa-download mr-2"></i>Descargar Ahora</a>`;
+                }
+
+                const colorClass = data.status === 'success' ? 'text-emerald-400' : (data.status === 'warning' ? 'text-amber-400' : 'text-red-400');
+                msgDiv.innerHTML = `<p class="${colorClass} font-bold mb-2">${data.message}</p>${extraHtml}`;
+                msgDiv.classList.remove('hidden');
+                
+                if(data.status === 'success' || data.status === 'warning') {
+                    btn.innerText = '✅ Solicitud Procesada';
+                } else {
+                    btn.innerText = 'Quiero mi enlace de descarga';
+                    btn.disabled = false;
+                }
+            } catch(e) {
+                msgDiv.innerHTML = '<p class="text-red-400 font-bold">❌ Hubo un error de conexión.</p>';
+                msgDiv.classList.remove('hidden');
+                btn.innerText = 'Quiero mi enlace de descarga';
+                btn.disabled = false;
+            }
         }
-        window.onload = function() {
-            var match = document.cookie.match(/googtrans=\/es\/([a-zA-Z\-]+)/);
-            if (match && match[1]) {
-                var langMap = { 'en': '🇬🇧 English', 'fr': '🇫🇷 Français', 'pt': '🇵🇹 Português', 'ru': '🇷🇺 Русский', 'it': '🇮🇹 Italiano', 'de': '🇩🇪 Deutsch', 'zh-CN': '🇨🇳 中文', 'ko': '🇰🇷 한국어', 'hi': '🇮🇳 हिन्दी' };
-                if (langMap[match[1]]) document.getElementById('current-lang-name').innerText = langMap[match[1]];
-            }
-        };
     </script>
-    <script>fetch('/api/track_view', { method: 'POST' });</script>
 </body>
 </html>"""
-    return template.replace("{CHATBOT_ID}", chatbot_id)\
-                   .replace("{HERO_TITLE}", c.get('hero_title', ''))\
+
+    return template.replace("{HERO_TITLE}", c.get('hero_title', ''))\
                    .replace("{HERO_SUBTITLE}", c.get('hero_subtitle', ''))\
                    .replace("{HERO_TEXT}", c.get('hero_text', ''))\
                    .replace("{PUBLICATIONS_HTML}", pubs_html)\
                    .replace("{PLANS_HTML}", plans_html)\
-                   .replace("{SOCIAL_HTML}", social_html)\
-                   .replace("{BANK_MODAL_HTML}", bank_modal_html)\
-                   .replace("{CRYPTO_MODAL_HTML}", crypto_modal_html)\
-                   .replace("{DOWNLOAD_BUTTONS_HTML}", download_buttons_html)\
-                   .replace("{DOWNLOAD_INSTRUCTIONS_HTML}", download_instructions_html)
-
-@app.get("/", response_class=HTMLResponse)
-def read_root():
-    pages_data = get_all_pages()
-    c = pages_data.get("pages", {}).get("main", get_default_content())
-    return render_landing_page(c)
-
-@app.get("/p/{slug}", response_class=HTMLResponse)
-def read_dynamic_page(slug: str):
-    pages_data = get_all_pages()
-    c = pages_data.get("pages", {}).get(slug)
-    if c:
-        return render_landing_page(c)
-    return HTMLResponse("<h1>404 - Página no encontrada</h1><a href='/'>Volver al inicio</a>")
+                   .replace("{SOCIAL_HTML}", social_html)
 
 # ==========================================
 # 🧠 BASES DE DATOS Y RUTAS API
 # ==========================================
 db_trades = []
 
-class TradeData(BaseModel): strategy: str; symbol: str; timeframe: str; outcome: bool; profit_pips: float; session: str
-class LicenseCheck(BaseModel): key: str; hwid: str
-class LicenseCreate(BaseModel): plan: str; duration_days: int = 30; email: str = ""
-class RecoveryRequest(BaseModel): email: str
-class TrialRequest(BaseModel): hwid: str
-class LicenseUpdate(BaseModel): key: str; active: bool = False
-class ResetHWID(BaseModel): key: str
+class TradeData(BaseModel):
+    strategy: str
+    symbol: str
+    timeframe: str
+    outcome: bool
+    profit_pips: float
+    session: str
+
+class LicenseCheck(BaseModel):
+    key: str
+    hwid: str
+
+class LicenseCreate(BaseModel):
+    plan: str
+    duration_days: int = 30
+    email: str = ""
+
+class LicenseAction(BaseModel):
+    key: str
+
+class RecoveryRequest(BaseModel):
+    email: str
+
+class TrialRequest(BaseModel):
+    hwid: str
+
+class LicenseUpdate(BaseModel):
+    key: str
+    active: bool = False
+
+class ResetHWID(BaseModel):
+    key: str
+
+class LeadRequest(BaseModel):
+    email: str
 
 @app.post("/api/track_view")
 def track_view(request: Request):
@@ -1350,16 +847,44 @@ def track_view(request: Request):
         country = geo_resp.json().get("country", "Unknown") if geo_resp.status_code == 200 else "Unknown"
     except:
         country = "Unknown"
-    
+
     stats_db["views"] = stats_db.get("views", 0) + 1
     stats_db["countries"][country] = stats_db["countries"].get(country, 0) + 1
-    
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
+
+    save_dbs(licenses_db, trials_db, stats_db, leads_db)
     return {"status": "tracked"}
 
 @app.get("/api/get_stats")
 def get_stats():
     return stats_db
+
+# ==========================================
+# 📩 NUEVA RUTA: ENVIAR ENLACE DE DESCARGA
+# ==========================================
+@app.post("/api/request_download")
+def request_download(req: LeadRequest):
+    global leads_db
+    email = req.email.lower().strip()
+    if not email or "@" not in email:
+        return {"status": "error", "message": "❌ Por favor ingresa un correo válido."}
+    
+    # Guardar lead si no existe
+    if email not in leads_db:
+        leads_db.append(email)
+        save_dbs(licenses_db, trials_db, stats_db, leads_db)
+    
+    # Enviar correo con el enlace
+    download_link = "https://tu-enlace-de-descarga-aqui.com" # <--- CAMBIA ESTO POR TU ENLACE REAL
+    subject = "🚀 Tu enlace de descarga - BLENIN.G.77"
+    body = f"¡Hola!\n\nGracias por tu interés en BLENIN.G.77.\n\nPuedes descargar el sistema desde el siguiente enlace:\n{download_link}\n\nSi tienes algún problema, responde a este correo.\n\nSaludos,\nEquipo BLENIN.G.77"
+    
+    email_sent = send_email(email, subject, body)
+    
+    return {
+        "status": "success" if email_sent else "warning",
+        "message": "✅ ¡Correo enviado! Revisa tu bandeja de entrada (y spam) para obtener tu enlace de descarga." if email_sent else "⚠️ No pudimos enviarte el correo, pero puedes descargar el sistema directamente en el botón de abajo.",
+        "download_link": download_link
+    }
 
 def generate_license_key(plan):
     p1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
@@ -1373,12 +898,14 @@ def receive_intel(trade: TradeData):
 
 @app.get("/api/get_global_intel")
 def get_intel():
-    if not db_trades: return {}
+    if not db_trades:
+        return {}
     stats = defaultdict(lambda: {"wins": 0, "total": 0})
     for t in db_trades:
         k = f"{t.strategy}_{t.symbol}_{t.session}"
         stats[k]["total"] += 1
-        if t.outcome: stats[k]["wins"] += 1
+        if t.outcome:
+            stats[k]["wins"] += 1
     return {k: {"win_rate": v["wins"]/v["total"], "trades": v["total"]} for k, v in stats.items() if v["total"] > 0}
 
 @app.post("/api/start_trial")
@@ -1389,41 +916,45 @@ def start_trial(data: TrialRequest):
         if datetime.now() > expires:
             return {"valid": False, "message": "⏳ Prueba expirada."}
         return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": "BRONCE"}
-    
+
     trials_db[data.hwid] = {"expires": (datetime.now() + timedelta(days=30)).isoformat()}
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
+    save_dbs(licenses_db, trials_db, stats_db, leads_db)
     return {"valid": True, "days_left": 30, "plan": "BRONCE"}
 
 @app.post("/api/validate_license")
 def validate_license(data: LicenseCheck):
     global licenses_db
     key = data.key.upper().strip()
-    if key not in licenses_db: return {"valid": False, "message": "❌ Licencia no encontrada."}
+    if key not in licenses_db:
+        return {"valid": False, "message": "❌ Licencia no encontrada."}
     info = licenses_db[key]
-    if not info["active"]: return {"valid": False, "message": "🚫 Licencia suspendida."}
-    
+    if not info["active"]:
+        return {"valid": False, "message": "🚫 Licencia suspendida."}
+
     expires = datetime.fromisoformat(info["expires"])
-    if datetime.now() > expires: return {"valid": False, "message": "⏳ Expirada."}
-    
+    if datetime.now() > expires:
+        return {"valid": False, "message": "⏳ Expirada."}
+
     if info["hwid"] is None:
         info["hwid"] = data.hwid
-        save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
-    elif info["hwid"] != data.hwid: return {"valid": False, "message": "🔒 En uso en otra PC."}
-    
+        save_dbs(licenses_db, trials_db, stats_db, leads_db)
+    elif info["hwid"] != data.hwid:
+        return {"valid": False, "message": "🔒 En uso en otra PC."}
+
     return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": info["plan"]}
 
 @app.post("/api/create_license")
-def create_license(request: Request, data: LicenseCreate):
-    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
-    
+def create_license(data: LicenseCreate):
     global licenses_db
     key = generate_license_key(data.plan)
     licenses_db[key] = {
-        "hwid": None, 
-        "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(), 
-        "active": True, "plan": data.plan.upper(), "email": data.email.lower()
+        "hwid": None,
+        "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(),
+        "active": True,
+        "plan": data.plan.upper(),
+        "email": data.email.lower()
     }
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
+    save_dbs(licenses_db, trials_db, stats_db, leads_db)
     return {"status": "success", "key": key}
 
 @app.post("/api/recover_by_email")
@@ -1435,28 +966,24 @@ def recover_by_email(req: RecoveryRequest):
     return {"status": "error", "message": "Correo no encontrado."}
 
 @app.post("/api/manage_license")
-def manage_license(request: Request, data: LicenseUpdate):
-    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
-    
+def manage_license(data: LicenseUpdate):
     global licenses_db
     key = data.key.upper().strip()
     if key not in licenses_db:
         return {"status": "error", "message": "❌ Licencia no encontrada."}
-    
+
     licenses_db[key]["active"] = data.active
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
+    save_dbs(licenses_db, trials_db, stats_db, leads_db)
     status = "activada" if data.active else "suspendida"
     return {"status": "success", "message": f"✅ Licencia {key} {status} correctamente."}
 
 @app.post("/api/reset_hwid")
-def reset_hwid(request: Request, data: ResetHWID):
-    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
-    
+def reset_hwid(data: ResetHWID):
     global licenses_db
     key = data.key.upper().strip()
     if key not in licenses_db:
         return {"status": "error", "message": "❌ Licencia no encontrada."}
-    
+
     licenses_db[key]["hwid"] = None
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
+    save_dbs(licenses_db, trials_db, stats_db, leads_db)
     return {"status": "success", "message": f"✅ HWID reseteado para {key}."}
