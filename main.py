@@ -122,7 +122,6 @@ def load_dbs():
         resp = requests.get(JSONBIN_DB_URL, headers=headers, timeout=5)
         if resp.status_code == 200:
             data = resp.json()["record"]
-            # Si no existe la contraseña en la base de datos, usa la de Render o la por defecto
             pwd = data.get("admin_password", os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"))
             return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}}), pwd
     except: pass
@@ -260,7 +259,7 @@ def admin_panel(request: Request):
                 <label class="text-sm text-slate-400">Subtítulo (H2)</label>
                 <input type="text" id="hero_subtitle" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
                 <label class="text-sm text-slate-400">Texto Descriptivo</label>
-                <textarea id="hero_text" rows="3" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none"></textarea>
+                <textarea id="hero_text" rows="3" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none"></textarea>
             </div>
 
             <!-- SISTEMA DE DESCARGA -->
@@ -330,6 +329,11 @@ def admin_panel(request: Request):
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Top Países de Origen</h3>
                 <div id="stat_countries" class="space-y-2"></div>
+            </div>
+            <!-- NUEVA SECCIÓN: LEADS CAPTURADOS -->
+            <div class="bg-slate-800 p-6 rounded-xl border border-cyan-700 shadow-lg">
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">📧 Leads Capturados (Algoritmo de Persuasión)</h3>
+                <div id="stat_leads" class="space-y-2 max-h-96 overflow-y-auto"></div>
             </div>
         </div>
 
@@ -636,6 +640,19 @@ def admin_panel(request: Request):
                 html += `<div class="flex justify-between items-center bg-slate-900 p-2 rounded"><span class="text-sm text-slate-300">${{c}}</span><span class="text-cyan-400 font-bold">${{countries[c]}}</span></div>`;
             }});
             document.getElementById('stat_countries').innerHTML = html || '<p class="text-slate-500 text-sm">Aún no hay datos.</p>';
+            
+            // Render Leads
+            const leads = data.captured_leads || [];
+            let leadsHtml = '';
+            if(leads.length === 0) {{
+                leadsHtml = '<p class="text-slate-500 text-sm">Aún no se han capturado correos.</p>';
+            }} else {{
+                leads.slice().reverse().forEach(l => {{
+                    leadsHtml += `<div class="bg-slate-900 p-3 rounded border border-slate-700"><div class="flex justify-between"><span class="text-cyan-400 font-bold text-sm">${{l.email}}</span><span class="text-slate-500 text-xs">${{l.date.split('T')[0]}}</span></div><span class="text-slate-400 text-xs">Interacción: ${{l.interaction}}</span></div>`;
+                }});
+            }}
+            document.getElementById('stat_leads').innerHTML = leadsHtml;
+            
         }} catch (e) {{ console.error(e); }}
     }}
 
@@ -1009,6 +1026,26 @@ def render_landing_page(c):
         </div>
     </nav>
 
+    <!-- ALGORITMO DE PERSUASIÓN: BANNER DE URGENCIA -->
+    <div id="urgency-banner" class="bg-gradient-to-r from-amber-500 to-red-500 text-slate-900 text-center py-2 px-4 text-sm font-bold flex justify-center items-center gap-3">
+        <i class="fas fa-fire animate-pulse"></i>
+        <span>OFERTA DE LANZAMIENTO: Termina en</span>
+        <span id="countdown-timer" class="font-mono bg-slate-900 text-amber-400 px-2 py-1 rounded">23:59:59</span>
+    </div>
+    <script>
+        function startCountdown() {
+            let now = new Date();
+            let midnight = new Date();
+            midnight.setHours(23, 59, 59, 999);
+            let diff = midnight - now;
+            let hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            let minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            let seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            document.getElementById('countdown-timer').innerText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        setInterval(startCountdown, 1000);
+    </script>
+
     <header class="relative overflow-hidden py-24 md:py-32 hero-bg">
         <div class="container mx-auto px-6 text-center relative z-10">
             <div class="inline-block bg-slate-800/50 border border-slate-700 px-4 py-1 rounded-full text-xs font-medium text-cyan-400 mb-6">🚀 SISTEMA INSTITUCIONAL ACTIVO</div>
@@ -1190,6 +1227,153 @@ def render_landing_page(c):
         };
     </script>
     <script>fetch('/api/track_view', { method: 'POST' });</script>
+
+    <!-- ======================================================== -->
+    <!-- 🧠 ALGORITMO DE PERSUASIÓN Y CAPTACIÓN DE LEADS          -->
+    <!-- ======================================================== -->
+
+    <!-- 1. PRUEBA SOCIAL (NOTIFICACIONES FALSAS PERO REALES) -->
+    <div id="social-proof-toast" class="fixed bottom-5 left-5 bg-slate-800 border border-cyan-500 text-slate-300 p-4 rounded-lg shadow-2xl flex items-center gap-3 transition-all duration-500 opacity-0 translate-y-10 z-[9998] max-w-xs">
+        <i class="fas fa-check-circle text-cyan-400 text-2xl"></i>
+        <div>
+            <p id="sp-name" class="font-bold text-white text-sm">Carlos de México</p>
+            <p id="sp-action" class="text-xs text-slate-400">Acaba de adquirir el Plan Oro</p>
+        </div>
+    </div>
+    <script>
+        function showSocialProof() {
+            const names = ["Carlos M.", "Ana G.", "John D.", "María F.", "Alex R.", "Sofía L.", "David P.", "Elena V."];
+            const countries = ["México", "España", "Argentina", "Colombia", "Estados Unidos", "Chile", "Perú", "Ecuador"];
+            const actions = [
+                "Acaba de adquirir el Plan Oro",
+                "Acaba de adquirir el Plan Plata",
+                "Está viendo una demostración en vivo",
+                "Solicitó prueba gratuita de 30 días"
+            ];
+            const toast = document.getElementById('social-proof-toast');
+            document.getElementById('sp-name').innerText = `${names[Math.floor(Math.random()*names.length)]} de ${countries[Math.floor(Math.random()*countries.length)]}`;
+            document.getElementById('sp-action').innerText = actions[Math.floor(Math.random()*actions.length)];
+            toast.classList.remove('opacity-0', 'translate-y-10');
+            setTimeout(() => toast.classList.add('opacity-0', 'translate-y-10'), 5000);
+        }
+        setTimeout(showSocialProof, 5000);
+        setInterval(showSocialProof, Math.floor(Math.random() * (25000 - 15000 + 1)) + 15000);
+    </script>
+
+    <!-- 2. MODAL DE ABANDONO (EXIT INTENT) -->
+    <div id="exit-modal" class="hidden fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4">
+        <div class="bg-slate-800 p-8 rounded-xl border border-cyan-500 max-w-md w-full text-center relative">
+            <button onclick="document.getElementById('exit-modal').classList.add('hidden')" class="absolute top-3 right-4 text-slate-500 hover:text-white text-2xl">&times;</button>
+            <i class="fas fa-gift text-cyan-400 text-5xl mb-4"></i>
+            <h3 class="text-2xl font-bold text-white mb-2">¡Espera! No te vayas sin tu regalo</h3>
+            <p class="text-slate-400 mb-6 text-sm">Suscríbete ahora y recibe un <strong class="text-cyan-400">Ebook Gratuito</strong> además de un descuento del 10% en tu primer mes.</p>
+            <input type="email" id="exit_email_input" placeholder="Tu mejor correo" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 text-white">
+            <button onclick="submitLead('Modal de Abandono')" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Quiero mi Descuento</button>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('mouseleave', function(e) {
+            if (e.clientY < 0 && !localStorage.getItem('exit_modal_shown')) {
+                document.getElementById('exit-modal').classList.remove('hidden');
+                localStorage.setItem('exit_modal_shown', 'true');
+            }
+        });
+    </script>
+
+    <!-- 3. WIDGET FLOTANTE DE CAPTACIÓN INTELIGENTE -->
+    <div id="lead-capture-widget" class="fixed bottom-5 right-5 bg-slate-800 p-6 rounded-xl border border-cyan-500 shadow-2xl w-80 z-[9998] transition-all duration-500 translate-y-[150%] hidden">
+        <button onclick="closeLeadWidget()" class="absolute top-2 right-3 text-slate-500 hover:text-white text-xl">&times;</button>
+        <div class="text-center mb-4">
+            <i class="fas fa-robot text-cyan-400 text-3xl mb-2"></i>
+            <h4 class="text-white font-bold text-lg">¿Te gusta lo que ves?</h4>
+            <p class="text-slate-400 text-sm">Déjanos tu correo y te enviamos un video privado de cómo opera la IA + un descuento.</p>
+        </div>
+        <input type="email" id="lead_email_input" placeholder="tu.correo@gmail.com" class="w-full bg-slate-900 rounded p-2 mb-3 border border-slate-700 text-white outline-none focus:border-cyan-500">
+        <button onclick="submitLead('Widget Flotante')" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-2 rounded transition">
+            Quiero el Video y Descuento
+        </button>
+        <div id="lead_thanks" class="hidden text-center text-emerald-400 text-sm font-bold mt-4">
+            <i class="fas fa-check-circle"></i> ¡Revisa tu correo en 2 minutos!
+        </div>
+    </div>
+    <script>
+        let leadTriggered = false;
+
+        function showLeadWidget(interactionType) {
+            if (leadTriggered || localStorage.getItem('lead_captured')) return;
+            const widget = document.getElementById('lead-capture-widget');
+            widget.classList.remove('hidden');
+            setTimeout(() => widget.classList.remove('translate-y-[150%]'), 50);
+            leadTriggered = true;
+            widget.dataset.interaction = interactionType;
+        }
+
+        function closeLeadWidget() {
+            const widget = document.getElementById('lead-capture-widget');
+            widget.classList.add('translate-y-[150%]');
+            setTimeout(() => widget.classList.add('hidden'), 500);
+            setTimeout(() => { leadTriggered = false; }, 3600000);
+        }
+
+        async function submitLead(source) {
+            let email = '';
+            if(source === 'Modal de Abandono') {
+                email = document.getElementById('exit_email_input').value;
+            } else {
+                email = document.getElementById('lead_email_input').value;
+            }
+
+            if (!email || !email.includes('@')) {
+                alert('Por favor ingresa un correo válido.');
+                return;
+            }
+
+            let interaction = source;
+            if(source !== 'Modal de Abandono') {
+                interaction = document.getElementById('lead-capture-widget').dataset.interaction || source;
+            }
+
+            try {
+                await fetch('/api/capture_lead', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email, interaction: interaction })
+                });
+
+                if(source === 'Modal de Abandono') {
+                    document.getElementById('exit-modal').classList.add('hidden');
+                } else {
+                    document.getElementById('lead_email_input').style.display = 'none';
+                    document.querySelector('#lead-capture-widget button[onclick^="submitLead"]').style.display = 'none';
+                    document.getElementById('lead_thanks').classList.remove('hidden');
+                }
+                
+                localStorage.setItem('lead_captured', 'true');
+                setTimeout(closeLeadWidget, 4000);
+            } catch (e) {
+                alert('Hubo un error, intenta de nuevo.');
+            }
+        }
+
+        // TRIGGERS DE INTERACCIÓN
+        document.querySelectorAll('a[href="#videos"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                setTimeout(() => showLeadWidget('Clic en Ver Demo'), 3000);
+            });
+        });
+
+        const pricingSection = document.getElementById('pricing');
+        if (pricingSection) {
+            pricingSection.addEventListener('mouseenter', () => {
+                setTimeout(() => showLeadWidget('Mirando los Planes'), 5000);
+            });
+        }
+
+        setTimeout(() => {
+            if (!leadTriggered && !localStorage.getItem('lead_captured')) showLeadWidget('Lectura profunda (40s)');
+        }, 40000);
+    </script>
+
 </body>
 </html>"""
     return template.replace("{CHATBOT_ID}", chatbot_id)\
@@ -1204,9 +1388,23 @@ def render_landing_page(c):
                    .replace("{DOWNLOAD_INSTRUCTIONS_HTML}", download_instructions_html)
 
 @app.get("/", response_class=HTMLResponse)
-def read_root():
+def read_root(request: Request):
     pages_data = get_all_pages()
     c = pages_data.get("pages", {}).get("main", get_default_content())
+    
+    # --- ALGORITMO DE PERSUASIÓN POR PAÍS (GEOLOCALIZACIÓN) ---
+    user_country_name = "Internacional"
+    try:
+        ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "8.8.8.8").split(",")[0]
+        geo_resp = requests.get(f"https://get.geojs.io/v1/ip/country.json?ip={ip}", timeout=2)
+        if geo_resp.status_code == 200:
+            user_country_name = geo_resp.json().get("country_name", "Internacional")
+    except:
+        pass
+        
+    if user_country_name != "Internacional":
+        c['hero_text'] = f"🔥 Usuarios de {user_country_name} ya están multiplicando su capital. " + c.get('hero_text', '')
+    
     return render_landing_page(c)
 
 @app.get("/p/{slug}", response_class=HTMLResponse)
@@ -1229,6 +1427,7 @@ class RecoveryRequest(BaseModel): email: str
 class TrialRequest(BaseModel): hwid: str
 class LicenseUpdate(BaseModel): key: str; active: bool = False
 class ResetHWID(BaseModel): key: str
+class LeadCapture(BaseModel): email: str; interaction: str = "Visualizó demo"
 
 @app.post("/api/track_view")
 def track_view(request: Request):
@@ -1349,3 +1548,36 @@ def reset_hwid(request: Request, data: ResetHWID):
     licenses_db[key]["hwid"] = None
     save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
     return {"status": "success", "message": f"✅ HWID reseteado para {key}."}
+
+# ==========================================
+# 🎯 NUEVA RUTA: ALGORITMO DE CAPTACIÓN DE LEADS
+# ==========================================
+@app.post("/api/capture_lead")
+def capture_lead(lead: LeadCapture):
+    global stats_db
+    try:
+        if "captured_leads" not in stats_db:
+            stats_db["captured_leads"] = []
+        
+        existing_emails = [l.get("email") for l in stats_db["captured_leads"]]
+        if lead.email.lower() not in existing_emails:
+            stats_db["captured_leads"].append({
+                "email": lead.email.lower(),
+                "interaction": lead.interaction,
+                "date": datetime.now().isoformat()
+            })
+            save_dbs(licenses_db, trials_db, stats_db, admin_password_db)
+        
+        # CORREO AL CLIENTE
+        client_subject = "🚀 Tu acceso a BLENIN.G.77 - Información Exclusiva"
+        client_body = f"Hola,\n\nGracias por tu interés en BLENIN.G.77.\nDetectamos que te interesa nuestro sistema de IA Predictiva.\n\nAdjuntamos información exclusiva para ti. Si deseas agendar una llamada o tienes dudas, responde a este correo.\n\nSaludos,\nEl equipo de BLENIN77."
+        send_email(lead.email, client_subject, client_body)
+        
+        # ALERTA AL ADMINISTRADOR
+        admin_subject = f"🔥 Nuevo Lead Interesado: {lead.email}"
+        admin_body = f"¡Alerta de captación!\n\nUn usuario ha interactuado con la página.\nCorreo: {lead.email}\nInteracción: {lead.interaction}\n\n¡Contáctalo lo antes posible para cerrar la venta!"
+        send_email(SMTP_EMAIL, admin_subject, admin_body)
+        
+        return {"status": "success", "message": "Información enviada al correo."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
