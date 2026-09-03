@@ -57,20 +57,20 @@ def load_dbs():
         resp = requests.get(JSONBIN_DB_URL, headers=headers, timeout=5)
         if resp.status_code == 200:
             data = resp.json()["record"]
-            return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}}), data.get("leads_db", [])
+            return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}})
     except:
         pass
-    return {}, {}, {"views": 0, "countries": {}}, []
+    return {}, {}, {"views": 0, "countries": {}}
 
-def save_dbs(lic, trials, stats, leads):
+def save_dbs(lic, trials, stats):
     try:
         headers = {"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}
-        data = {"licenses_db": lic, "trials_db": trials, "stats_db": stats, "leads_db": leads}
+        data = {"licenses_db": lic, "trials_db": trials, "stats_db": stats}
         requests.put(JSONBIN_DB_URL, json=data, headers=headers, timeout=5)
     except:
         pass
 
-licenses_db, trials_db, stats_db, leads_db = load_dbs()
+licenses_db, trials_db, stats_db = load_dbs()
 
 if not licenses_db:
     licenses_db = {
@@ -78,7 +78,7 @@ if not licenses_db:
         "BLENIN-TEST-PLATA": {"hwid": None, "expires": "2026-09-15T00:00:00", "active": True, "plan": "PLATA", "email": "test-plata@blenin77.com"},
         "BLENIN-TEST-BRONCE": {"hwid": None, "expires": "2026-09-15T00:00:00", "active": True, "plan": "BRONCE", "email": "test-bronce@blenin77.com"}
     }
-    save_dbs(licenses_db, trials_db, stats_db, leads_db)
+    save_dbs(licenses_db, trials_db, stats_db)
 
 def get_content():
     try:
@@ -117,7 +117,7 @@ def save_content(data):
         return False
 
 # ==========================================
-# 🎛️ PANEL DE ADMINISTRACIÓN (TAILWIND UI)
+# 🎛️ PANEL DE ADMINISTRACIÓN (TAILWIND UI) — MEJORADO
 # ==========================================
 @app.get("/admin", response_class=HTMLResponse)
 def admin_panel():
@@ -151,7 +151,7 @@ def admin_panel():
 
     <div class="flex-1 container mx-auto p-6 md:p-10 max-w-4xl">
 
-        <!-- PESTAÑA ESTADÍSTICAS -->
+        <!-- PESTAÑA ESTADÍSTICAS — MEJORADA -->
         <div id="content-stats" class="space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-gradient-to-br from-cyan-500/10 to-slate-800 p-6 rounded-xl border border-cyan-500/30 shadow-lg text-center">
@@ -266,6 +266,9 @@ def admin_panel():
         setTimeout(() => t.classList.add('opacity-0'), 3000);
     }}
 
+    // ==========================================
+    // 🗺️ MAPA DE CÓDIGOS ISO → NOMBRES EN ESPAÑOL
+    // ==========================================
     const COUNTRY_MAP = {{
         'CO':'Colombia','ES':'España','MX':'México','AR':'Argentina','PE':'Perú',
         'CL':'Chile','EC':'Ecuador','VE':'Venezuela','BO':'Bolivia','PY':'Paraguay',
@@ -287,6 +290,7 @@ def admin_panel():
         'PK':'Pakistán','BD':'Bangladés','LK':'Sri Lanka','KZ':'Kazajistán'
     }};
 
+    // Convierte código ISO (CO, ES, US) a emoji de bandera 🇨🇴 🇪🇸 🇺🇸
     function codeToFlag(code) {{
         if(!code || code === 'Unknown') return '🌍';
         return code.toUpperCase().replace(/./g, c =>
@@ -299,6 +303,9 @@ def admin_panel():
         return COUNTRY_MAP[code.toUpperCase()] || code.toUpperCase();
     }}
 
+    // ==========================================
+    // 📊 FUNCIÓN loadStats MEJORADA
+    // ==========================================
     async function loadStats() {{
         try {{
             const res = await fetch('/api/get_stats');
@@ -480,7 +487,7 @@ def recover_page():
     """
 
 # ==========================================
-# 🌐 PÁGINA WEB DE VENTAS (LANDING PAGE)
+# 🌐 PÁGINA WEB DE VENTAS (LANDING PAGE) — MEJORADA
 # ==========================================
 @app.get("/", response_class=HTMLResponse)
 def read_root():
@@ -544,12 +551,14 @@ def read_root():
         body { font-family: 'Inter', sans-serif; background-color: #020617; }
         .glow { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }
         .hero-bg { background: linear-gradient(to bottom, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; }
+        /* Ocultar la barra superior de Google Translate */
         .goog-te-banner-frame.skiptranslate {display: none !important;}
         body {top: 0px !important;}
         .goog-te-gadget {font-size: 0 !important;}
         #google_translate_element {display: none !important;}
         .goog-tooltip {display: none !important;}
         .goog-tooltip:hover {display: none !important;}
+        /* Scrollbar personalizada del menú de idiomas */
         #lang-dropdown::-webkit-scrollbar { width: 6px; }
         #lang-dropdown::-webkit-scrollbar-track { background: #1e293b; }
         #lang-dropdown::-webkit-scrollbar-thumb { background: #06b6d4; border-radius: 3px; }
@@ -567,7 +576,9 @@ def read_root():
                 <a href="#pricing" class="hover:text-cyan-400 transition">Precios</a>
             </div>
             <div class="flex items-center gap-3">
+                <!-- Traductor oculto nativo de Google -->
                 <div id="google_translate_element"></div>
+                <!-- Menú personalizado con banderas -->
                 <div class="relative" id="lang-wrapper">
                     <button id="lang-btn" type="button" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg text-sm font-medium transition border border-slate-700">
                         <span class="text-lg leading-none" id="lang-flag">🇪🇸</span>
@@ -635,21 +646,122 @@ def read_root():
         </div>
     </section>
 
-    <!-- INICIO FORMULARIO DE DESCARGA NATIVO (Reemplaza a MailerLite) -->
+    <!-- INICIO FORMULARIO MAILERLITE -->
     <div class="section py-16 px-6 bg-slate-950">
-        <div class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-2xl text-center">
-            <h4 class="text-2xl font-bold text-cyan-400 mb-3">¿Quieres descargar el sistema?</h4>
-            <p class="text-slate-400 mb-6">Deja tu correo y te enviaremos el enlace de descarga del sistema completo.</p>
-            
-            <input type="email" id="lead_email_input" placeholder="tu.correo@gmail.com" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 outline-none focus:border-cyan-500 text-white text-center">
-            <button onclick="requestDownload()" id="lead_submit_btn" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">
-                Quiero mi enlace de descarga
-            </button>
-            
-            <div id="lead_msg" class="mt-6 hidden"></div>
+        <style type="text/css">@import url("https://assets.mlcdn.com/fonts.css?version=1785409");</style>
+        <style type="text/css">
+            .ml-form-embedSubmitLoad { display: inline-block; width: 20px; height: 20px; }
+            .g-recaptcha { transform: scale(1); -webkit-transform: scale(1); transform-origin: 0 0; -webkit-transform-origin: 0 0; height: ; }
+            .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+            .ml-form-embedSubmitLoad:after { content: " "; display: block; width: 11px; height: 11px; margin: 1px; border-radius: 50%; border: 4px solid #fff; border-color: #ffffff #ffffff #ffffff transparent; animation: ml-form-embedSubmitLoad 1.2s linear infinite; }
+            @keyframes ml-form-embedSubmitLoad { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+            #mlb2-44360624.ml-form-embedContainer { box-sizing: border-box; display: table; margin: 0 auto; position: static; width: 100% !important; }
+            #mlb2-44360624.ml-form-embedContainer h4, #mlb2-44360624.ml-form-embedContainer p, #mlb2-44360624.ml-form-embedContainer span, #mlb2-44360624.ml-form-embedContainer button { text-transform: none !important; letter-spacing: normal !important; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper { background-color: #1b263b; border-width: 1px; border-color: #334155; border-radius: 8px; border-style: solid; box-sizing: border-box; display: inline-block !important; margin: 0; padding: 0; position: relative; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper.embedPopup, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper.embedDefault { width: 400px; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper.embedForm { max-width: 400px; width: 100%; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-align-left { text-align: left; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-align-center { text-align: center; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-align-default { display: table-cell !important; vertical-align: middle !important; text-align: center !important; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-align-right { text-align: right; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedHeader img { border-top-left-radius: 4px; border-top-right-radius: 4px; height: auto; margin: 0 auto !important; max-width: 100%; width: undefinedpx; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-successBody { padding: 20px 20px 0 20px; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody.ml-form-embedBodyHorizontal { padding-bottom: 0; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-embedContent, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-successBody .ml-form-successContent { text-align: left; margin: 0 0 20px 0; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-embedContent h4, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-successBody .ml-form-successContent h4 { color: #00e5ff; font-family: 'Inter', sans-serif; font-size: 25px; font-weight: 700; margin: 0 0 10px 0; text-align: center; word-break: break-word; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-embedContent p, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-successBody .ml-form-successContent p { color: #94a3b8; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 400; line-height: 20px; margin: 0 0 10px 0; text-align: center; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-embedContent ul, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-embedContent ol, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-successBody .ml-form-successContent ul, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-successBody .ml-form-successContent ol { color: #94a3b8; font-family: 'Inter', sans-serif; font-size: 14px; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-embedContent ol ol, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-successBody .ml-form-successContent ol ol { list-style-type: lower-alpha; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-embedContent ol ol ol, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-successBody .ml-form-successContent ol ol ol { list-style-type: lower-roman; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-embedContent p a, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-successBody .ml-form-successContent p a { color: #000000; text-decoration: underline; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-block-form .ml-field-group { text-align: left!important; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-block-form .ml-field-group label { margin-bottom: 5px; color: #e2e8f0; font-size: 14px; font-family: 'Inter', sans-serif; font-weight: bold; font-style: normal; text-decoration: none; display: inline-block; line-height: 20px; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-embedContent p:last-child, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-successBody .ml-form-successContent p:last-child { margin: 0; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody form { margin: 0; width: 100%; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-formContent, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-checkboxRow { margin: 0 0 20px 0; width: 100%; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-checkboxRow { float: left; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-formContent.horozintalForm { margin: 0; padding: 0 0 20px 0; width: 100%; height: auto; float: left; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-fieldRow { margin: 0 0 10px 0; width: 100%; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-fieldRow.ml-last-item { margin: 0; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-fieldRow.ml-formfieldHorizintal { margin: 0; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-fieldRow input { background-color: #0f172a !important; color: #ffffff !important; border-color: #334155; border-radius: 4px !important; border-style: solid !important; border-width: 1px !important; font-family: 'Inter', sans-serif; font-size: 14px !important; height: auto; line-height: 21px !important; margin-bottom: 0; margin-top: 0; margin-left: 0; margin-right: 0; padding: 10px 10px !important; width: 100% !important; box-sizing: border-box !important; max-width: 100% !important; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-fieldRow input::-webkit-input-placeholder, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-horizontalRow input::-webkit-input-placeholder { color: #64748b; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-fieldRow input::-moz-placeholder, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-horizontalRow input::-moz-placeholder { color: #64748b; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-fieldRow input:-ms-input-placeholder, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-horizontalRow input:-ms-input-placeholder { color: #64748b; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-fieldRow input:-moz-placeholder, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-horizontalRow input:-moz-placeholder { color: #64748b; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-horizontalRow { height: auto; width: 100%; float: left; }
+            .ml-form-formContent.horozintalForm .ml-form-horizontalRow .ml-input-horizontal { width: 70%; float: left; }
+            .ml-form-formContent.horozintalForm .ml-form-horizontalRow .ml-button-horizontal { width: 30%; float: left; }
+            .ml-form-formContent.horozintalForm .ml-form-horizontalRow .ml-button-horizontal.labelsOn { padding-top: 25px; }
+            .ml-form-formContent.horozintalForm .ml-form-horizontalRow .horizontal-fields { box-sizing: border-box; float: left; padding-right: 10px; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-horizontalRow button { background-color: #00e5ff !important; border-color: #00e5ff; border-style: solid; border-width: 1px; border-radius: 4px; box-shadow: none; color: #020617 !important; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 14px !important; font-weight: 700; line-height: 20px; margin: 0 !important; padding: 10px !important; width: 100%; height: auto; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-horizontalRow button:hover { background-color: #22d3ee !important; border-color: #22d3ee !important; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-checkboxRow input[type="checkbox"] { box-sizing: border-box; padding: 0; position: absolute; z-index: -1; opacity: 0; margin-top: 5px; margin-left: -1.5rem; overflow: visible; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-checkboxRow .label-description { color: #94a3b8; display: block; font-family: 'Inter', sans-serif; font-size: 12px; text-align: left; margin-bottom: 0; position: relative; vertical-align: top; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-checkboxRow label { font-weight: normal; margin: 0; padding: 0; position: relative; display: block; min-height: 24px; padding-left: 24px; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-checkboxRow label a { color: #00e5ff; text-decoration: underline; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-checkboxRow label p { color: #94a3b8 !important; font-family: 'Inter', sans-serif !important; font-size: 12px !important; font-weight: normal !important; line-height: 18px !important; padding: 0 !important; margin: 0 5px 0 0 !important; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-checkboxRow label p:last-child { margin: 0; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-embedSubmit { margin: 0 0 20px 0; float: left; width: 100%; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-embedSubmit button { background-color: #00e5ff !important; border: none !important; border-radius: 4px !important; box-shadow: none !important; color: #020617 !important; cursor: pointer; font-family: 'Inter', sans-serif !important; font-size: 14px !important; font-weight: 700 !important; line-height: 21px !important; height: auto; padding: 10px !important; width: 100% !important; box-sizing: border-box !important; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-embedSubmit button.loading { display: none; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-embedSubmit button:hover { background-color: #22d3ee !important; }
+            .ml-subscribe-close { width: 30px; height: 30px; background: url('https://assets.mlcdn.com/ml/images/default/modal_close.png') no-repeat; background-size: 30px; cursor: pointer; margin-top: -10px; margin-right: -10px; position: absolute; top: 0; right: 0; }
+            .ml-error input, .ml-error textarea, .ml-error select { border-color: red!important; }
+            .ml-error .custom-checkbox-radio-list { border: 1px solid red !important; border-radius: 4px; padding: 10px; }
+            .ml-error .label-description, .ml-error .label-description p, .ml-error .label-description p a, .ml-error label:first-child { color: #ff0000 !important; }
+            #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-checkboxRow.ml-error .label-description p, #mlb2-44360624.ml-form-embedContainer .ml-form-embedWrapper .ml-form-embedBody .ml-form-checkboxRow.ml-error .label-description p:first-letter { color: #ff0000 !important; }
+            @media only screen and (max-width: 400px){ .ml-form-embedWrapper.embedDefault, .ml-form-embedWrapper.embedPopup { width: 100%!important; } .ml-form-formContent.horozintalForm { float: left!important; } .ml-form-formContent.horozintalForm .ml-form-horizontalRow { height: auto!important; width: 100%!important; float: left!important; } .ml-form-formContent.horozintalForm .ml-form-horizontalRow .ml-input-horizontal { width: 100%!important; } .ml-form-formContent.horozintalForm .ml-form-horizontalRow .ml-input-horizontal > div { padding-right: 0px!important; padding-bottom: 10px; } .ml-form-formContent.horozintalForm .ml-form-horizontalRow .ml-button-horizontal { width: 100%!important; } .ml-form-formContent.horozintalForm .ml-form-horizontalRow .ml-button-horizontal.labelsOn { padding-top: 0px!important; } }
+        </style>
+        <div id="mlb2-44360624" class="ml-form-embedContainer ml-subscribe-form ml-subscribe-form-44360624">
+            <div class="ml-form-align-center ">
+                <div class="ml-form-embedWrapper embedForm">
+                    <div class="ml-form-embedBody ml-form-embedBodyDefault row-form">
+                        <div class="ml-form-embedContent" style=" ">
+                            <h4>"¿Quieres ver al Bot operando en vivo?"</h4>
+                            <p>"Deja tu correo y te enviaremos un video de cómo el Enjambre de Agentes abre operaciones reales."</p>
+                        </div>
+                        <form class="ml-block-form" action="https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/subscribe" data-code="" method="post" target="_blank">
+                            <div class="ml-form-formContent">
+                                <div class="ml-form-fieldRow ml-last-item">
+                                    <div class="ml-field-group ml-field-email ml-validate-email ml-validate-required">
+                                        <input aria-label="email" aria-required="true" type="email" class="form-control" data-inputmask="" name="fields[email]" placeholder="Email" autocomplete="email">
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="hidden" name="ml-submit" value="1">
+                            <div class="ml-form-embedSubmit">
+                                <button type="submit" class="primary">"Quiero Acceso"</button>
+                                <button disabled="disabled" style="display: none;" type="button" class="loading">
+                                    <div class="ml-form-embedSubmitLoad"></div>
+                                    <span class="sr-only">Loading...</span>
+                                </button>
+                            </div>
+                            <input type="hidden" name="anticsrf" value="true">
+                        </form>
+                    </div>
+                    <div class="ml-form-successBody row-success" style="display: none">
+                        <div class="ml-form-successContent">
+                            <h4>Thank you!</h4>
+                            <p>You have successfully joined our subscriber list.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
+        <script>
+            function ml_webform_success_44360624() {
+                var $ = ml_jQuery || jQuery;
+                $('.ml-subscribe-form-44360624 .row-success').show();
+                $('.ml-subscribe-form-44360624 .row-form').hide();
+            }
+        </script>
+        <script src="https://groot.mailerlite.com/js/w/webforms.min.js?v83147fa8ce2d95cb73ece7f28b469519" type="text/javascript"></script>
+        <script>
+            fetch("https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/takel")
+        </script>
     </div>
-    <!-- FIN FORMULARIO DE DESCARGA -->
+    <!-- FIN FORMULARIO MAILERLITE -->
 
     <!-- Social Footer -->
     <section class="py-12 border-t border-slate-800">
@@ -738,54 +850,9 @@ def read_root():
     </script>
     <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 
-    <!-- TRACKING Y FORMULARIO DE DESCARGA SCRIPTS -->
+    <!-- TRACKING SCRIPT -->
     <script>
         fetch('/api/track_view', { method: 'POST' });
-
-        async function requestDownload() {
-            const email = document.getElementById('lead_email_input').value;
-            const btn = document.getElementById('lead_submit_btn');
-            const msgDiv = document.getElementById('lead_msg');
-            
-            if(!email) {
-                msgDiv.innerHTML = '<p class="text-red-400 font-bold">❌ Por favor ingresa un correo.</p>';
-                msgDiv.classList.remove('hidden');
-                return;
-            }
-
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Enviando...';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/request_download', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({email: email})
-                });
-                const data = await res.json();
-                
-                let extraHtml = '';
-                if(data.download_link) {
-                    extraHtml = `<a href="${data.download_link}" target="_blank" class="inline-block mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-6 rounded transition"><i class="fas fa-download mr-2"></i>Descargar Ahora</a>`;
-                }
-
-                const colorClass = data.status === 'success' ? 'text-emerald-400' : (data.status === 'warning' ? 'text-amber-400' : 'text-red-400');
-                msgDiv.innerHTML = `<p class="${colorClass} font-bold mb-2">${data.message}</p>${extraHtml}`;
-                msgDiv.classList.remove('hidden');
-                
-                if(data.status === 'success' || data.status === 'warning') {
-                    btn.innerText = '✅ Solicitud Procesada';
-                } else {
-                    btn.innerText = 'Quiero mi enlace de descarga';
-                    btn.disabled = false;
-                }
-            } catch(e) {
-                msgDiv.innerHTML = '<p class="text-red-400 font-bold">❌ Hubo un error de conexión.</p>';
-                msgDiv.classList.remove('hidden');
-                btn.innerText = 'Quiero mi enlace de descarga';
-                btn.disabled = false;
-            }
-        }
     </script>
 </body>
 </html>"""
@@ -835,9 +902,6 @@ class LicenseUpdate(BaseModel):
 class ResetHWID(BaseModel):
     key: str
 
-class LeadRequest(BaseModel):
-    email: str
-
 @app.post("/api/track_view")
 def track_view(request: Request):
     global stats_db
@@ -851,40 +915,12 @@ def track_view(request: Request):
     stats_db["views"] = stats_db.get("views", 0) + 1
     stats_db["countries"][country] = stats_db["countries"].get(country, 0) + 1
 
-    save_dbs(licenses_db, trials_db, stats_db, leads_db)
+    save_dbs(licenses_db, trials_db, stats_db)
     return {"status": "tracked"}
 
 @app.get("/api/get_stats")
 def get_stats():
     return stats_db
-
-# ==========================================
-# 📩 NUEVA RUTA: ENVIAR ENLACE DE DESCARGA
-# ==========================================
-@app.post("/api/request_download")
-def request_download(req: LeadRequest):
-    global leads_db
-    email = req.email.lower().strip()
-    if not email or "@" not in email:
-        return {"status": "error", "message": "❌ Por favor ingresa un correo válido."}
-    
-    # Guardar lead si no existe
-    if email not in leads_db:
-        leads_db.append(email)
-        save_dbs(licenses_db, trials_db, stats_db, leads_db)
-    
-    # Enviar correo con el enlace
-    download_link = "https://tu-enlace-de-descarga-aqui.com" # <--- CAMBIA ESTO POR TU ENLACE REAL
-    subject = "🚀 Tu enlace de descarga - BLENIN.G.77"
-    body = f"¡Hola!\n\nGracias por tu interés en BLENIN.G.77.\n\nPuedes descargar el sistema desde el siguiente enlace:\n{download_link}\n\nSi tienes algún problema, responde a este correo.\n\nSaludos,\nEquipo BLENIN.G.77"
-    
-    email_sent = send_email(email, subject, body)
-    
-    return {
-        "status": "success" if email_sent else "warning",
-        "message": "✅ ¡Correo enviado! Revisa tu bandeja de entrada (y spam) para obtener tu enlace de descarga." if email_sent else "⚠️ No pudimos enviarte el correo, pero puedes descargar el sistema directamente en el botón de abajo.",
-        "download_link": download_link
-    }
 
 def generate_license_key(plan):
     p1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
@@ -918,7 +954,7 @@ def start_trial(data: TrialRequest):
         return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": "BRONCE"}
 
     trials_db[data.hwid] = {"expires": (datetime.now() + timedelta(days=30)).isoformat()}
-    save_dbs(licenses_db, trials_db, stats_db, leads_db)
+    save_dbs(licenses_db, trials_db, stats_db)
     return {"valid": True, "days_left": 30, "plan": "BRONCE"}
 
 @app.post("/api/validate_license")
@@ -937,7 +973,7 @@ def validate_license(data: LicenseCheck):
 
     if info["hwid"] is None:
         info["hwid"] = data.hwid
-        save_dbs(licenses_db, trials_db, stats_db, leads_db)
+        save_dbs(licenses_db, trials_db, stats_db)
     elif info["hwid"] != data.hwid:
         return {"valid": False, "message": "🔒 En uso en otra PC."}
 
@@ -954,7 +990,7 @@ def create_license(data: LicenseCreate):
         "plan": data.plan.upper(),
         "email": data.email.lower()
     }
-    save_dbs(licenses_db, trials_db, stats_db, leads_db)
+    save_dbs(licenses_db, trials_db, stats_db)
     return {"status": "success", "key": key}
 
 @app.post("/api/recover_by_email")
@@ -973,7 +1009,7 @@ def manage_license(data: LicenseUpdate):
         return {"status": "error", "message": "❌ Licencia no encontrada."}
 
     licenses_db[key]["active"] = data.active
-    save_dbs(licenses_db, trials_db, stats_db, leads_db)
+    save_dbs(licenses_db, trials_db, stats_db)
     status = "activada" if data.active else "suspendida"
     return {"status": "success", "message": f"✅ Licencia {key} {status} correctamente."}
 
@@ -985,5 +1021,5 @@ def reset_hwid(data: ResetHWID):
         return {"status": "error", "message": "❌ Licencia no encontrada."}
 
     licenses_db[key]["hwid"] = None
-    save_dbs(licenses_db, trials_db, stats_db, leads_db)
+    save_dbs(licenses_db, trials_db, stats_db)
     return {"status": "success", "message": f"✅ HWID reseteado para {key}."}
