@@ -124,7 +124,7 @@ def get_default_ai_config():
         "stage1_body": "Hola {name},\n\nHace un par de días te interesó nuestro sistema. Muchas personas nos preguntan si la IA reemplaza por completo su trabajo. La respuesta es no: es un copiloto que trabaja por ti.\n\n¿Tienes alguna duda sobre los planes? Simplemente responde a este correo.\n\nUn saludo,\nAgente BLENIN77.",
         "stage2_days": 5,
         "stage2_subject": "🔥 {name}, mira esto antes de decidir...",
-        "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que está logrando la comunidad. Nuestros usuarios del Plan Oro están reportando resultados increíbles gracias al Enjambre de 500 Agentes.\n\nRecuerda que la oferta de lanzamiento termina pronto. ¡No te quedes fuera!\n\nMira los planes aquí: https://blenin77-server.onrender.com/#pricing\n\nAgente BLENIN77.",
+        "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que está logrando la comunidad. Nuestros usuarios del Plan Oro están reportando resultados increíbles gracias al Enjambre de 500 Agentes.\n\nRecuerda que la oferta de lanzamiento termina pronto. ¡No te quedes fuera!\n\nMira los planes aquí: tudominio.com/#pricing\n\nAgente BLENIN77.",
         "stage3_days": 10,
         "stage3_subject": "⏳ Última oportunidad para ti, {name}",
         "stage3_body": "Hola {name},\n\nHemos notado que aún no das el paso. Sabemos que el trading requiere confianza.\n\nPor eso, como último intento de ayudarte, hemos habilitado un descuento especial del 10% si adquieres cualquier plan en las próximas 48 horas.\n\nUsa el código: BLENIN10 al momento de tu transferencia o escríbenos para ayudarte.\n\nAgente BLENIN77."
@@ -172,9 +172,9 @@ def get_default_content(page_name="Principal"):
         "hero_text": "IA Predictiva, Enjambre de 500 Agentes y Análisis Global en Tiempo Real.",
         "publications": [{"type": "video", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ", "desc": "Mira cómo el Enjambre de Agentes abre operaciones reales."}],
         "plans": [
-            {"name": "Bronce", "price": "$49", "features": "✅ 1 Cuenta MT5\n✅ Modo MT5 Puro", "link": "https://paypal.me/bronce", "highlight": False},
-            {"name": "Plata", "price": "$99", "features": "✅ 2 Cuentas MT5\n✅ Modo Híbrido + Enjambre", "link": "https://paypal.me/plata", "highlight": True},
-            {"name": "Oro", "price": "$199", "features": "✅ Cuentas Ilimitadas\n✅ Deep Learning (PyTorch)", "link": "https://paypal.me/oro", "highlight": False}
+            {"name": "Bronce", "price": "$49", "features": "✅ 1 Cuenta MT5\n✅ Modo MT5 Puro", "link": "P-78W24779DJ167620XNKNUHYY", "highlight": False},
+            {"name": "Plata", "price": "$99", "features": "✅ 2 Cuentas MT5\n✅ Modo Híbrido + Enjambre", "link": "P-5XY16476VG217634ANKNUHZA", "highlight": True},
+            {"name": "Oro", "price": "$199", "features": "✅ Cuentas Ilimitadas\n✅ Deep Learning (PyTorch)", "link": "P-4LL21192X9335681FNKNUHZA", "highlight": False}
         ],
         "social_links": {"facebook": "", "whatsapp": "", "youtube": "", "tiktok": "", "telegram": "", "instagram": ""},
         "bank_transfer_info": {
@@ -315,6 +315,7 @@ def admin_panel(request: Request):
 
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Planes de Suscripción (PayPal)</h3>
+                <div class="bg-slate-900 p-3 rounded mb-4 text-amber-400 text-xs">💡 IMPORTANTE: En el campo "Enlace de pago", pon únicamente el ID del plan de PayPal (Ej: P-78W24779DJ167620XNKNUHYY). El sistema lo convertirá en un botón automático.</div>
                 <div id="plans-container" class="space-y-6"></div>
                 <button onclick="addPlanRow()" class="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-plus mr-2"></i>Agregar Plan</button>
             </div>
@@ -361,7 +362,6 @@ def admin_panel(request: Request):
                 <p class="text-sm text-slate-400 mb-6">Usa la variable <code class="bg-slate-900 p-1 rounded text-cyan-400">{{name}}</code> en los mensajes para personalizarlos con el nombre del cliente.</p>
                 
                 <div class="space-y-8">
-                    <!-- Etapa 1 -->
                     <div class="bg-slate-900 p-4 rounded-lg border border-slate-700">
                         <h4 class="text-cyan-400 font-bold mb-3">Seguimiento 1</h4>
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
@@ -378,7 +378,6 @@ def admin_panel(request: Request):
                         <textarea id="s1_body" rows="4" class="w-full bg-slate-800 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></textarea>
                     </div>
 
-                    <!-- Etapa 2 -->
                     <div class="bg-slate-900 p-4 rounded-lg border border-slate-700">
                         <h4 class="text-cyan-400 font-bold mb-3">Seguimiento 2</h4>
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
@@ -395,7 +394,6 @@ def admin_panel(request: Request):
                         <textarea id="s2_body" rows="4" class="w-full bg-slate-800 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></textarea>
                     </div>
 
-                    <!-- Etapa 3 -->
                     <div class="bg-slate-900 p-4 rounded-lg border border-slate-700">
                         <h4 class="text-cyan-400 font-bold mb-3">Seguimiento 3 (Cierre)</h4>
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
@@ -643,7 +641,7 @@ def admin_panel(request: Request):
                 <input type="text" class="p-price bg-slate-800 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Precio (Ej: $199)" value="${{price}}">
             </div>
             <textarea class="p-features w-full bg-slate-800 rounded p-2 my-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Características">${{features}}</textarea>
-            <input type="text" class="p-link w-full bg-slate-800 rounded p-2 mb-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Enlace de pago de PayPal" value="${{link}}">
+            <input type="text" class="p-link w-full bg-slate-800 rounded p-2 mb-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="ID de Plan de PayPal (Ej: P-78W24779DJ167620XNKNUHYY)" value="${{link}}">
             <div class="flex justify-between items-center mt-2">
                 <label class="text-sm flex items-center gap-2 cursor-pointer"><input type="checkbox" class="p-highlight accent-cyan-500" ${{highlight ? 'checked' : ''}}> Resaltar (Más Popular)</label>
                 <button onclick="this.parentElement.parentElement.remove()" class="text-red-500 text-xs hover:text-red-400"><i class="fas fa-trash mr-1"></i>Eliminar</button>
@@ -886,13 +884,48 @@ def render_landing_page(c):
     has_bank_info = bt.get('account_number')
     
     plans_html = ""
+    paypal_scripts = ""
     for p in c.get('plans', []):
         if p.get('name'):
             highlight_classes = "lg:scale-105 border-cyan-500 shadow-cyan-500/20" if p.get('highlight') else "border-slate-800"
             badge = '<span class="absolute top-0 right-0 bg-cyan-500 text-slate-900 text-xs font-bold px-3 py-1 rounded-bl-lg">MÁS POPULAR</span>' if p.get('highlight') else ''
             features_html = p.get('features', '').replace('\n', '<br>')
-            bank_btn_html = f"""<button onclick="openBankModal('{p.get('name', '')}', '{p.get('price', '')}')" class="block text-center w-full bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium py-2 rounded text-sm transition mt-2"><i class="fas fa-university mr-2"></i>Pagar por Transferencia Bancaria</button>""" if has_bank_info else ""
-            plans_html += f"""<div class="relative bg-slate-800 p-8 rounded-xl border {highlight_classes} transition-all duration-300 hover:-translate-y-2 hover:shadow-xl flex flex-col">{badge}<h3 class="text-xl font-bold text-white mb-2">{p.get('name', '')}</h3><div class="text-4xl font-extrabold text-cyan-400 mb-4">{p.get('price', '')}<span class="text-base font-normal text-slate-500">/mes</span></div><p class="text-slate-300 text-sm mb-6 flex-grow">{features_html}</p><div class="mt-auto"><a href="{p.get('link', '#')}" class="block text-center w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Suscribirme con Tarjeta</a>{bank_btn_html}</div></div>"""
+            
+            bank_btn_html = ""
+            if has_bank_info:
+                bank_btn_html = f"""<button onclick="openBankModal('{p.get('name', '')}', '{p.get('price', '')}')" class="block text-center w-full bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium py-2 rounded text-sm transition mt-2"><i class="fas fa-university mr-2"></i>Pagar por Transferencia Bancaria</button>"""
+
+            plan_link = p.get('link', '#')
+            if plan_link.startswith("P-"):
+                pay_btn_html = f'<div id="paypal-btn-{plan_link}" class="mt-auto"></div>'
+                paypal_scripts += f"""
+                <script>
+                if (typeof paypal !== 'undefined') {{
+                    paypal.Buttons({{
+                        style: {{ shape: 'rect', color: 'blue', layout: 'vertical', label: 'subscribe' }},
+                        createSubscription: function(data, actions) {{
+                            return actions.subscription.create({{ plan_id: '{plan_link}' }});
+                        }},
+                        onApprove: function(data, actions) {{
+                            alert('¡Suscripción procesada con éxito! Te enviaremos tu licencia a tu correo en un momento.');
+                        }}
+                    }}).render('#paypal-btn-{plan_link}');
+                }}
+                </script>
+                """
+            else:
+                pay_btn_html = f'<div class="mt-auto"><a href="{plan_link}" class="block text-center w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Suscribirme con Tarjeta</a></div>'
+
+            plans_html += f"""
+            <div class="relative bg-slate-800 p-8 rounded-xl border {highlight_classes} transition-all duration-300 hover:-translate-y-2 hover:shadow-xl flex flex-col">
+                {badge}
+                <h3 class="text-xl font-bold text-white mb-2">{p.get('name', '')}</h3>
+                <div class="text-4xl font-extrabold text-cyan-400 mb-4">{p.get('price', '')}<span class="text-base font-normal text-slate-500">/mes</span></div>
+                <p class="text-slate-300 text-sm mb-6 flex-grow">{features_html}</p>
+                {pay_btn_html}
+                <div class="mt-2">{bank_btn_html}</div>
+            </div>
+            """
 
     social = c.get('social_links', {})
     social_html = ""
@@ -927,7 +960,7 @@ def render_landing_page(c):
                 download_buttons_html += f"""<a href="{link}" target="_blank" class="bg-slate-700 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block w-full mb-2"><i class="fas fa-server mr-2"></i> Servidor de Descarga {i+1}</a>"""
 
     template = """<!DOCTYPE html>
-<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>BLENIN.G.77 - Institutional Trading AI</title><script src="https://cdn.tailwindcss.com"></script><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><script>window.embeddedChatbotConfig = {chatbotId: "{CHATBOT_ID}",domain: "www.chatbase.co"}</script><script src="https://www.chatbase.co/embed.min.js" chatbotId="{CHATBOT_ID}" domain="www.chatbase.co" defer></script><style>body { font-family: 'Inter', sans-serif; background-color: #020617; }.glow { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }.hero-bg { background: linear-gradient(to bottom, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; }.chatbase-bubble-button, iframe[src*="chatbase.co"] { z-index: 99999 !important; display: block !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; }.goog-te-banner-frame.skiptranslate { display: none !important; } body { top: 0px !important; }.goog-tooltip, .goog-tooltip:hover { display: none !important; }.goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }#google_translate_element { position: absolute; top: -9999px; left: -9999px; opacity: 0; }.goog-te-gadget { font-size: 0 !important; }#lang-menu::-webkit-scrollbar { width: 6px; }#lang-menu::-webkit-scrollbar-track { background: #1e293b; border-radius: 10px; }#lang-menu::-webkit-scrollbar-thumb { background: #0e7490; border-radius: 10px; }</style></head>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>BLENIN.G.77 - Institutional Trading AI</title><script src="https://cdn.tailwindcss.com"></script><script src="https://www.paypal.com/sdk/js?client-id=AYybGelHI0tT0nLaGtRnRG2sc8z4FnGqAazhHUyP9Vc_DFJAxp_psxzTqe2QBKwwSCO1UbNx2ehJ28Eg&vault=true&intent=subscription"></script><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><script>window.embeddedChatbotConfig = {chatbotId: "{CHATBOT_ID}",domain: "www.chatbase.co"}</script><script src="https://www.chatbase.co/embed.min.js" chatbotId="{CHATBOT_ID}" domain="www.chatbase.co" defer></script><style>body { font-family: 'Inter', sans-serif; background-color: #020617; }.glow { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }.hero-bg { background: linear-gradient(to bottom, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; }.chatbase-bubble-button, iframe[src*="chatbase.co"] { z-index: 99999 !important; display: block !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; }.goog-te-banner-frame.skiptranslate { display: none !important; } body { top: 0px !important; }.goog-tooltip, .goog-tooltip:hover { display: none !important; }.goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }#google_translate_element { position: absolute; top: -9999px; left: -9999px; opacity: 0; }.goog-te-gadget { font-size: 0 !important; }#lang-menu::-webkit-scrollbar { width: 6px; }#lang-menu::-webkit-scrollbar-track { background: #1e293b; border-radius: 10px; }#lang-menu::-webkit-scrollbar-thumb { background: #0e7490; border-radius: 10px; }</style></head>
 <body class="text-slate-300">
     <nav class="bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-800"><div class="container mx-auto px-6 py-4 flex justify-between items-center"><a href="/" class="text-xl font-extrabold text-cyan-400 glow">BLENIN.G.77</a><div class="hidden md:flex space-x-6 text-sm font-medium items-center"><a href="#features" class="hover:text-cyan-400 transition">Tecnología</a><a href="#videos" class="hover:text-cyan-400 transition">Galería</a><a href="#pricing" class="hover:text-cyan-400 transition">Precios</a><div class="relative inline-block text-left"><button id="lang-btn" class="inline-flex justify-center items-center gap-2 rounded-md border border-slate-700 px-3 py-1.5 bg-slate-800 text-sm font-medium text-slate-300 hover:bg-slate-700 transition"><i class="fas fa-globe text-cyan-400"></i> <span id="current-lang-name">🇪🇸 Español</span> <i class="fas fa-chevron-down text-xs"></i></button><div id="lang-menu" class="hidden absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-slate-800 ring-1 ring-black ring-opacity-5 z-50 max-h-80 overflow-y-auto"><div class="py-1"><a href="#" onclick="changeLang('es', '🇪🇸 Español'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇪🇸 Español</a><a href="#" onclick="changeLang('en', '🇬🇧 English'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇬🇧 English</a><a href="#" onclick="changeLang('fr', '🇫🇷 Français'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇫🇷 Français</a><a href="#" onclick="changeLang('pt', '🇵🇹 Português'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇵🇹 Português</a><a href="#" onclick="changeLang('ru', '🇷🇺 Русский'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇷🇺 Русский</a><a href="#" onclick="changeLang('it', '🇮🇹 Italiano'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇮🇹 Italiano</a><a href="#" onclick="changeLang('de', '🇩🇪 Deutsch'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇩🇪 Deutsch</a><a href="#" onclick="changeLang('zh-CN', '🇨🇳 中文'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇨🇳 中文</a><a href="#" onclick="changeLang('ko', '🇰🇷 한국어'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇰🇷 한국어</a><a href="#" onclick="changeLang('hi', '🇮🇳 हिन्दी'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇮🇳 हिन्दी</a></div></div></div></div><a href="#pricing" class="bg-cyan-500 text-slate-900 px-4 py-2 rounded text-sm font-bold hover:bg-cyan-400 transition">Comprar Ahora</a></div></nav>
 
@@ -963,6 +996,8 @@ def render_landing_page(c):
 
     <div id="lead-capture-widget" class="fixed bottom-5 right-5 bg-slate-800 p-6 rounded-xl border border-cyan-500 shadow-2xl w-80 z-[9998] transition-all duration-500 translate-y-[150%] hidden"><button onclick="closeLeadWidget()" class="absolute top-2 right-3 text-slate-500 hover:text-white text-xl">&times;</button><div class="text-center mb-4"><i class="fas fa-robot text-cyan-400 text-3xl mb-2"></i><h4 class="text-white font-bold text-lg">¿Te gusta lo que ves?</h4><p class="text-slate-400 text-sm">Déjanos tu nombre y correo. Nuestra IA te enviará un video privado de cómo opera + un descuento.</p></div><input type="text" id="lead_name_input" placeholder="Tu Nombre" class="w-full bg-slate-900 rounded p-2 mb-3 border border-slate-700 text-white outline-none focus:border-cyan-500"><input type="email" id="lead_email_input" placeholder="tu.correo@gmail.com" class="w-full bg-slate-900 rounded p-2 mb-3 border border-slate-700 text-white outline-none focus:border-cyan-500"><button onclick="submitLead('Widget Flotante')" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-2 rounded transition">Quiero el Video y Descuento</button><div id="lead_thanks" class="hidden text-center text-emerald-400 text-sm font-bold mt-4"><i class="fas fa-check-circle"></i> ¡Revisa tu correo en 2 minutos!</div></div>
     <script>let leadTriggered = false;function showLeadWidget(interactionType) {if (leadTriggered || localStorage.getItem('lead_captured')) return;const widget = document.getElementById('lead-capture-widget');widget.classList.remove('hidden');setTimeout(() => widget.classList.remove('translate-y-[150%]'), 50);leadTriggered = true;widget.dataset.interaction = interactionType;}function closeLeadWidget() {const widget = document.getElementById('lead-capture-widget');widget.classList.add('translate-y-[150%]');setTimeout(() => widget.classList.add('hidden'), 500);setTimeout(() => { leadTriggered = false; }, 3600000);}async function submitLead(source) {let email = '';let name = '';if(source === 'Modal de Abandono') {name = document.getElementById('exit_name_input').value || 'Usuario';email = document.getElementById('exit_email_input').value;} else {name = document.getElementById('lead_name_input').value || 'Usuario';email = document.getElementById('lead_email_input').value;}if (!email || !email.includes('@')) {alert('Por favor ingresa un correo válido.');return;}let interaction = source;if(source !== 'Modal de Abandono') {interaction = document.getElementById('lead-capture-widget').dataset.interaction || source;}try {await fetch('/api/capture_lead', {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ name: name, email: email, interaction: interaction })});if(source === 'Modal de Abandono') {document.getElementById('exit-modal').classList.add('hidden');} else {document.getElementById('lead_name_input').style.display = 'none';document.getElementById('lead_email_input').style.display = 'none';document.querySelector('#lead-capture-widget button[onclick^="submitLead"]').style.display = 'none';document.getElementById('lead_thanks').classList.remove('hidden');}localStorage.setItem('lead_captured', 'true');setTimeout(closeLeadWidget, 4000);} catch (e) {alert('Hubo un error, intenta de nuevo.');}}document.querySelectorAll('a[href="#videos"]').forEach(btn => {btn.addEventListener('click', () => {setTimeout(() => showLeadWidget('Clic en Ver Demo'), 3000);});});const pricingSection = document.getElementById('pricing');if (pricingSection) {pricingSection.addEventListener('mouseenter', () => {setTimeout(() => showLeadWidget('Mirando los Planes'), 5000);});}setTimeout(() => {if (!leadTriggered && !localStorage.getItem('lead_captured')) showLeadWidget('Lectura profunda (40s)');}, 40000);</script>
+    
+    {PAYPAL_SCRIPTS}
 </body></html>"""
     return template.replace("{CHATBOT_ID}", chatbot_id)\
                    .replace("{HERO_TITLE}", c.get('hero_title', ''))\
@@ -973,7 +1008,8 @@ def render_landing_page(c):
                    .replace("{SOCIAL_HTML}", social_html)\
                    .replace("{BANK_MODAL_HTML}", bank_modal_html)\
                    .replace("{DOWNLOAD_BUTTONS_HTML}", download_buttons_html)\
-                   .replace("{DOWNLOAD_INSTRUCTIONS_HTML}", download_instructions_html)
+                   .replace("{DOWNLOAD_INSTRUCTIONS_HTML}", download_instructions_html)\
+                   .replace("{PAYPAL_SCRIPTS}", paypal_scripts)
 
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):
@@ -1011,13 +1047,6 @@ class LeadCapture(BaseModel):
     name: str = "Usuario"
     email: str
     interaction: str = "Visualizó demo"
-class MakeWebhookData(BaseModel):
-    email: str
-    plan: str
-    duration_days: int = 30
-    secret_token: str
-
-MAKE_WEBHOOK_TOKEN = "blenin_secret_token_2024"
 
 @app.post("/api/track_view")
 def track_view(request: Request):
@@ -1149,43 +1178,6 @@ def capture_lead(lead: LeadCapture):
         send_email(SMTP_EMAIL, admin_subject, admin_body)
         return {"status": "success", "message": "Información enviada al correo."}
     except Exception as e: return {"status": "error", "message": str(e)}
-
-# ==========================================
-# 🔗 WEBHOOK DE MAKE.COM (PASARELA DE PAGOS)
-# ==========================================
-@app.post("/api/make_payment_webhook")
-def make_payment_webhook(data: MakeWebhookData):
-    if data.secret_token != MAKE_WEBHOOK_TOKEN:
-        raise HTTPException(status_code=403, detail="Acceso denegado.")
-    
-    try:
-        global licenses_db
-        plan_upper = data.plan.upper()
-        if "ORO" in plan_upper: plan_upper = "ORO"
-        elif "PLATA" in plan_upper: plan_upper = "PLATA"
-        else: plan_upper = "BRONCE"
-        
-        key = generate_license_key(plan_upper)
-        licenses_db[key] = {
-            "hwid": None, 
-            "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(), 
-            "active": True, 
-            "plan": plan_upper, 
-            "email": data.email.lower()
-        }
-        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
-        
-        client_subject = "✅ Pago Confirmado - Aquí tienes tu Licencia BLENIN77"
-        client_body = f"¡Gracias por tu compra!\n\nTu pago ha sido confirmado exitosamente.\n\nAquí tienes tu clave de licencia:\n{key}\n\nPlan: {plan_upper}\nDuración: {data.duration_days} días\n\nPara descargar el sistema, ingresa a: https://blenin77-server.onrender.com/\n\nSaludos,\nEquipo BLENIN77."
-        send_email(data.email, client_subject, client_body)
-        
-        admin_subject = f"💰 ¡Nueva Venta Automática! Plan {plan_upper}"
-        admin_body = f"Se ha procesado un pago automáticamente a través de PayPal.\n\nCliente: {data.email}\nPlan: {plan_upper}\nLicencia generada: {key}"
-        send_email(SMTP_EMAIL, admin_subject, admin_body)
-        
-        return {"status": "success", "message": "Licencia generada y enviada por correo."}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
 
 # ==========================================
 # 🧠 AGENTE IA DE SEGUIMIENTO AUTOMÁTICO (SCHEDULER)
