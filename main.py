@@ -124,7 +124,7 @@ def get_default_ai_config():
         "stage1_body": "Hola {name},\n\nHace un par de días te interesó nuestro sistema. Muchas personas nos preguntan si la IA reemplaza por completo su trabajo. La respuesta es no: es un copiloto que trabaja por ti.\n\n¿Tienes alguna duda sobre los planes? Simplemente responde a este correo.\n\nUn saludo,\nAgente BLENIN77.",
         "stage2_days": 5,
         "stage2_subject": "🔥 {name}, mira esto antes de decidir...",
-        "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que está logrando la comunidad. Nuestros usuarios del Plan Oro están reportando resultados increíbles gracias al Enjambre de 500 Agentes.\n\nRecuerda que la oferta de lanzamiento termina pronto. ¡No te quedes fuera!\n\nMira los planes aquí: tudominio.com/#pricing\n\nAgente BLENIN77.",
+        "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que está logrando la comunidad. Nuestros usuarios del Plan Oro están reportando resultados increíbles gracias al Enjambre de 500 Agentes.\n\nRecuerda que la oferta de lanzamiento termina pronto. ¡No te quedes fuera!\n\nMira los planes aquí: https://blenin77-server.onrender.com/#pricing\n\nAgente BLENIN77.",
         "stage3_days": 10,
         "stage3_subject": "⏳ Última oportunidad para ti, {name}",
         "stage3_body": "Hola {name},\n\nHemos notado que aún no das el paso. Sabemos que el trading requiere confianza.\n\nPor eso, como último intento de ayudarte, hemos habilitado un descuento especial del 10% si adquieres cualquier plan en las próximas 48 horas.\n\nUsa el código: BLENIN10 al momento de tu transferencia o escríbenos para ayudarte.\n\nAgente BLENIN77."
@@ -1011,6 +1011,13 @@ class LeadCapture(BaseModel):
     name: str = "Usuario"
     email: str
     interaction: str = "Visualizó demo"
+class MakeWebhookData(BaseModel):
+    email: str
+    plan: str
+    duration_days: int = 30
+    secret_token: str
+
+MAKE_WEBHOOK_TOKEN = "blenin_secret_token_2024"
 
 @app.post("/api/track_view")
 def track_view(request: Request):
@@ -1142,6 +1149,43 @@ def capture_lead(lead: LeadCapture):
         send_email(SMTP_EMAIL, admin_subject, admin_body)
         return {"status": "success", "message": "Información enviada al correo."}
     except Exception as e: return {"status": "error", "message": str(e)}
+
+# ==========================================
+# 🔗 WEBHOOK DE MAKE.COM (PASARELA DE PAGOS)
+# ==========================================
+@app.post("/api/make_payment_webhook")
+def make_payment_webhook(data: MakeWebhookData):
+    if data.secret_token != MAKE_WEBHOOK_TOKEN:
+        raise HTTPException(status_code=403, detail="Acceso denegado.")
+    
+    try:
+        global licenses_db
+        plan_upper = data.plan.upper()
+        if "ORO" in plan_upper: plan_upper = "ORO"
+        elif "PLATA" in plan_upper: plan_upper = "PLATA"
+        else: plan_upper = "BRONCE"
+        
+        key = generate_license_key(plan_upper)
+        licenses_db[key] = {
+            "hwid": None, 
+            "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(), 
+            "active": True, 
+            "plan": plan_upper, 
+            "email": data.email.lower()
+        }
+        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
+        
+        client_subject = "✅ Pago Confirmado - Aquí tienes tu Licencia BLENIN77"
+        client_body = f"¡Gracias por tu compra!\n\nTu pago ha sido confirmado exitosamente.\n\nAquí tienes tu clave de licencia:\n{key}\n\nPlan: {plan_upper}\nDuración: {data.duration_days} días\n\nPara descargar el sistema, ingresa a: https://blenin77-server.onrender.com/\n\nSaludos,\nEquipo BLENIN77."
+        send_email(data.email, client_subject, client_body)
+        
+        admin_subject = f"💰 ¡Nueva Venta Automática! Plan {plan_upper}"
+        admin_body = f"Se ha procesado un pago automáticamente a través de PayPal.\n\nCliente: {data.email}\nPlan: {plan_upper}\nLicencia generada: {key}"
+        send_email(SMTP_EMAIL, admin_subject, admin_body)
+        
+        return {"status": "success", "message": "Licencia generada y enviada por correo."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 # ==========================================
 # 🧠 AGENTE IA DE SEGUIMIENTO AUTOMÁTICO (SCHEDULER)
