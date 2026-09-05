@@ -960,7 +960,20 @@ def render_landing_page(c):
                 download_buttons_html += f"""<a href="{link}" target="_blank" class="bg-slate-700 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block w-full mb-2"><i class="fas fa-server mr-2"></i> Servidor de Descarga {i+1}</a>"""
 
     template = """<!DOCTYPE html>
-<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>BLENIN.G.77 - Institutional Trading AI</title><script src="https://cdn.tailwindcss.com"></script><script src="https://www.paypal.com/sdk/js?client-id=AYybGelHI0tT0nLaGtRnRG2sc8z4FnGqAazhHUyP9Vc_DFJAxp_psxzTqe2QBKwwSCO1UbNx2ehJ28Eg&vault=true&intent=subscription"></script><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><script>window.embeddedChatbotConfig = {chatbotId: "{CHATBOT_ID}",domain: "www.chatbase.co"}</script><script src="https://www.chatbase.co/embed.min.js" chatbotId="{CHATBOT_ID}" domain="www.chatbase.co" defer></script><style>body { font-family: 'Inter', sans-serif; background-color: #020617; }.glow { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }.hero-bg { background: linear-gradient(to bottom, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; }.chatbase-bubble-button, iframe[src*="chatbase.co"] { z-index: 99999 !important; display: block !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; }.goog-te-banner-frame.skiptranslate { display: none !important; } body { top: 0px !important; }.goog-tooltip, .goog-tooltip:hover { display: none !important; }.goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }#google_translate_element { position: absolute; top: -9999px; left: -9999px; opacity: 0; }.goog-te-gadget { font-size: 0 !important; }#lang-menu::-webkit-scrollbar { width: 6px; }#lang-menu::-webkit-scrollbar-track { background: #1e293b; border-radius: 10px; }#lang-menu::-webkit-scrollbar-thumb { background: #0e7490; border-radius: 10px; }</style></head>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>BLENIN.G.77 - Institutional Trading AI</title>
+    
+    <!-- ETIQUETAS SEO PARA GOOGLE -->
+    <meta name="description" content="BLENIN.G.77: Sistema de Trading con IA Predictiva, Enjambre de 500 Agentes y Análisis Global en Tiempo Real para MetaTrader 5. Automatiza tus operaciones hoy.">
+    <meta name="keywords" content="trading IA, bot metatrader 5, inteligencia artificial trading, EA forex, bot automático MT5, enjambre de agentes trading, blenin77">
+    <meta name="robots" content="index, follow">
+    
+    <!-- ETIQUETAS PARA REDES SOCIALES (OPEN GRAPH) -->
+    <meta property="og:title" content="BLENIN.G.77 - IA Predictiva para Trading Institucional">
+    <meta property="og:description" content="El mejor sistema de IA para automatizar tus operaciones en MT5. Enjambre de 500 agentes trabajando por ti.">
+    <meta property="og:image" content="https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png">
+    <meta property="og:url" content="https://blenin77-server.onrender.com/">
+
+    <script src="https://cdn.tailwindcss.com"></script><script src="https://www.paypal.com/sdk/js?client-id=AYybGelHI0tT0nLaGtRnRG2sc8z4FnGqAazhHUyP9Vc_DFJAxp_psxzTqe2QBKwwSCO1UbNx2ehJ28Eg&vault=true&intent=subscription"></script><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><script>window.embeddedChatbotConfig = {chatbotId: "{CHATBOT_ID}",domain: "www.chatbase.co"}</script><script src="https://www.chatbase.co/embed.min.js" chatbotId="{CHATBOT_ID}" domain="www.chatbase.co" defer></script><style>body { font-family: 'Inter', sans-serif; background-color: #020617; }.glow { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }.hero-bg { background: linear-gradient(to bottom, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; }.chatbase-bubble-button, iframe[src*="chatbase.co"] { z-index: 99999 !important; display: block !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; }.goog-te-banner-frame.skiptranslate { display: none !important; } body { top: 0px !important; }.goog-tooltip, .goog-tooltip:hover { display: none !important; }.goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }#google_translate_element { position: absolute; top: -9999px; left: -9999px; opacity: 0; }.goog-te-gadget { font-size: 0 !important; }#lang-menu::-webkit-scrollbar { width: 6px; }#lang-menu::-webkit-scrollbar-track { background: #1e293b; border-radius: 10px; }#lang-menu::-webkit-scrollbar-thumb { background: #0e7490; border-radius: 10px; }</style></head>
 <body class="text-slate-300">
     <nav class="bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-800"><div class="container mx-auto px-6 py-4 flex justify-between items-center"><a href="/" class="text-xl font-extrabold text-cyan-400 glow">BLENIN.G.77</a><div class="hidden md:flex space-x-6 text-sm font-medium items-center"><a href="#features" class="hover:text-cyan-400 transition">Tecnología</a><a href="#videos" class="hover:text-cyan-400 transition">Galería</a><a href="#pricing" class="hover:text-cyan-400 transition">Precios</a><div class="relative inline-block text-left"><button id="lang-btn" class="inline-flex justify-center items-center gap-2 rounded-md border border-slate-700 px-3 py-1.5 bg-slate-800 text-sm font-medium text-slate-300 hover:bg-slate-700 transition"><i class="fas fa-globe text-cyan-400"></i> <span id="current-lang-name">🇪🇸 Español</span> <i class="fas fa-chevron-down text-xs"></i></button><div id="lang-menu" class="hidden absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-slate-800 ring-1 ring-black ring-opacity-5 z-50 max-h-80 overflow-y-auto"><div class="py-1"><a href="#" onclick="changeLang('es', '🇪🇸 Español'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇪🇸 Español</a><a href="#" onclick="changeLang('en', '🇬🇧 English'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇬🇧 English</a><a href="#" onclick="changeLang('fr', '🇫🇷 Français'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇫🇷 Français</a><a href="#" onclick="changeLang('pt', '🇵🇹 Português'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇵🇹 Português</a><a href="#" onclick="changeLang('ru', '🇷🇺 Русский'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇷🇺 Русский</a><a href="#" onclick="changeLang('it', '🇮🇹 Italiano'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇮🇹 Italiano</a><a href="#" onclick="changeLang('de', '🇩🇪 Deutsch'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇩🇪 Deutsch</a><a href="#" onclick="changeLang('zh-CN', '🇨🇳 中文'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇨🇳 中文</a><a href="#" onclick="changeLang('ko', '🇰🇷 한국어'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇰🇷 한국어</a><a href="#" onclick="changeLang('hi', '🇮🇳 हिन्दी'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇮🇳 हिन्दी</a></div></div></div></div><a href="#pricing" class="bg-cyan-500 text-slate-900 px-4 py-2 rounded text-sm font-bold hover:bg-cyan-400 transition">Comprar Ahora</a></div></nav>
 
@@ -1158,6 +1171,50 @@ def reset_hwid(request: Request, data: ResetHWID):
     licenses_db[key]["hwid"] = None
     save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
     return {"status": "success", "message": f"✅ HWID reseteado para {key}."}
+
+# ==========================================
+# 🔗 WEBHOOK DE MAKE.COM (PASARELA DE PAGOS)
+# ==========================================
+class MakeWebhookData(BaseModel):
+    email: str
+    plan: str
+    duration_days: int = 30
+    secret_token: str
+
+MAKE_WEBHOOK_TOKEN = "blenin_secret_token_2024"
+
+@app.post("/api/make_payment_webhook")
+def make_payment_webhook(data: MakeWebhookData):
+    if data.secret_token != MAKE_WEBHOOK_TOKEN:
+        raise HTTPException(status_code=403, detail="Acceso denegado.")
+    try:
+        global licenses_db
+        plan_upper = data.plan.upper()
+        if "ORO" in plan_upper: plan_upper = "ORO"
+        elif "PLATA" in plan_upper: plan_upper = "PLATA"
+        else: plan_upper = "BRONCE"
+        
+        key = generate_license_key(plan_upper)
+        licenses_db[key] = {
+            "hwid": None, 
+            "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(), 
+            "active": True, 
+            "plan": plan_upper, 
+            "email": data.email.lower()
+        }
+        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
+        
+        client_subject = "✅ Pago Confirmado - Aquí tienes tu Licencia BLENIN77"
+        client_body = f"¡Gracias por tu compra!\n\nTu pago ha sido confirmado exitosamente.\n\nAquí tienes tu clave de licencia:\n{key}\n\nPlan: {plan_upper}\nDuración: {data.duration_days} días\n\nPara descargar el sistema, ingresa a: https://blenin77-server.onrender.com/\n\nSaludos,\nEquipo BLENIN77."
+        send_email(data.email, client_subject, client_body)
+        
+        admin_subject = f"💰 ¡Nueva Venta Automática! Plan {plan_upper}"
+        admin_body = f"Se ha procesado un pago automáticamente a través de PayPal.\n\nCliente: {data.email}\nPlan: {plan_upper}\nLicencia generada: {key}"
+        send_email(SMTP_EMAIL, admin_subject, admin_body)
+        
+        return {"status": "success", "message": "Licencia generada y enviada por correo."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @app.post("/api/capture_lead")
 def capture_lead(lead: LeadCapture):
