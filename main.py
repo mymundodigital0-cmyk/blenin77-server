@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from collections import defaultdict
@@ -124,7 +124,7 @@ def get_default_ai_config():
         "stage1_body": "Hola {name},\n\nHace un par de días te interesó nuestro sistema. Muchas personas nos preguntan si la IA reemplaza por completo su trabajo. La respuesta es no: es un copiloto que trabaja por ti.\n\n¿Tienes alguna duda sobre los planes? Simplemente responde a este correo.\n\nUn saludo,\nAgente BLENIN77.",
         "stage2_days": 5,
         "stage2_subject": "🔥 {name}, mira esto antes de decidir...",
-        "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que está logrando la comunidad. Nuestros usuarios del Plan Oro están reportando resultados increíbles gracias al Enjambre de 500 Agentes.\n\nRecuerda que la oferta de lanzamiento termina pronto. ¡No te quedes fuera!\n\nMira los planes aquí: tudominio.com/#pricing\n\nAgente BLENIN77.",
+        "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que está logrando la comunidad. Nuestros usuarios del Plan Oro están reportando resultados increíbles gracias al Enjambre de 500 Agentes.\n\nRecuerda que la oferta de lanzamiento termina pronto. ¡No te quedes fuera!\n\nMira los planes aquí: https://blenin77-server.onrender.com/#pricing\n\nAgente BLENIN77.",
         "stage3_days": 10,
         "stage3_subject": "⏳ Última oportunidad para ti, {name}",
         "stage3_body": "Hola {name},\n\nHemos notado que aún no das el paso. Sabemos que el trading requiere confianza.\n\nPor eso, como último intento de ayudarte, hemos habilitado un descuento especial del 10% si adquieres cualquier plan en las próximas 48 horas.\n\nUsa el código: BLENIN10 al momento de tu transferencia o escríbenos para ayudarte.\n\nAgente BLENIN77."
@@ -1023,6 +1023,13 @@ def render_landing_page(c):
                    .replace("{DOWNLOAD_BUTTONS_HTML}", download_buttons_html)\
                    .replace("{DOWNLOAD_INSTRUCTIONS_HTML}", download_instructions_html)\
                    .replace("{PAYPAL_SCRIPTS}", paypal_scripts)
+
+# ==========================================
+# 🔍 VERIFICACIÓN DE GOOGLE SEARCH CONSOLE
+# ==========================================
+@app.get("/google80facc731870c13b.html", response_class=PlainTextResponse)
+def google_verification():
+    return "google-site-verification: google80facc731870c13b.html"
 
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):
