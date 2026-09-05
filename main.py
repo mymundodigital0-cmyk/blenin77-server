@@ -359,7 +359,7 @@ def admin_panel(request: Request):
         <div id="content-ai" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-cyan-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🤖 Configuración del Agente IA (Seguimiento de Leads)</h3>
-                <p class="text-sm text-slate-400 mb-6">Usa la variable <code class="bg-slate-900 p-1 rounded text-cyan-400">{{name}}</code> en los mensajes para personalizarlos con el nombre del cliente.</p>
+                <p class="text-sm text-slate-400 mb-6">Usa la variable <code class="bg-slate-900 p-1 rounded text-cyan-400">{{{{name}}}}</code> en los mensajes para personalizarlos con el nombre del cliente.</p>
                 
                 <div class="space-y-8">
                     <div class="bg-slate-900 p-4 rounded-lg border border-slate-700">
@@ -988,7 +988,65 @@ def render_landing_page(c):
 
     <section id="pricing" class="py-20 container mx-auto px-6"><h2 class="text-3xl font-bold text-center text-white mb-4">Planes de Suscripción</h2><p class="text-slate-400 text-center mb-12">Elige el plan que se adapte a tu capital y estilo de trading.</p><div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">{PLANS_HTML}</div></section>
 
-    <div class="py-16 px-6 bg-slate-950"><div class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-lg text-center" id="ml-form-wrapper"><h3 class="text-2xl font-bold text-white mb-2">¿Quieres ver al Bot operando en vivo?</h3><p class="text-slate-400 text-sm mb-6">Deja tu correo y te enviaremos un video de cómo el Enjambre de Agentes abre operaciones reales, además de darte acceso al sistema.</p><div class="ml-form-embedContainer ml-subscribe-form ml-subscribe-form-44360624"><div class="ml-form-align-center"><div class="ml-form-embedWrapper embedForm"><div class="ml-form-embedBody ml-form-embedBodyDefault row-form"><div class="ml-form-embedContent"><p style="color: #94a3b8; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 400; line-height: 20px; margin: 0 0 10px 0; text-align: center;">Ingresa tu correo para continuar.</p></div><form class="ml-block-form" action="https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/subscribe" data-code="" method="post" target="_blank" onsubmit="return ml_reveal_download()"><div class="ml-form-formContent"><div class="ml-form-fieldRow ml-last-item"><div class="ml-field-group ml-field-email ml-validate-email ml-validate-required"><input aria-label="email" aria-required="true" type="email" class="form-control" data-inputmask="" name="fields[email]" placeholder="Email" autocomplete="email" style="background-color: #0f172a !important; color: #fff !important; border: 1px solid #334155 !important; border-radius: 6px !important; padding: 12px !important; width: 100% !important; margin-bottom: 10px !important;"></div></div></div><input type="hidden" name="ml-submit" value="1"><div class="ml-form-embedSubmit" style="margin-top: 0;"><button type="submit" class="primary" style="background-color: #00e5ff !important; color: #020617 !important; border-radius: 6px !important; font-weight: 700; font-family: 'Inter', sans-serif; padding: 12px !important; width: 100% !important; border: none !important; cursor: pointer;">Quiero Acceso y Descargar</button><button disabled="disabled" style="display: none;" type="button" class="loading"><div class="ml-form-embedSubmitLoad"></div><span class="sr-only">Loading...</span></button></div><input type="hidden" name="anticsrf" value="true"></form></div></div></div></div><script>function ml_webform_success_44360624() {var $ = ml_jQuery || jQuery;$('.ml-subscribe-form-44360624 .row-success').show();$('.ml-subscribe-form-44360624 .row-form').hide();}</script><script src="https://groot.mailerlite.com/js/w/webforms.min.js?v83147fa8ce2d95cb73ece7f28b469519" type="text/javascript"></script><script>fetch("https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/takel")</script></div><div id="download-box" class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-cyan-500 shadow-cyan-500/10 shadow-lg text-center mt-6" style="display: none;"><i class="fas fa-check-circle text-emerald-400 text-4xl mb-4"></i><h4 class="text-xl font-bold text-cyan-400 mb-4">¡Listo! Aquí tienes tu descarga:</h4><div class="text-slate-300 text-sm mb-6 text-left bg-slate-900 p-4 rounded-lg border border-slate-700">{DOWNLOAD_INSTRUCTIONS_HTML}</div><div class="flex flex-col gap-3">{DOWNLOAD_BUTTONS_HTML}</div></div><script>function ml_reveal_download() {setTimeout(function() {document.getElementById('download-box').style.display = 'block';document.getElementById('ml-form-wrapper').style.display = 'none';document.getElementById('download-box').scrollIntoView({behavior: "smooth", block: "center"});}, 1000);return true;}</script></div>
+    <!-- INICIO FORMULARIO NATIVO Y DESCARGA (Conectado al Agente IA) -->
+    <div class="py-16 px-6 bg-slate-950">
+        <div class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-lg text-center" id="lead-form-wrapper">
+            <h3 class="text-2xl font-bold text-white mb-2">¿Quieres ver al Bot operando en vivo?</h3>
+            <p class="text-slate-400 text-sm mb-6">Deja tu correo y te enviaremos un video de cómo el Enjambre de Agentes abre operaciones reales, además de darte acceso al sistema.</p>
+            
+            <input type="email" id="download_email_input" placeholder="Tu mejor correo electrónico" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 text-white outline-none focus:border-cyan-500">
+            <button onclick="submitLeadForDownload()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition mb-2">
+                Quiero Acceso y Descargar
+            </button>
+            <div id="download_thanks" class="hidden text-emerald-400 text-sm font-bold mt-4"></div>
+        </div>
+
+        <!-- CUADRO DE DESCARGA REVELADO -->
+        <div id="download-box" class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-cyan-500 shadow-cyan-500/10 shadow-lg text-center mt-6 hidden">
+            <i class="fas fa-check-circle text-emerald-400 text-4xl mb-4"></i>
+            <h4 class="text-xl font-bold text-cyan-400 mb-4">¡Listo! Aquí tienes tu descarga:</h4>
+            <div class="text-slate-300 text-sm mb-6 text-left bg-slate-900 p-4 rounded-lg border border-slate-700">
+                {DOWNLOAD_INSTRUCTIONS_HTML}
+            </div>
+            <div class="flex flex-col gap-3">
+                {DOWNLOAD_BUTTONS_HTML}
+            </div>
+        </div>
+        
+        <script>
+            async function submitLeadForDownload() {
+                const email = document.getElementById('download_email_input').value;
+                if (!email || !email.includes('@')) {
+                    alert('Por favor ingresa un correo válido.');
+                    return;
+                }
+                
+                document.getElementById('download_thanks').innerText = "⏳ Procesando tu acceso...";
+                document.getElementById('download_thanks').classList.remove('hidden');
+
+                try {
+                    await fetch('/api/capture_lead', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            name: 'Usuario Web', 
+                            email: email, 
+                            interaction: 'Descarga de Sistema desde Web' 
+                        })
+                    });
+                    
+                    document.getElementById('lead-form-wrapper').style.display = 'none';
+                    document.getElementById('download-box').classList.remove('hidden');
+                    document.getElementById('download-box').scrollIntoView({behavior: "smooth", block: "center"});
+                    
+                } catch (e) {
+                    alert('Hubo un error de conexión, intenta de nuevo.');
+                    document.getElementById('download_thanks').classList.add('hidden');
+                }
+            }
+        </script>
+    </div>
+    <!-- FIN FORMULARIO NATIVO Y DESCARGA -->
 
     <section class="py-12 border-t border-slate-800"><div class="container mx-auto px-6 text-center"><h3 class="text-xl font-bold text-white mb-6">Síguenos en nuestras redes</h3><div class="flex justify-center space-x-4 text-xl">{SOCIAL_HTML}</div></div></section>
 
@@ -1024,13 +1082,6 @@ def render_landing_page(c):
                    .replace("{DOWNLOAD_INSTRUCTIONS_HTML}", download_instructions_html)\
                    .replace("{PAYPAL_SCRIPTS}", paypal_scripts)
 
-# ==========================================
-# 🔍 VERIFICACIÓN DE GOOGLE SEARCH CONSOLE
-# ==========================================
-@app.get("/google80facc731870c13b.html", response_class=PlainTextResponse)
-def google_verification():
-    return "google-site-verification: google80facc731870c13b.html"
-
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):
     pages_data = get_all_pages()
@@ -1050,6 +1101,25 @@ def read_dynamic_page(slug: str):
     c = pages_data.get("pages", {}).get(slug)
     if c: return render_landing_page(c)
     return HTMLResponse("<h1>404 - Página no encontrada</h1><a href='/'>Volver al inicio</a>")
+
+# ==========================================
+# 🔍 VERIFICACIÓN DE GOOGLE SEARCH CONSOLE
+# ==========================================
+@app.get("/google80facc731870c13b.html", response_class=PlainTextResponse)
+def google_verification():
+    return "google-site-verification: google80facc731870c13b.html"
+
+# ==========================================
+# 🔄 SISTEMA DE ACTUALIZACIONES DEL BOT
+# ==========================================
+@app.get("/api/get_latest_version")
+def get_latest_version():
+    return {
+        "latest_version": "1.0.0", 
+        "download_url": "https://blenin77-server.onrender.com/", 
+        "update_message": "Hay una nueva versión disponible.",
+        "force_update": False
+    }
 
 # ==========================================
 # 🧠 BASES DE DATOS Y RUTAS API
