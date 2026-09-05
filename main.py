@@ -137,10 +137,19 @@ def load_dbs():
         if resp.status_code == 200:
             data = resp.json()["record"]
             pwd = data.get("admin_password", os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"))
-            ai_cfg = data.get("ai_agent_config", get_default_ai_config())
-            return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}}), pwd, ai_cfg
+            
+            # 🚀 MULTI-SITIO: Garantizar que las estadísticas y la IA estén separadas por slug
+            stats = data.get("stats_db", {})
+            if "main" not in stats:
+                stats = {"main": {"views": 0, "countries": {}, "captured_leads": []}}
+                
+            ai_cfg = data.get("ai_agent_config", {})
+            if "main" not in ai_cfg:
+                ai_cfg = {"main": get_default_ai_config()}
+                
+            return data.get("licenses_db", {}), data.get("trials_db", {}), stats, pwd, ai_cfg
     except: pass
-    return {}, {}, {"views": 0, "countries": {}}, os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"), get_default_ai_config()
+    return {}, {}, {"main": {"views": 0, "countries": {}, "captured_leads": []}}, os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"), {"main": get_default_ai_config()}
 
 def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None):
     try:
@@ -335,6 +344,10 @@ def admin_panel(request: Request):
 
         <!-- PESTAÑA ESTADÍSTICAS -->
         <div id="content-stats" class="hidden space-y-6">
+            <div class="bg-slate-800 p-4 rounded-xl border border-cyan-500 text-center mb-4">
+                <p class="text-sm text-slate-400">Mostrando datos de la página:</p>
+                <h3 id="stats_page_name" class="text-2xl font-bold text-cyan-400">--</h3>
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg text-center">
                     <h3 class="text-sm text-slate-400 uppercase tracking-wider mb-2">Visitas Totales</h3>
@@ -357,6 +370,10 @@ def admin_panel(request: Request):
 
         <!-- PESTAÑA AGENTE IA -->
         <div id="content-ai" class="hidden space-y-6">
+            <div class="bg-slate-800 p-4 rounded-xl border border-cyan-500 text-center mb-4">
+                <p class="text-sm text-slate-400">Configurando IA para la página:</p>
+                <h3 id="ai_page_name" class="text-2xl font-bold text-cyan-400">--</h3>
+            </div>
             <div class="bg-slate-800 p-6 rounded-xl border border-cyan-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🤖 Configuración del Agente IA (Seguimiento de Leads)</h3>
                 <p class="text-sm text-slate-400 mb-6">Usa la variable <code class="bg-slate-900 p-1 rounded text-cyan-400">{{{{name}}}}</code> en los mensajes para personalizarlos con el nombre del cliente.</p>
@@ -504,8 +521,17 @@ def admin_panel(request: Request):
         document.getElementById('tab-' + tabId).classList.add('tab-active');
         document.getElementById('tab-' + tabId).classList.remove('bg-slate-800', 'hover:bg-slate-700');
         
-        if(tabId === 'ai') loadAIConfig();
-        if(tabId === 'stats') loadStats();
+        const activeSlug = document.getElementById('page_selector').value || 'main';
+        const activeName = allPages[activeSlug]?.page_name || 'Principal';
+        
+        if(tabId === 'ai') {{
+            document.getElementById('ai_page_name').innerText = activeName;
+            loadAIConfig(activeSlug);
+        }}
+        if(tabId === 'stats') {{
+            document.getElementById('stats_page_name').innerText = activeName;
+            loadStats(activeSlug);
+        }}
     }}
 
     function showToast(msg) {{
@@ -569,6 +595,11 @@ def admin_panel(request: Request):
 
         const urlText = slug === 'main' ? 'tudominio.com/' : 'tudominio.com/p/' + slug;
         document.getElementById('page_url_preview').innerText = urlText;
+        
+        // Actualizar nombres si las pestañas están abiertas
+        const activeName = p.page_name || 'Principal';
+        if(document.getElementById('ai_page_name')) document.getElementById('ai_page_name').innerText = activeName;
+        if(document.getElementById('stats_page_name')) document.getElementById('stats_page_name').innerText = activeName;
     }}
 
     function createPage() {{
@@ -671,7 +702,7 @@ def admin_panel(request: Request):
             if(div.querySelector('.dl-url').value.trim()) {{
                 dlLinksArray.push(div.querySelector('.dl-url').value);
             }}
-        }});
+        }})
 
         allPages[slug] = {{
             page_name: document.getElementById('page_name').value,
@@ -707,9 +738,9 @@ def admin_panel(request: Request):
         if(reloadSelector) {{ updateSelector(); document.getElementById('page_selector').value = Object.keys(allPages).pop(); loadPageData(); }}
     }}
 
-    async function loadStats() {{
+    async function loadStats(slug) {{
         try {{
-            const res = await fetch('/api/get_stats');
+            const res = await fetch(`/api/get_stats?slug=${{slug}}`);
             const data = await res.json();
             document.getElementById('stat_views').innerText = data.views || 0;
             const countries = data.countries || {{}};
@@ -744,9 +775,9 @@ def admin_panel(request: Request):
         }} catch (e) {{ console.error(e); }}
     }}
 
-    async function loadAIConfig() {{
+    async function loadAIConfig(slug) {{
         try {{
-            const res = await fetch('/api/get_ai_config');
+            const res = await fetch(`/api/get_ai_config?slug=${{slug}}`);
             const data = await res.json();
             document.getElementById('s1_days').value = data.stage1_days || 2;
             document.getElementById('s1_subject').value = data.stage1_subject || '';
@@ -761,16 +792,20 @@ def admin_panel(request: Request):
     }}
 
     async function saveAIConfig() {{
+        const slug = document.getElementById('page_selector').value || 'main';
         const payload = {{
-            stage1_days: parseInt(document.getElementById('s1_days').value),
-            stage1_subject: document.getElementById('s1_subject').value,
-            stage1_body: document.getElementById('s1_body').value,
-            stage2_days: parseInt(document.getElementById('s2_days').value),
-            stage2_subject: document.getElementById('s2_subject').value,
-            stage2_body: document.getElementById('s2_body').value,
-            stage3_days: parseInt(document.getElementById('s3_days').value),
-            stage3_subject: document.getElementById('s3_subject').value,
-            stage3_body: document.getElementById('s3_body').value
+            slug: slug,
+            config: {{
+                stage1_days: parseInt(document.getElementById('s1_days').value),
+                stage1_subject: document.getElementById('s1_subject').value,
+                stage1_body: document.getElementById('s1_body').value,
+                stage2_days: parseInt(document.getElementById('s2_days').value),
+                stage2_subject: document.getElementById('s2_subject').value,
+                stage2_body: document.getElementById('s2_body').value,
+                stage3_days: parseInt(document.getElementById('s3_days').value),
+                stage3_subject: document.getElementById('s3_subject').value,
+                stage3_body: document.getElementById('s3_body').value
+            }}
         }};
         const res = await fetch('/api/save_ai_config', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
         const result = await res.json();
@@ -871,7 +906,7 @@ def recover_page():
     <body class="bg-slate-900 text-slate-300 flex items-center justify-center min-h-screen"><div class="bg-slate-800 p-8 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md text-center"><h1 class="text-2xl font-bold text-cyan-400 mb-2">🔑 Recuperar Licencia</h1><p class="text-slate-400 mb-6 text-sm">Ingresa el correo electrónico con el que realizaste tu compra.</p><input type="email" id="email" placeholder="tu.correo@gmail.com" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 outline-none focus:border-cyan-500"><button onclick="recover()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Enviar mi licencia</button><div id="msg" class="mt-4 text-emerald-400 font-bold text-sm hidden"></div></div><script>function recover(){var email = document.getElementById('email').value;fetch('/api/recover_by_email', {method: 'POST',headers: {'Content-Type': 'application/json'},body: JSON.stringify({email: email})}).then(r => r.json()).then(d => {const msgDiv = document.getElementById('msg');msgDiv.innerText = d.message;msgDiv.classList.remove('hidden');});}</script></body></html>
     """
 
-def render_landing_page(c):
+def render_landing_page(c, slug="main"):
     pubs_html = ""
     for p in c.get('publications', []):
         if p.get('url'):
@@ -1014,6 +1049,7 @@ def render_landing_page(c):
         </div>
         
         <script>
+            const currentSlug = "{SLUG}"; // Slug inyectado desde el backend
             async function submitLeadForDownload() {
                 const email = document.getElementById('download_email_input').value;
                 if (!email || !email.includes('@')) {
@@ -1031,7 +1067,8 @@ def render_landing_page(c):
                         body: JSON.stringify({ 
                             name: 'Usuario Web', 
                             email: email, 
-                            interaction: 'Descarga de Sistema desde Web' 
+                            interaction: 'Descarga de Sistema desde Web',
+                            slug: currentSlug
                         })
                     });
                     
@@ -1056,7 +1093,7 @@ def render_landing_page(c):
 
     <div id="google_translate_element"></div><script type="text/javascript">function googleTranslateElementInit() { new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'en,fr,pt,ru,it,de,zh-CN,ko,hi', layout: google.translate.TranslateElement.InlineLayout.SIMPLE, autoDisplay: false}, 'google_translate_element'); }</script><script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
     <script>const langBtn = document.getElementById('lang-btn');const langMenu = document.getElementById('lang-menu');langBtn.addEventListener('click', (e) => { e.stopPropagation(); langMenu.classList.toggle('hidden'); });window.addEventListener('click', (e) => { if (!langMenu.contains(e.target) && !langBtn.contains(e.target)) { langMenu.classList.add('hidden'); } });function changeLang(langCode, langName) {document.getElementById('current-lang-name').innerText = langName;langMenu.classList.add('hidden');var date = new Date(); date.setTime(date.getTime() + (365 * 24 * 60 * 60 * 1000)); var expires = "; expires=" + date.toUTCString();var hostname = window.location.hostname;if (langCode === 'es') {document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + hostname;document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=." + hostname;} else {var cookieValue = "/es/" + langCode;document.cookie = "googtrans=" + cookieValue + expires + "; path=/";document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=" + hostname;document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=." + hostname;}window.location.reload();}window.onload = function() {var match = document.cookie.match(/googtrans=\/es\/([a-zA-Z\-]+)/);if (match && match[1]) {var langMap = { 'en': '🇬🇧 English', 'fr': '🇫🇷 Français', 'pt': '🇵🇹 Português', 'ru': '🇷🇺 Русский', 'it': '🇮🇹 Italiano', 'de': '🇩🇪 Deutsch', 'zh-CN': '🇨🇳 中文', 'ko': '🇰🇷 한국어', 'hi': '🇮🇳 हिन्दी' };if (langMap[match[1]]) document.getElementById('current-lang-name').innerText = langMap[match[1]];}};</script>
-    <script>fetch('/api/track_view', { method: 'POST' });</script>
+    <script>fetch('/api/track_view', {{ method: 'POST', body: JSON.stringify({{slug: currentSlug}}) }});</script>
 
     <!-- ALGORITMO DE PERSUASIÓN Y CAPTACIÓN DE LEADS -->
     <div id="social-proof-toast" class="fixed bottom-5 left-5 bg-slate-800 border border-cyan-500 text-slate-300 p-4 rounded-lg shadow-2xl flex items-center gap-3 transition-all duration-500 opacity-0 translate-y-10 z-[9998] max-w-xs"><i class="fas fa-check-circle text-cyan-400 text-2xl"></i><div><p id="sp-name" class="font-bold text-white text-sm">Carlos de México</p><p id="sp-action" class="text-xs text-slate-400">Acaba de adquirir el Plan Oro</p></div></div>
@@ -1066,7 +1103,7 @@ def render_landing_page(c):
     <script>document.addEventListener('mouseleave', function(e) {if (e.clientY < 0 && !localStorage.getItem('exit_modal_shown')) {document.getElementById('exit-modal').classList.remove('hidden');localStorage.setItem('exit_modal_shown', 'true');}});</script>
 
     <div id="lead-capture-widget" class="fixed bottom-5 right-5 bg-slate-800 p-6 rounded-xl border border-cyan-500 shadow-2xl w-80 z-[9998] transition-all duration-500 translate-y-[150%] hidden"><button onclick="closeLeadWidget()" class="absolute top-2 right-3 text-slate-500 hover:text-white text-xl">&times;</button><div class="text-center mb-4"><i class="fas fa-robot text-cyan-400 text-3xl mb-2"></i><h4 class="text-white font-bold text-lg">¿Te gusta lo que ves?</h4><p class="text-slate-400 text-sm">Déjanos tu nombre y correo. Nuestra IA te enviará un video privado de cómo opera + un descuento.</p></div><input type="text" id="lead_name_input" placeholder="Tu Nombre" class="w-full bg-slate-900 rounded p-2 mb-3 border border-slate-700 text-white outline-none focus:border-cyan-500"><input type="email" id="lead_email_input" placeholder="tu.correo@gmail.com" class="w-full bg-slate-900 rounded p-2 mb-3 border border-slate-700 text-white outline-none focus:border-cyan-500"><button onclick="submitLead('Widget Flotante')" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-2 rounded transition">Quiero el Video y Descuento</button><div id="lead_thanks" class="hidden text-center text-emerald-400 text-sm font-bold mt-4"><i class="fas fa-check-circle"></i> ¡Revisa tu correo en 2 minutos!</div></div>
-    <script>let leadTriggered = false;function showLeadWidget(interactionType) {if (leadTriggered || localStorage.getItem('lead_captured')) return;const widget = document.getElementById('lead-capture-widget');widget.classList.remove('hidden');setTimeout(() => widget.classList.remove('translate-y-[150%]'), 50);leadTriggered = true;widget.dataset.interaction = interactionType;}function closeLeadWidget() {const widget = document.getElementById('lead-capture-widget');widget.classList.add('translate-y-[150%]');setTimeout(() => widget.classList.add('hidden'), 500);setTimeout(() => { leadTriggered = false; }, 3600000);}async function submitLead(source) {let email = '';let name = '';if(source === 'Modal de Abandono') {name = document.getElementById('exit_name_input').value || 'Usuario';email = document.getElementById('exit_email_input').value;} else {name = document.getElementById('lead_name_input').value || 'Usuario';email = document.getElementById('lead_email_input').value;}if (!email || !email.includes('@')) {alert('Por favor ingresa un correo válido.');return;}let interaction = source;if(source !== 'Modal de Abandono') {interaction = document.getElementById('lead-capture-widget').dataset.interaction || source;}try {await fetch('/api/capture_lead', {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ name: name, email: email, interaction: interaction })});if(source === 'Modal de Abandono') {document.getElementById('exit-modal').classList.add('hidden');} else {document.getElementById('lead_name_input').style.display = 'none';document.getElementById('lead_email_input').style.display = 'none';document.querySelector('#lead-capture-widget button[onclick^="submitLead"]').style.display = 'none';document.getElementById('lead_thanks').classList.remove('hidden');}localStorage.setItem('lead_captured', 'true');setTimeout(closeLeadWidget, 4000);} catch (e) {alert('Hubo un error, intenta de nuevo.');}}document.querySelectorAll('a[href="#videos"]').forEach(btn => {btn.addEventListener('click', () => {setTimeout(() => showLeadWidget('Clic en Ver Demo'), 3000);});});const pricingSection = document.getElementById('pricing');if (pricingSection) {pricingSection.addEventListener('mouseenter', () => {setTimeout(() => showLeadWidget('Mirando los Planes'), 5000);});}setTimeout(() => {if (!leadTriggered && !localStorage.getItem('lead_captured')) showLeadWidget('Lectura profunda (40s)');}, 40000);</script>
+    <script>let leadTriggered = false;function showLeadWidget(interactionType) {if (leadTriggered || localStorage.getItem('lead_captured')) return;const widget = document.getElementById('lead-capture-widget');widget.classList.remove('hidden');setTimeout(() => widget.classList.remove('translate-y-[150%]'), 50);leadTriggered = true;widget.dataset.interaction = interactionType;}function closeLeadWidget() {const widget = document.getElementById('lead-capture-widget');widget.classList.add('translate-y-[150%]');setTimeout(() => widget.classList.add('hidden'), 500);setTimeout(() => { leadTriggered = false; }, 3600000);}async function submitLead(source) {let email = '';let name = '';if(source === 'Modal de Abandono') {name = document.getElementById('exit_name_input').value || 'Usuario';email = document.getElementById('exit_email_input').value;} else {name = document.getElementById('lead_name_input').value || 'Usuario';email = document.getElementById('lead_email_input').value;}if (!email || !email.includes('@')) {alert('Por favor ingresa un correo válido.');return;}let interaction = source;if(source !== 'Modal de Abandono') {interaction = document.getElementById('lead-capture-widget').dataset.interaction || source;}try {await fetch('/api/capture_lead', {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ name: name, email: email, interaction: interaction, slug: currentSlug })});if(source === 'Modal de Abandono') {document.getElementById('exit-modal').classList.add('hidden');} else {document.getElementById('lead_name_input').style.display = 'none';document.getElementById('lead_email_input').style.display = 'none';document.querySelector('#lead-capture-widget button[onclick^="submitLead"]').style.display = 'none';document.getElementById('lead_thanks').classList.remove('hidden');}localStorage.setItem('lead_captured', 'true');setTimeout(closeLeadWidget, 4000);} catch (e) {alert('Hubo un error, intenta de nuevo.');}}document.querySelectorAll('a[href="#videos"]').forEach(btn => {btn.addEventListener('click', () => {setTimeout(() => showLeadWidget('Clic en Ver Demo'), 3000);});});const pricingSection = document.getElementById('pricing');if (pricingSection) {pricingSection.addEventListener('mouseenter', () => {setTimeout(() => showLeadWidget('Mirando los Planes'), 5000);});}setTimeout(() => {if (!leadTriggered && !localStorage.getItem('lead_captured')) showLeadWidget('Lectura profunda (40s)');}, 40000);</script>
     
     {PAYPAL_SCRIPTS}
 </body></html>"""
@@ -1080,6 +1117,7 @@ def render_landing_page(c):
                    .replace("{BANK_MODAL_HTML}", bank_modal_html)\
                    .replace("{DOWNLOAD_BUTTONS_HTML}", download_buttons_html)\
                    .replace("{DOWNLOAD_INSTRUCTIONS_HTML}", download_instructions_html)\
+                   .replace("{SLUG}", slug)\
                    .replace("{PAYPAL_SCRIPTS}", paypal_scripts)
 
 @app.get("/", response_class=HTMLResponse)
@@ -1093,13 +1131,13 @@ def read_root(request: Request):
         if geo_resp.status_code == 200: user_country_name = geo_resp.json().get("country_name", "Internacional")
     except: pass
     if user_country_name != "Internacional": c['hero_text'] = f"🔥 Usuarios de {user_country_name} ya están multiplicando su capital. " + c.get('hero_text', '')
-    return render_landing_page(c)
+    return render_landing_page(c, slug="main")
 
 @app.get("/p/{slug}", response_class=HTMLResponse)
 def read_dynamic_page(slug: str):
     pages_data = get_all_pages()
     c = pages_data.get("pages", {}).get(slug)
-    if c: return render_landing_page(c)
+    if c: return render_landing_page(c, slug=slug)
     return HTMLResponse("<h1>404 - Página no encontrada</h1><a href='/'>Volver al inicio</a>")
 
 # ==========================================
@@ -1122,6 +1160,46 @@ def get_latest_version():
     }
 
 # ==========================================
+# 📈 SISTEMA DE LICENCIAS PARA LA APP DE MARKETING
+# ==========================================
+class MarketingLicenseCheck(BaseModel):
+    key: str
+
+@app.post("/api/validate_marketing_license")
+def validate_marketing_license(data: MarketingLicenseCheck):
+    global licenses_db
+    key = data.key.upper().strip()
+    
+    if key not in licenses_db:
+        return {"valid": False, "message": "❌ Licencia de marketing no encontrada."}
+    
+    info = licenses_db[key]
+    if not info["active"]:
+        return {"valid": False, "message": "🚫 Licencia suspendada. Paga tu suscripción."}
+        
+    expires = datetime.fromisoformat(info["expires"])
+    if datetime.now() > expires:
+        return {"valid": False, "message": "⏳ Suscripción expirada. Renueva para continuar."}
+        
+    user_plan = info.get("plan", "BRONCE")
+    
+    marketing_features = {
+        "BRONCE": {"max_negocios": 1, "pdf_enabled": False, "sync_enabled": False, "plan_name": "BÁSICO"},
+        "PLATA":  {"max_negocios": 3, "pdf_enabled": False, "sync_enabled": True,  "plan_name": "MEDIO"},
+        "ORO":    {"max_negocios": 999, "pdf_enabled": True, "sync_enabled": True,  "plan_name": "AVANZADO"}
+    }
+    
+    features = marketing_features.get(user_plan, marketing_features["BRONCE"])
+    
+    return {
+        "valid": True, 
+        "plan": user_plan,
+        "plan_name": features["plan_name"],
+        "days_left": (expires - datetime.now()).days,
+        "features": features
+    }
+
+# ==========================================
 # 🧠 BASES DE DATOS Y RUTAS API
 # ==========================================
 db_trades = []
@@ -1137,31 +1215,44 @@ class LeadCapture(BaseModel):
     name: str = "Usuario"
     email: str
     interaction: str = "Visualizó demo"
+    slug: str = "main"
 
 @app.post("/api/track_view")
-def track_view(request: Request):
+def track_view(request: Request, data: dict = None):
     global stats_db
+    slug = "main"
+    if data and data.get("slug"):
+        slug = data.get("slug")
+        
+    if slug not in stats_db:
+        stats_db[slug] = {"views": 0, "countries": {}, "captured_leads": []}
+        
     try:
         ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "8.8.8.8").split(",")[0]
         geo_resp = requests.get(f"https://get.geojs.io/v1/ip/country.json?ip={ip}", timeout=2)
         country = geo_resp.json().get("country", "Unknown") if geo_resp.status_code == 200 else "Unknown"
     except: country = "Unknown"
-    stats_db["views"] = stats_db.get("views", 0) + 1
-    stats_db["countries"][country] = stats_db["countries"].get(country, 0) + 1
+    
+    stats_db[slug]["views"] = stats_db[slug].get("views", 0) + 1
+    stats_db[slug]["countries"][country] = stats_db[slug]["countries"].get(country, 0) + 1
     save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
     return {"status": "tracked"}
 
 @app.get("/api/get_stats")
-def get_stats(): return stats_db
+def get_stats(slug: str = "main"):
+    return stats_db.get(slug, {"views": 0, "countries": {}, "captured_leads": []})
 
 @app.get("/api/get_ai_config")
-def get_ai_config(): return ai_agent_config
+def get_ai_config(slug: str = "main"):
+    return ai_agent_config.get(slug, get_default_ai_config())
 
 @app.post("/api/save_ai_config")
 def save_ai_config(request: Request, data: dict):
     global ai_agent_config
     if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
-    ai_agent_config = data
+    slug = data.get("slug", "main")
+    config = data.get("config", {})
+    ai_agent_config[slug] = config
     save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
     return {"status": "success", "message": "✅ Configuración del Agente IA guardada correctamente."}
 
@@ -1297,10 +1388,15 @@ def make_payment_webhook(data: MakeWebhookData):
 def capture_lead(lead: LeadCapture):
     global stats_db
     try:
-        if "captured_leads" not in stats_db: stats_db["captured_leads"] = []
-        existing_emails = [l.get("email") for l in stats_db["captured_leads"]]
+        slug = lead.slug if lead.slug else "main"
+        if slug not in stats_db:
+            stats_db[slug] = {"views": 0, "countries": {}, "captured_leads": []}
+            
+        if "captured_leads" not in stats_db[slug]: stats_db[slug]["captured_leads"] = []
+        
+        existing_emails = [l.get("email") for l in stats_db[slug]["captured_leads"]]
         if lead.email.lower() not in existing_emails:
-            stats_db["captured_leads"].append({"name": lead.name, "email": lead.email.lower(), "interaction": lead.interaction, "date": datetime.now().isoformat(), "follow_up_stage": 0, "last_email_sent": datetime.now().isoformat()})
+            stats_db[slug]["captured_leads"].append({"name": lead.name, "email": lead.email.lower(), "interaction": lead.interaction, "date": datetime.now().isoformat(), "follow_up_stage": 0, "last_email_sent": datetime.now().isoformat()})
             save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
         
         client_subject = f"🚀 ¡Bienvenido {lead.name}! Tu acceso a BLENIN.G.77"
@@ -1317,41 +1413,44 @@ def capture_lead(lead: LeadCapture):
 # 🧠 AGENTE IA DE SEGUIMIENTO AUTOMÁTICO (SCHEDULER)
 # ==========================================
 def ai_follow_up_agent():
-    global stats_db
-    if "captured_leads" not in stats_db: return
+    global stats_db, ai_agent_config
     leads_updated = False
     now = datetime.now()
 
-    for lead in stats_db["captured_leads"]:
-        stage = lead.get("follow_up_stage", 0)
-        last_sent_str = lead.get("last_email_sent")
-        if not last_sent_str: continue
-        last_sent = datetime.fromisoformat(last_sent_str)
-        days_since_last = (now - last_sent).days
+    for slug, site_stats in stats_db.items():
+        cfg = ai_agent_config.get(slug, get_default_ai_config())
+        if "captured_leads" not in site_stats: continue
+        
+        for lead in site_stats["captured_leads"]:
+            stage = lead.get("follow_up_stage", 0)
+            last_sent_str = lead.get("last_email_sent")
+            if not last_sent_str: continue
+            last_sent = datetime.fromisoformat(last_sent_str)
+            days_since_last = (now - last_sent).days
 
-        if stage == 0 and days_since_last >= int(ai_agent_config.get("stage1_days", 2)):
-            subject = ai_agent_config.get("stage1_subject", "").replace("{name}", lead["name"])
-            body = ai_agent_config.get("stage1_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body):
-                lead["follow_up_stage"] = 1
-                lead["last_email_sent"] = now.isoformat()
-                leads_updated = True
+            if stage == 0 and days_since_last >= int(cfg.get("stage1_days", 2)):
+                subject = cfg.get("stage1_subject", "").replace("{name}", lead["name"])
+                body = cfg.get("stage1_body", "").replace("{name}", lead["name"])
+                if send_email(lead["email"], subject, body):
+                    lead["follow_up_stage"] = 1
+                    lead["last_email_sent"] = now.isoformat()
+                    leads_updated = True
 
-        elif stage == 1 and days_since_last >= int(ai_agent_config.get("stage2_days", 5)):
-            subject = ai_agent_config.get("stage2_subject", "").replace("{name}", lead["name"])
-            body = ai_agent_config.get("stage2_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body):
-                lead["follow_up_stage"] = 2
-                lead["last_email_sent"] = now.isoformat()
-                leads_updated = True
+            elif stage == 1 and days_since_last >= int(cfg.get("stage2_days", 5)):
+                subject = cfg.get("stage2_subject", "").replace("{name}", lead["name"])
+                body = cfg.get("stage2_body", "").replace("{name}", lead["name"])
+                if send_email(lead["email"], subject, body):
+                    lead["follow_up_stage"] = 2
+                    lead["last_email_sent"] = now.isoformat()
+                    leads_updated = True
 
-        elif stage == 2 and days_since_last >= int(ai_agent_config.get("stage3_days", 10)):
-            subject = ai_agent_config.get("stage3_subject", "").replace("{name}", lead["name"])
-            body = ai_agent_config.get("stage3_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body):
-                lead["follow_up_stage"] = 3
-                lead["last_email_sent"] = now.isoformat()
-                leads_updated = True
+            elif stage == 2 and days_since_last >= int(cfg.get("stage3_days", 10)):
+                subject = cfg.get("stage3_subject", "").replace("{name}", lead["name"])
+                body = cfg.get("stage3_body", "").replace("{name}", lead["name"])
+                if send_email(lead["email"], subject, body):
+                    lead["follow_up_stage"] = 3
+                    lead["last_email_sent"] = now.isoformat()
+                    leads_updated = True
 
     if leads_updated:
         save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
