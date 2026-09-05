@@ -138,7 +138,6 @@ def load_dbs():
             data = resp.json()["record"]
             pwd = data.get("admin_password", os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"))
             
-            # 🚀 MULTI-SITIO: Garantizar que las estadísticas y la IA estén separadas por slug
             stats = data.get("stats_db", {})
             if "main" not in stats:
                 stats = {"main": {"views": 0, "countries": {}, "captured_leads": []}}
@@ -596,7 +595,6 @@ def admin_panel(request: Request):
         const urlText = slug === 'main' ? 'tudominio.com/' : 'tudominio.com/p/' + slug;
         document.getElementById('page_url_preview').innerText = urlText;
         
-        // Actualizar nombres si las pestañas están abiertas
         const activeName = p.page_name || 'Principal';
         if(document.getElementById('ai_page_name')) document.getElementById('ai_page_name').innerText = activeName;
         if(document.getElementById('stats_page_name')) document.getElementById('stats_page_name').innerText = activeName;
@@ -1093,7 +1091,9 @@ def render_landing_page(c, slug="main"):
 
     <div id="google_translate_element"></div><script type="text/javascript">function googleTranslateElementInit() { new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'en,fr,pt,ru,it,de,zh-CN,ko,hi', layout: google.translate.TranslateElement.InlineLayout.SIMPLE, autoDisplay: false}, 'google_translate_element'); }</script><script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
     <script>const langBtn = document.getElementById('lang-btn');const langMenu = document.getElementById('lang-menu');langBtn.addEventListener('click', (e) => { e.stopPropagation(); langMenu.classList.toggle('hidden'); });window.addEventListener('click', (e) => { if (!langMenu.contains(e.target) && !langBtn.contains(e.target)) { langMenu.classList.add('hidden'); } });function changeLang(langCode, langName) {document.getElementById('current-lang-name').innerText = langName;langMenu.classList.add('hidden');var date = new Date(); date.setTime(date.getTime() + (365 * 24 * 60 * 60 * 1000)); var expires = "; expires=" + date.toUTCString();var hostname = window.location.hostname;if (langCode === 'es') {document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + hostname;document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=." + hostname;} else {var cookieValue = "/es/" + langCode;document.cookie = "googtrans=" + cookieValue + expires + "; path=/";document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=" + hostname;document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=." + hostname;}window.location.reload();}window.onload = function() {var match = document.cookie.match(/googtrans=\/es\/([a-zA-Z\-]+)/);if (match && match[1]) {var langMap = { 'en': '🇬🇧 English', 'fr': '🇫🇷 Français', 'pt': '🇵🇹 Português', 'ru': '🇷🇺 Русский', 'it': '🇮🇹 Italiano', 'de': '🇩🇪 Deutsch', 'zh-CN': '🇨🇳 中文', 'ko': '🇰🇷 한국어', 'hi': '🇮🇳 हिन्दी' };if (langMap[match[1]]) document.getElementById('current-lang-name').innerText = langMap[match[1]];}};</script>
-    <script>fetch('/api/track_view', {{ method: 'POST', body: JSON.stringify({{slug: currentSlug}}) }});</script>
+    
+    <!-- SCRIPT DE TRACKING CORREGIDO (Usa Query Parameter para evitar errores 422) -->
+    <script>fetch('/api/track_view?slug=' + currentSlug, { method: 'POST' });</script>
 
     <!-- ALGORITMO DE PERSUASIÓN Y CAPTACIÓN DE LEADS -->
     <div id="social-proof-toast" class="fixed bottom-5 left-5 bg-slate-800 border border-cyan-500 text-slate-300 p-4 rounded-lg shadow-2xl flex items-center gap-3 transition-all duration-500 opacity-0 translate-y-10 z-[9998] max-w-xs"><i class="fas fa-check-circle text-cyan-400 text-2xl"></i><div><p id="sp-name" class="font-bold text-white text-sm">Carlos de México</p><p id="sp-action" class="text-xs text-slate-400">Acaba de adquirir el Plan Oro</p></div></div>
@@ -1218,12 +1218,10 @@ class LeadCapture(BaseModel):
     slug: str = "main"
 
 @app.post("/api/track_view")
-def track_view(request: Request, data: dict = None):
+def track_view(request: Request, slug: str = "main"):
     global stats_db
-    slug = "main"
-    if data and data.get("slug"):
-        slug = data.get("slug")
-        
+    
+    # 🚀 FIX: Asegurar que el diccionario de la página exista antes de sumar visitas
     if slug not in stats_db:
         stats_db[slug] = {"views": 0, "countries": {}, "captured_leads": []}
         
@@ -1231,7 +1229,8 @@ def track_view(request: Request, data: dict = None):
         ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "8.8.8.8").split(",")[0]
         geo_resp = requests.get(f"https://get.geojs.io/v1/ip/country.json?ip={ip}", timeout=2)
         country = geo_resp.json().get("country", "Unknown") if geo_resp.status_code == 200 else "Unknown"
-    except: country = "Unknown"
+    except: 
+        country = "Unknown"
     
     stats_db[slug]["views"] = stats_db[slug].get("views", 0) + 1
     stats_db[slug]["countries"][country] = stats_db[slug]["countries"].get(country, 0) + 1
