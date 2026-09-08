@@ -106,8 +106,7 @@ def send_email(to_email, subject, body):
         msg['To'] = to_email
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
-        # ✅ FIX: Agregamos timeout=15 para que no cuelgue el servidor si Gmail tarda mucho
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=15)
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
         server.starttls()
         server.login(SMTP_EMAIL, SMTP_PASSWORD)
         server.send_message(msg)
@@ -131,6 +130,14 @@ def get_default_ai_config():
         "stage3_body": "Hola {name},\n\nHemos notado que aún no das el paso. Sabemos que el trading requiere confianza.\n\nPor eso, como último intento de ayudarte, hemos habilitado un descuento especial del 10% si adquieres cualquier plan en las próximas 48 horas.\n\nUsa el código: BLENIN10 al momento de tu transferencia o escríbenos para ayudarte.\n\nAgente BLENIN77."
     }
 
+def get_default_update_config():
+    return {
+        "latest_version": "1.0.0",
+        "download_url": "https://blenin77-server.onrender.com/",
+        "force_update": False,
+        "update_message": "Hay una nueva versión disponible."
+    }
+
 def load_dbs():
     try:
         headers = {"X-Master-Key": JSONBIN_API_KEY}
@@ -138,20 +145,13 @@ def load_dbs():
         if resp.status_code == 200:
             data = resp.json()["record"]
             pwd = data.get("admin_password", os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"))
-            
-            stats = data.get("stats_db", {})
-            if "main" not in stats:
-                stats = {"main": {"views": 0, "countries": {}, "captured_leads": []}}
-                
-            ai_cfg = data.get("ai_agent_config", {})
-            if "main" not in ai_cfg:
-                ai_cfg = {"main": get_default_ai_config()}
-                
-            return data.get("licenses_db", {}), data.get("trials_db", {}), stats, pwd, ai_cfg
+            ai_cfg = data.get("ai_agent_config", get_default_ai_config())
+            upd_cfg = data.get("bot_update_config", get_default_update_config())
+            return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}}), pwd, ai_cfg, upd_cfg
     except: pass
-    return {}, {}, {"main": {"views": 0, "countries": {}, "captured_leads": []}}, os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"), {"main": get_default_ai_config()}
+    return {}, {}, {"views": 0, "countries": {}}, os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"), get_default_ai_config(), get_default_update_config()
 
-def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None):
+def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
     try:
         headers = {"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}
         data = {"licenses_db": lic, "trials_db": trials, "stats_db": stats}
@@ -159,10 +159,12 @@ def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None):
             data["admin_password"] = pwd
         if ai_cfg:
             data["ai_agent_config"] = ai_cfg
+        if upd_cfg:
+            data["bot_update_config"] = upd_cfg
         requests.put(JSONBIN_DB_URL, json=data, headers=headers, timeout=5)
     except: pass
 
-licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config = load_dbs()
+licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config = load_dbs()
 
 if not licenses_db:
     licenses_db = {
@@ -170,7 +172,7 @@ if not licenses_db:
         "BLENIN-TEST-PLATA": {"hwid": None, "expires": "2026-09-15T00:00:00", "active": True, "plan": "PLATA", "email": "test-plata@blenin77.com"},
         "BLENIN-TEST-BRONCE": {"hwid": None, "expires": "2026-09-15T00:00:00", "active": True, "plan": "BRONCE", "email": "test-bronce@blenin77.com"}
     }
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
 
 def get_default_content(page_name="Principal"):
     return {
@@ -222,6 +224,32 @@ def save_all_pages(data):
     except: return False
 
 # ==========================================
+# 🔄 SISTEMA DE ACTUALIZACIONES DEL BOT (PÚBLICO)
+# ==========================================
+@app.get("/api/get_latest_version")
+def get_latest_version():
+    return bot_update_config
+
+class UpdateConfigData(BaseModel):
+    latest_version: str
+    download_url: str
+    force_update: bool
+    update_message: str
+
+@app.get("/api/get_update_config")
+def get_update_config_api():
+    if not bot_update_config: return get_default_update_config()
+    return bot_update_config
+
+@app.post("/api/save_update_config")
+def save_update_config_api(request: Request, data: UpdateConfigData):
+    global bot_update_config
+    if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
+    bot_update_config = data.dict()
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
+    return {"status": "success", "message": "✅ Configuración de actualización guardada."}
+
+# ==========================================
 # 🎛️ PANEL DE ADMINISTRACIÓN (CMS MULTI-PÁGINA)
 # ==========================================
 @app.get("/admin", response_class=HTMLResponse)
@@ -249,6 +277,7 @@ def admin_panel(request: Request):
             <button onclick="showTab('stats')" id="tab-stats" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">📊 Estadísticas</button>
             <button onclick="showTab('ai')" id="tab-ai" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">🤖 Agente IA</button>
             <button onclick="showTab('lic')" id="tab-lic" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">Licencias</button>
+            <button onclick="showTab('updates')" id="tab-updates" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">🔄 Actualizaciones</button>
             <button onclick="showTab('settings')" id="tab-settings" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">⚙️ Ajustes</button>
             <a href="/admin/logout" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded text-sm font-bold transition ml-2"><i class="fas fa-sign-out-alt mr-1"></i>Salir</a>
         </div>
@@ -289,7 +318,6 @@ def admin_panel(request: Request):
                 <textarea id="hero_text" rows="3" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none"></textarea>
             </div>
 
-            <!-- SISTEMA DE DESCARGA -->
             <div class="bg-slate-800 p-6 rounded-xl border border-indigo-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">📥 Sistema de Descarga para Clientes</h3>
                 <p class="text-sm text-slate-400 mb-4">Agrega uno o varios enlaces (servidores espejo) por si uno principal se cae. El usuario verá botones de "Servidor 1", "Servidor 2", etc.</p>
@@ -303,7 +331,6 @@ def admin_panel(request: Request):
                 </div>
             </div>
 
-            <!-- TRANSFERENCIA BANCARIA -->
             <div class="bg-slate-800 p-6 rounded-xl border border-amber-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">💳 Pagos por Transferencia Bancaria</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -344,10 +371,6 @@ def admin_panel(request: Request):
 
         <!-- PESTAÑA ESTADÍSTICAS -->
         <div id="content-stats" class="hidden space-y-6">
-            <div class="bg-slate-800 p-4 rounded-xl border border-cyan-500 text-center mb-4">
-                <p class="text-sm text-slate-400">Mostrando datos de la página:</p>
-                <h3 id="stats_page_name" class="text-2xl font-bold text-cyan-400">--</h3>
-            </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg text-center">
                     <h3 class="text-sm text-slate-400 uppercase tracking-wider mb-2">Visitas Totales</h3>
@@ -370,13 +393,9 @@ def admin_panel(request: Request):
 
         <!-- PESTAÑA AGENTE IA -->
         <div id="content-ai" class="hidden space-y-6">
-            <div class="bg-slate-800 p-4 rounded-xl border border-cyan-500 text-center mb-4">
-                <p class="text-sm text-slate-400">Configurando IA para la página:</p>
-                <h3 id="ai_page_name" class="text-2xl font-bold text-cyan-400">--</h3>
-            </div>
             <div class="bg-slate-800 p-6 rounded-xl border border-cyan-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🤖 Configuración del Agente IA (Seguimiento de Leads)</h3>
-                <p class="text-sm text-slate-400 mb-6">Usa la variable <code class="bg-slate-900 p-1 rounded text-cyan-400">{{{{name}}}}</code> en los mensajes para personalizarlos con el nombre del cliente.</p>
+                <p class="text-sm text-slate-400 mb-6">Usa la variable <code class="bg-slate-900 p-1 rounded text-cyan-400">{{name}}</code> en los mensajes para personalizarlos con el nombre del cliente.</p>
                 
                 <div class="space-y-8">
                     <div class="bg-slate-900 p-4 rounded-lg border border-slate-700">
@@ -471,6 +490,37 @@ def admin_panel(request: Request):
             </div>
         </div>
 
+        <!-- PESTAÑA ACTUALIZACIONES (NUEVA) -->
+        <div id="content-updates" class="hidden space-y-6">
+            <div class="bg-slate-800 p-6 rounded-xl border border-cyan-700 shadow-lg">
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🔄 Gestión de Versiones del Bot</h3>
+                <p class="text-sm text-slate-400 mb-4">Configura los parámetros que recibirán los bots de tus usuarios al iniciar sesión. Si la versión del bot del usuario es diferente a la que pongas aquí, se mostrará un aviso.</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="text-sm text-slate-400">Última Versión Disponible</label>
+                        <input type="text" id="upd_version" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: 1.1.0">
+                    </div>
+                    <div>
+                        <label class="text-sm text-slate-400">URL de Descarga del .exe</label>
+                        <input type="text" id="upd_url" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="https://drive.google.com/...">
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="text-sm text-slate-400">Mensaje de la Actualización</label>
+                    <textarea id="upd_message" rows="3" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Corrección de errores críticos. Nueva estrategia agregada."></textarea>
+                </div>
+
+                <div class="flex items-center gap-2 mb-6 p-3 bg-slate-900 rounded border border-slate-700">
+                    <input type="checkbox" id="upd_force" class="w-5 h-5 accent-red-500">
+                    <label for="upd_force" class="text-sm text-slate-300 cursor-pointer">Forzar Actualización Obligatoria (Bloquear uso de versiones antiguas)</label>
+                </div>
+                
+                <button onclick="saveUpdateConfig()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition"><i class="fas fa-save mr-2"></i>Guardar y Publicar Versión</button>
+            </div>
+        </div>
+
         <!-- PESTAÑA AJUSTES -->
         <div id="content-settings" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-amber-700 shadow-lg">
@@ -512,7 +562,7 @@ def admin_panel(request: Request):
     const allPages = {pages_json};
     
     function showTab(tabId) {{
-        ['pages', 'stats', 'ai', 'lic', 'settings'].forEach(id => {{
+        ['pages', 'stats', 'ai', 'lic', 'updates', 'settings'].forEach(id => {{
             document.getElementById('content-' + id).classList.add('hidden');
             document.getElementById('tab-' + id).classList.remove('tab-active');
             document.getElementById('tab-' + id).classList.add('bg-slate-800', 'hover:bg-slate-700');
@@ -521,17 +571,9 @@ def admin_panel(request: Request):
         document.getElementById('tab-' + tabId).classList.add('tab-active');
         document.getElementById('tab-' + tabId).classList.remove('bg-slate-800', 'hover:bg-slate-700');
         
-        const activeSlug = document.getElementById('page_selector').value || 'main';
-        const activeName = allPages[activeSlug]?.page_name || 'Principal';
-        
-        if(tabId === 'ai') {{
-            document.getElementById('ai_page_name').innerText = activeName;
-            loadAIConfig(activeSlug);
-        }}
-        if(tabId === 'stats') {{
-            document.getElementById('stats_page_name').innerText = activeName;
-            loadStats(activeSlug);
-        }}
+        if(tabId === 'ai') loadAIConfig();
+        if(tabId === 'stats') loadStats();
+        if(tabId === 'updates') loadUpdateConfig();
     }}
 
     function showToast(msg) {{
@@ -595,10 +637,6 @@ def admin_panel(request: Request):
 
         const urlText = slug === 'main' ? 'tudominio.com/' : 'tudominio.com/p/' + slug;
         document.getElementById('page_url_preview').innerText = urlText;
-        
-        const activeName = p.page_name || 'Principal';
-        if(document.getElementById('ai_page_name')) document.getElementById('ai_page_name').innerText = activeName;
-        if(document.getElementById('stats_page_name')) document.getElementById('stats_page_name').innerText = activeName;
     }}
 
     function createPage() {{
@@ -701,7 +739,7 @@ def admin_panel(request: Request):
             if(div.querySelector('.dl-url').value.trim()) {{
                 dlLinksArray.push(div.querySelector('.dl-url').value);
             }}
-        }})
+        }});
 
         allPages[slug] = {{
             page_name: document.getElementById('page_name').value,
@@ -737,9 +775,9 @@ def admin_panel(request: Request):
         if(reloadSelector) {{ updateSelector(); document.getElementById('page_selector').value = Object.keys(allPages).pop(); loadPageData(); }}
     }}
 
-    async function loadStats(slug) {{
+    async function loadStats() {{
         try {{
-            const res = await fetch(`/api/get_stats?slug=${{slug}}`);
+            const res = await fetch('/api/get_stats');
             const data = await res.json();
             document.getElementById('stat_views').innerText = data.views || 0;
             const countries = data.countries || {{}};
@@ -774,9 +812,9 @@ def admin_panel(request: Request):
         }} catch (e) {{ console.error(e); }}
     }}
 
-    async function loadAIConfig(slug) {{
+    async function loadAIConfig() {{
         try {{
-            const res = await fetch(`/api/get_ai_config?slug=${{slug}}`);
+            const res = await fetch('/api/get_ai_config');
             const data = await res.json();
             document.getElementById('s1_days').value = data.stage1_days || 2;
             document.getElementById('s1_subject').value = data.stage1_subject || '';
@@ -791,22 +829,41 @@ def admin_panel(request: Request):
     }}
 
     async function saveAIConfig() {{
-        const slug = document.getElementById('page_selector').value || 'main';
         const payload = {{
-            slug: slug,
-            config: {{
-                stage1_days: parseInt(document.getElementById('s1_days').value),
-                stage1_subject: document.getElementById('s1_subject').value,
-                stage1_body: document.getElementById('s1_body').value,
-                stage2_days: parseInt(document.getElementById('s2_days').value),
-                stage2_subject: document.getElementById('s2_subject').value,
-                stage2_body: document.getElementById('s2_body').value,
-                stage3_days: parseInt(document.getElementById('s3_days').value),
-                stage3_subject: document.getElementById('s3_subject').value,
-                stage3_body: document.getElementById('s3_body').value
-            }}
+            stage1_days: parseInt(document.getElementById('s1_days').value),
+            stage1_subject: document.getElementById('s1_subject').value,
+            stage1_body: document.getElementById('s1_body').value,
+            stage2_days: parseInt(document.getElementById('s2_days').value),
+            stage2_subject: document.getElementById('s2_subject').value,
+            stage2_body: document.getElementById('s2_body').value,
+            stage3_days: parseInt(document.getElementById('s3_days').value),
+            stage3_subject: document.getElementById('s3_subject').value,
+            stage3_body: document.getElementById('s3_body').value
         }};
         const res = await fetch('/api/save_ai_config', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
+        const result = await res.json();
+        showToast(result.message);
+    }}
+
+    async function loadUpdateConfig() {{
+        try {{
+            const res = await fetch('/api/get_update_config');
+            const data = await res.json();
+            document.getElementById('upd_version').value = data.latest_version || '1.0.0';
+            document.getElementById('upd_url').value = data.download_url || '';
+            document.getElementById('upd_message').value = data.update_message || '';
+            document.getElementById('upd_force').checked = data.force_update || false;
+        }} catch(e) {{ console.error(e); }}
+    }}
+
+    async function saveUpdateConfig() {{
+        const payload = {{
+            latest_version: document.getElementById('upd_version').value,
+            download_url: document.getElementById('upd_url').value,
+            force_update: document.getElementById('upd_force').checked,
+            update_message: document.getElementById('upd_message').value
+        }};
+        const res = await fetch('/api/save_update_config', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
         const result = await res.json();
         showToast(result.message);
     }}
@@ -895,7 +952,7 @@ def api_change_password(request: Request, data: ChangePasswordData):
     if data.current_password != admin_password_db: return {"status": "error", "message": "❌ La contraseña actual es incorrecta."}
     if len(data.new_password) < 4: return {"status": "error", "message": "❌ La nueva contraseña debe tener al menos 4 caracteres."}
     admin_password_db = data.new_password
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"status": "success", "message": "✅ Contraseña actualizada correctamente."}
 
 @app.get("/recuperar-clave", response_class=HTMLResponse)
@@ -905,7 +962,7 @@ def recover_page():
     <body class="bg-slate-900 text-slate-300 flex items-center justify-center min-h-screen"><div class="bg-slate-800 p-8 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md text-center"><h1 class="text-2xl font-bold text-cyan-400 mb-2">🔑 Recuperar Licencia</h1><p class="text-slate-400 mb-6 text-sm">Ingresa el correo electrónico con el que realizaste tu compra.</p><input type="email" id="email" placeholder="tu.correo@gmail.com" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 outline-none focus:border-cyan-500"><button onclick="recover()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Enviar mi licencia</button><div id="msg" class="mt-4 text-emerald-400 font-bold text-sm hidden"></div></div><script>function recover(){var email = document.getElementById('email').value;fetch('/api/recover_by_email', {method: 'POST',headers: {'Content-Type': 'application/json'},body: JSON.stringify({email: email})}).then(r => r.json()).then(d => {const msgDiv = document.getElementById('msg');msgDiv.innerText = d.message;msgDiv.classList.remove('hidden');});}</script></body></html>
     """
 
-def render_landing_page(c, slug="main"):
+def render_landing_page(c):
     pubs_html = ""
     for p in c.get('publications', []):
         if p.get('url'):
@@ -1014,7 +1071,7 @@ def render_landing_page(c, slug="main"):
     <div id="urgency-banner" class="bg-gradient-to-r from-amber-500 to-red-500 text-slate-900 text-center py-2 px-4 text-sm font-bold flex justify-center items-center gap-3"><i class="fas fa-fire animate-pulse"></i><span>OFERTA DE LANZAMIENTO: Termina en</span><span id="countdown-timer" class="font-mono bg-slate-900 text-amber-400 px-2 py-1 rounded">23:59:59</span></div>
     <script>function startCountdown() {let now = new Date();let midnight = new Date();midnight.setHours(23, 59, 59, 999);let diff = midnight - now;let hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));let minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));let seconds = Math.floor((diff % (1000 * 60)) / 1000);document.getElementById('countdown-timer').innerText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;}setInterval(startCountdown, 1000);</script>
 
-    <header class="relative overflow-hidden py-24 md:py-32 hero-bg"><div class="container mx-auto px-6 text-center relative z-10"><div class="inline-block bg-slate-800/50 border border-slate-700 px=4 py-1 rounded-full text-xs font-medium text-cyan-400 mb-6">🚀 SISTEMA INSTITUCIONAL ACTIVO</div><h1 class="text-4xl md:text-6xl font-extrabold text-white mb-4 glow">{HERO_TITLE}</h1><h2 class="text-lg md:text-xl text-slate-400 font-light mb-6 tracking-wider uppercase">{HERO_SUBTITLE}</h2><p class="text-md md:text-lg text-slate-300 max-w-2xl mx-auto mb-10">{HERO_TEXT}</p><div class="flex justify-center gap-4"><a href="#pricing" class="bg-cyan-500 text-slate-900 font-bold py-3 px-8 rounded hover:bg-cyan-400 transition transform hover:-translate-y-1 shadow-lg shadow-cyan-500/20">Ver Planes</a><a href="#videos" class="border border-slate-700 text-slate-300 font-bold py-3 px-8 rounded hover:bg-slate-800 transition">Ver Demo</a></div></div></header>
+    <header class="relative overflow-hidden py-24 md:py-32 hero-bg"><div class="container mx-auto px-6 text-center relative z-10"><div class="inline-block bg-slate-800/50 border border-slate-700 px-4 py-1 rounded-full text-xs font-medium text-cyan-400 mb-6">🚀 SISTEMA INSTITUCIONAL ACTIVO</div><h1 class="text-4xl md:text-6xl font-extrabold text-white mb-4 glow">{HERO_TITLE}</h1><h2 class="text-lg md:text-xl text-slate-400 font-light mb-6 tracking-wider uppercase">{HERO_SUBTITLE}</h2><p class="text-md md:text-lg text-slate-300 max-w-2xl mx-auto mb-10">{HERO_TEXT}</p><div class="flex justify-center gap-4"><a href="#pricing" class="bg-cyan-500 text-slate-900 font-bold py-3 px-8 rounded hover:bg-cyan-400 transition transform hover:-translate-y-1 shadow-lg shadow-cyan-500/20">Ver Planes</a><a href="#videos" class="border border-slate-700 text-slate-300 font-bold py-3 px-8 rounded hover:bg-slate-800 transition">Ver Demo</a></div></div></header>
 
     <section id="features" class="py-20 container mx-auto px-6"><h2 class="text-3xl font-bold text-center text-white mb-12">Tecnología de Nivel Institucional</h2><div class="grid md:grid-cols-3 gap-8"><div class="bg-slate-900 p-8 rounded-xl border border-slate-800 hover:border-cyan-500 transition group"><div class="text-cyan-400 text-3xl mb-4 group-hover:scale-110 transition"><i class="fas fa-fish"></i></div><h3 class="text-xl font-bold text-white mb-2">Enjambre 3D</h3><p class="text-slate-400 text-sm">500 agentes virtuales simulan el futuro del mercado en milisegundos basándose en el patrón histórico del activo antes de operar.</p></div><div class="bg-slate-900 p-8 rounded-xl border border-slate-800 hover:border-cyan-500 transition group"><div class="text-cyan-400 text-3xl mb-4 group-hover:scale-110 transition"><i class="fas fa-shield-alt"></i></div><h3 class="text-xl font-bold text-white mb-2">Agente Centinela</h3><p class="text-slate-400 text-sm">Un guardaespaldas que lee Reuters, CNBC y la Fed en tiempo real. Si detecta un crash, bloquea al bot para proteger tu capital.</p></div><div class="bg-slate-900 p-8 rounded-xl border border-slate-800 hover:border-cyan-500 transition group"><div class="text-cyan-400 text-3xl mb-4 group-hover:scale-110 transition"><i class="fas fa-brain"></i></div><h3 class="text-xl font-bold text-white mb-2">Cerebro Global</h3><p class="text-slate-400 text-sm">Red neuronal descentralizada. Tu bot aprende de las operaciones exitosas y fallidas de todos los usuarios a nivel mundial.</p></div></div></section>
 
@@ -1022,68 +1079,7 @@ def render_landing_page(c, slug="main"):
 
     <section id="pricing" class="py-20 container mx-auto px-6"><h2 class="text-3xl font-bold text-center text-white mb-4">Planes de Suscripción</h2><p class="text-slate-400 text-center mb-12">Elige el plan que se adapte a tu capital y estilo de trading.</p><div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">{PLANS_HTML}</div></section>
 
-    <!-- INICIO FORMULARIO NATIVO Y DESCARGA (Conectado al Agente IA) -->
-    <div class="py-16 px-6 bg-slate-950">
-        <div class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-lg text-center" id="lead-form-wrapper">
-            <h3 class="text-2xl font-bold text-white mb-2">¿Quieres ver al Bot operando en vivo?</h3>
-            <p class="text-slate-400 text-sm mb-6">Deja tu correo y te enviaremos un video de cómo el Enjambre de Agentes abre operaciones reales, además de darte acceso al sistema.</p>
-            
-            <input type="email" id="download_email_input" placeholder="Tu mejor correo electrónico" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 text-white outline-none focus:border-cyan-500">
-            <button onclick="submitLeadForDownload()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition mb-2">
-                Quiero Acceso y Descargar
-            </button>
-            <div id="download_thanks" class="hidden text-emerald-400 text-sm font-bold mt-4"></div>
-        </div>
-
-        <!-- CUADRO DE DESCARGA REVELADO -->
-        <div id="download-box" class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-cyan-500 shadow-cyan-500/10 shadow-lg text-center mt-6 hidden">
-            <i class="fas fa-check-circle text-emerald-400 text-4xl mb-4"></i>
-            <h4 class="text-xl font-bold text-cyan-400 mb-4">¡Listo! Aquí tienes tu descarga:</h4>
-            <div class="text-slate-300 text-sm mb-6 text-left bg-slate-900 p-4 rounded-lg border border-slate-700">
-                {DOWNLOAD_INSTRUCTIONS_HTML}
-            </div>
-            <div class="flex flex-col gap-3">
-                {DOWNLOAD_BUTTONS_HTML}
-            </div>
-        </div>
-        
-        <script>
-            const currentSlug = "{SLUG}"; // Slug inyectado desde el backend
-            async function submitLeadForDownload() {
-                const email = document.getElementById('download_email_input').value;
-                if (!email || !email.includes('@')) {
-                    alert('Por favor ingresa un correo válido.');
-                    return;
-                }
-                
-                // 1. Mostrar mensaje de espera en el botón
-                const btn = document.querySelector('#lead-form-wrapper button');
-                btn.innerText = "⏳ Procesando tu acceso...";
-                btn.disabled = true;
-                
-                // 2. Pequeño retraso visual (800ms) para feedback del usuario
-                setTimeout(() => {
-                    // Ocultar formulario y mostrar botones de descarga
-                    document.getElementById('lead-form-wrapper').style.display = 'none';
-                    document.getElementById('download-box').classList.remove('hidden');
-                    document.getElementById('download-box').scrollIntoView({behavior: "smooth", block: "center"});
-
-                    // 3. Enviar el correo al servidor en segundo plano (sin esperar)
-                    fetch('/api/capture_lead', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            name: 'Usuario Web', 
-                            email: email, 
-                            interaction: 'Descarga de Sistema desde Web',
-                            slug: currentSlug
-                        })
-                    }).catch(e => console.error("Error guardando lead:", e));
-                }, 800); // 0.8 segundos de espera
-            }
-        </script>
-    </div>
-    <!-- FIN FORMULARIO NATIVO Y DESCARGA -->
+    <div class="py-16 px-6 bg-slate-950"><div class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-lg text-center" id="ml-form-wrapper"><h3 class="text-2xl font-bold text-white mb-2">¿Quieres ver al Bot operando en vivo?</h3><p class="text-slate-400 text-sm mb-6">Deja tu correo y te enviaremos un video de cómo el Enjambre de Agentes abre operaciones reales, además de darte acceso al sistema.</p><div class="ml-form-embedContainer ml-subscribe-form ml-subscribe-form-44360624"><div class="ml-form-align-center"><div class="ml-form-embedWrapper embedForm"><div class="ml-form-embedBody ml-form-embedBodyDefault row-form"><div class="ml-form-embedContent"><p style="color: #94a3b8; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 400; line-height: 20px; margin: 0 0 10px 0; text-align: center;">Ingresa tu correo para continuar.</p></div><form class="ml-block-form" action="https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/subscribe" data-code="" method="post" target="_blank" onsubmit="return ml_reveal_download()"><div class="ml-form-formContent"><div class="ml-form-fieldRow ml-last-item"><div class="ml-field-group ml-field-email ml-validate-email ml-validate-required"><input aria-label="email" aria-required="true" type="email" class="form-control" data-inputmask="" name="fields[email]" placeholder="Email" autocomplete="email" style="background-color: #0f172a !important; color: #fff !important; border: 1px solid #334155 !important; border-radius: 6px !important; padding: 12px !important; width: 100% !important; margin-bottom: 10px !important;"></div></div></div><input type="hidden" name="ml-submit" value="1"><div class="ml-form-embedSubmit" style="margin-top: 0;"><button type="submit" class="primary" style="background-color: #00e5ff !important; color: #020617 !important; border-radius: 6px !important; font-weight: 700; font-family: 'Inter', sans-serif; padding: 12px !important; width: 100% !important; border: none !important; cursor: pointer;">Quiero Acceso y Descargar</button><button disabled="disabled" style="display: none;" type="button" class="loading"><div class="ml-form-embedSubmitLoad"></div><span class="sr-only">Loading...</span></button></div><input type="hidden" name="anticsrf" value="true"></form></div></div></div></div><script>function ml_webform_success_44360624() {var $ = ml_jQuery || jQuery;$('.ml-subscribe-form-44360624 .row-success').show();$('.ml-subscribe-form-44360624 .row-form').hide();}</script><script src="https://groot.mailerlite.com/js/w/webforms.min.js?v83147fa8ce2d95cb73ece7f28b469519" type="text/javascript"></script><script>fetch("https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/takel")</script></div><div id="download-box" class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-cyan-500 shadow-cyan-500/10 shadow-lg text-center mt-6" style="display: none;"><i class="fas fa-check-circle text-emerald-400 text-4xl mb-4"></i><h4 class="text-xl font-bold text-cyan-400 mb-4">¡Listo! Aquí tienes tu descarga:</h4><div class="text-slate-300 text-sm mb-6 text-left bg-slate-900 p-4 rounded-lg border border-slate-700">{DOWNLOAD_INSTRUCTIONS_HTML}</div><div class="flex flex-col gap-3">{DOWNLOAD_BUTTONS_HTML}</div></div><script>function ml_reveal_download() {setTimeout(function() {document.getElementById('download-box').style.display = 'block';document.getElementById('ml-form-wrapper').style.display = 'none';document.getElementById('download-box').scrollIntoView({behavior: "smooth", block: "center"});}, 1000);return true;}</script></div>
 
     <section class="py-12 border-t border-slate-800"><div class="container mx-auto px-6 text-center"><h3 class="text-xl font-bold text-white mb-6">Síguenos en nuestras redes</h3><div class="flex justify-center space-x-4 text-xl">{SOCIAL_HTML}</div></div></section>
 
@@ -1093,9 +1089,7 @@ def render_landing_page(c, slug="main"):
 
     <div id="google_translate_element"></div><script type="text/javascript">function googleTranslateElementInit() { new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'en,fr,pt,ru,it,de,zh-CN,ko,hi', layout: google.translate.TranslateElement.InlineLayout.SIMPLE, autoDisplay: false}, 'google_translate_element'); }</script><script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
     <script>const langBtn = document.getElementById('lang-btn');const langMenu = document.getElementById('lang-menu');langBtn.addEventListener('click', (e) => { e.stopPropagation(); langMenu.classList.toggle('hidden'); });window.addEventListener('click', (e) => { if (!langMenu.contains(e.target) && !langBtn.contains(e.target)) { langMenu.classList.add('hidden'); } });function changeLang(langCode, langName) {document.getElementById('current-lang-name').innerText = langName;langMenu.classList.add('hidden');var date = new Date(); date.setTime(date.getTime() + (365 * 24 * 60 * 60 * 1000)); var expires = "; expires=" + date.toUTCString();var hostname = window.location.hostname;if (langCode === 'es') {document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + hostname;document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=." + hostname;} else {var cookieValue = "/es/" + langCode;document.cookie = "googtrans=" + cookieValue + expires + "; path=/";document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=" + hostname;document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=." + hostname;}window.location.reload();}window.onload = function() {var match = document.cookie.match(/googtrans=\/es\/([a-zA-Z\-]+)/);if (match && match[1]) {var langMap = { 'en': '🇬🇧 English', 'fr': '🇫🇷 Français', 'pt': '🇵🇹 Português', 'ru': '🇷🇺 Русский', 'it': '🇮🇹 Italiano', 'de': '🇩🇪 Deutsch', 'zh-CN': '🇨🇳 中文', 'ko': '🇰🇷 한국어', 'hi': '🇮🇳 हिन्दी' };if (langMap[match[1]]) document.getElementById('current-lang-name').innerText = langMap[match[1]];}};</script>
-    
-    <!-- SCRIPT DE TRACKING CORREGIDO (Usa Query Parameter para evitar errores 422) -->
-    <script>fetch('/api/track_view?slug=' + currentSlug, { method: 'POST' });</script>
+    <script>fetch('/api/track_view', { method: 'POST' });</script>
 
     <!-- ALGORITMO DE PERSUASIÓN Y CAPTACIÓN DE LEADS -->
     <div id="social-proof-toast" class="fixed bottom-5 left-5 bg-slate-800 border border-cyan-500 text-slate-300 p-4 rounded-lg shadow-2xl flex items-center gap-3 transition-all duration-500 opacity-0 translate-y-10 z-[9998] max-w-xs"><i class="fas fa-check-circle text-cyan-400 text-2xl"></i><div><p id="sp-name" class="font-bold text-white text-sm">Carlos de México</p><p id="sp-action" class="text-xs text-slate-400">Acaba de adquirir el Plan Oro</p></div></div>
@@ -1105,7 +1099,7 @@ def render_landing_page(c, slug="main"):
     <script>document.addEventListener('mouseleave', function(e) {if (e.clientY < 0 && !localStorage.getItem('exit_modal_shown')) {document.getElementById('exit-modal').classList.remove('hidden');localStorage.setItem('exit_modal_shown', 'true');}});</script>
 
     <div id="lead-capture-widget" class="fixed bottom-5 right-5 bg-slate-800 p-6 rounded-xl border border-cyan-500 shadow-2xl w-80 z-[9998] transition-all duration-500 translate-y-[150%] hidden"><button onclick="closeLeadWidget()" class="absolute top-2 right-3 text-slate-500 hover:text-white text-xl">&times;</button><div class="text-center mb-4"><i class="fas fa-robot text-cyan-400 text-3xl mb-2"></i><h4 class="text-white font-bold text-lg">¿Te gusta lo que ves?</h4><p class="text-slate-400 text-sm">Déjanos tu nombre y correo. Nuestra IA te enviará un video privado de cómo opera + un descuento.</p></div><input type="text" id="lead_name_input" placeholder="Tu Nombre" class="w-full bg-slate-900 rounded p-2 mb-3 border border-slate-700 text-white outline-none focus:border-cyan-500"><input type="email" id="lead_email_input" placeholder="tu.correo@gmail.com" class="w-full bg-slate-900 rounded p-2 mb-3 border border-slate-700 text-white outline-none focus:border-cyan-500"><button onclick="submitLead('Widget Flotante')" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-2 rounded transition">Quiero el Video y Descuento</button><div id="lead_thanks" class="hidden text-center text-emerald-400 text-sm font-bold mt-4"><i class="fas fa-check-circle"></i> ¡Revisa tu correo en 2 minutos!</div></div>
-    <script>let leadTriggered = false;function showLeadWidget(interactionType) {if (leadTriggered || localStorage.getItem('lead_captured')) return;const widget = document.getElementById('lead-capture-widget');widget.classList.remove('hidden');setTimeout(() => widget.classList.remove('translate-y-[150%]'), 50);leadTriggered = true;widget.dataset.interaction = interactionType;}function closeLeadWidget() {const widget = document.getElementById('lead-capture-widget');widget.classList.add('translate-y-[150%]');setTimeout(() => widget.classList.add('hidden'), 500);setTimeout(() => { leadTriggered = false; }, 3600000);}async function submitLead(source) {let email = '';let name = '';if(source === 'Modal de Abandono') {name = document.getElementById('exit_name_input').value || 'Usuario';email = document.getElementById('exit_email_input').value;} else {name = document.getElementById('lead_name_input').value || 'Usuario';email = document.getElementById('lead_email_input').value;}if (!email || !email.includes('@')) {alert('Por favor ingresa un correo válido.');return;}let interaction = source;if(source !== 'Modal de Abandono') {interaction = document.getElementById('lead-capture-widget').dataset.interaction || source;}// 1. Mostrar mensaje de espera en el botónconst btn = document.querySelector(source === 'Modal de Abandono' ? '#exit-modal button' : '#lead-capture-widget button[onclick^="submitLead"]');if(btn) {btn.innerText = "⏳ Procesando...";btn.disabled = true;}// 2. Pequeño retraso visual (800ms)setTimeout(() => {// Actualizar la interfazif(source === 'Modal de Abandono') {document.getElementById('exit-modal').classList.add('hidden');if(btn) { btn.innerText = "Quiero mi Descuento"; btn.disabled = false; }} else {document.getElementById('lead_name_input').style.display = 'none';document.getElementById('lead_email_input').style.display = 'none';if(btn) btn.style.display = 'none';document.getElementById('lead_thanks').classList.remove('hidden');}localStorage.setItem('lead_captured', 'true');setTimeout(closeLeadWidget, 4000);// 3. Enviar el dato al servidor en segundofetch('/api/capture_lead', {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ name: name, email: email, interaction: interaction, slug: currentSlug })}).catch(e => console.error("Error guardando lead:", e));}, 800);}document.querySelectorAll('a[href="#videos"]').forEach(btn => {btn.addEventListener('click', () => {setTimeout(() => showLeadWidget('Clic en Ver Demo'), 3000);});});const pricingSection = document.getElementById('pricing');if (pricingSection) {pricingSection.addEventListener('mouseenter', () => {setTimeout(() => showLeadWidget('Mirando los Planes'), 5000);});}setTimeout(() => {if (!leadTriggered && !localStorage.getItem('lead_captured')) showLeadWidget('Lectura profunda (40s)');}, 40000);</script>
+    <script>let leadTriggered = false;function showLeadWidget(interactionType) {if (leadTriggered || localStorage.getItem('lead_captured')) return;const widget = document.getElementById('lead-capture-widget');widget.classList.remove('hidden');setTimeout(() => widget.classList.remove('translate-y-[150%]'), 50);leadTriggered = true;widget.dataset.interaction = interactionType;}function closeLeadWidget() {const widget = document.getElementById('lead-capture-widget');widget.classList.add('translate-y-[150%]');setTimeout(() => widget.classList.add('hidden'), 500);setTimeout(() => { leadTriggered = false; }, 3600000);}async function submitLead(source) {let email = '';let name = '';if(source === 'Modal de Abandono') {name = document.getElementById('exit_name_input').value || 'Usuario';email = document.getElementById('exit_email_input').value;} else {name = document.getElementById('lead_name_input').value || 'Usuario';email = document.getElementById('lead_email_input').value;}if (!email || !email.includes('@')) {alert('Por favor ingresa un correo válido.');return;}let interaction = source;if(source !== 'Modal de Abandono') {interaction = document.getElementById('lead-capture-widget').dataset.interaction || source;}try {await fetch('/api/capture_lead', {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ name: name, email: email, interaction: interaction })});if(source === 'Modal de Abandono') {document.getElementById('exit-modal').classList.add('hidden');} else {document.getElementById('lead_name_input').style.display = 'none';document.getElementById('lead_email_input').style.display = 'none';document.querySelector('#lead-capture-widget button[onclick^="submitLead"]').style.display = 'none';document.getElementById('lead_thanks').classList.remove('hidden');}localStorage.setItem('lead_captured', 'true');setTimeout(closeLeadWidget, 4000);} catch (e) {alert('Hubo un error, intenta de nuevo.');}}document.querySelectorAll('a[href="#videos"]').forEach(btn => {btn.addEventListener('click', () => {setTimeout(() => showLeadWidget('Clic en Ver Demo'), 3000);});});const pricingSection = document.getElementById('pricing');if (pricingSection) {pricingSection.addEventListener('mouseenter', () => {setTimeout(() => showLeadWidget('Mirando los Planes'), 5000);});}setTimeout(() => {if (!leadTriggered && !localStorage.getItem('lead_captured')) showLeadWidget('Lectura profunda (40s)');}, 40000);</script>
     
     {PAYPAL_SCRIPTS}
 </body></html>"""
@@ -1119,8 +1113,14 @@ def render_landing_page(c, slug="main"):
                    .replace("{BANK_MODAL_HTML}", bank_modal_html)\
                    .replace("{DOWNLOAD_BUTTONS_HTML}", download_buttons_html)\
                    .replace("{DOWNLOAD_INSTRUCTIONS_HTML}", download_instructions_html)\
-                   .replace("{SLUG}", slug)\
                    .replace("{PAYPAL_SCRIPTS}", paypal_scripts)
+
+# ==========================================
+# 🔍 VERIFICACIÓN DE GOOGLE SEARCH CONSOLE
+# ==========================================
+@app.get("/google80facc731870c13b.html", response_class=PlainTextResponse)
+def google_verification():
+    return "google-site-verification: google80facc731870c13b.html"
 
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):
@@ -1133,73 +1133,14 @@ def read_root(request: Request):
         if geo_resp.status_code == 200: user_country_name = geo_resp.json().get("country_name", "Internacional")
     except: pass
     if user_country_name != "Internacional": c['hero_text'] = f"🔥 Usuarios de {user_country_name} ya están multiplicando su capital. " + c.get('hero_text', '')
-    return render_landing_page(c, slug="main")
+    return render_landing_page(c)
 
 @app.get("/p/{slug}", response_class=HTMLResponse)
 def read_dynamic_page(slug: str):
     pages_data = get_all_pages()
     c = pages_data.get("pages", {}).get(slug)
-    if c: return render_landing_page(c, slug=slug)
+    if c: return render_landing_page(c)
     return HTMLResponse("<h1>404 - Página no encontrada</h1><a href='/'>Volver al inicio</a>")
-
-# ==========================================
-# 🔍 VERIFICACIÓN DE GOOGLE SEARCH CONSOLE
-# ==========================================
-@app.get("/google80facc731870c13b.html", response_class=PlainTextResponse)
-def google_verification():
-    return "google-site-verification: google80facc731870c13b.html"
-
-# ==========================================
-# 🔄 SISTEMA DE ACTUALIZACIONES DEL BOT
-# ==========================================
-@app.get("/api/get_latest_version")
-def get_latest_version():
-    return {
-        "latest_version": "1.0.0", 
-        "download_url": "https://blenin77-server.onrender.com/", 
-        "update_message": "Hay una nueva versión disponible.",
-        "force_update": False
-    }
-
-# ==========================================
-# 📈 SISTEMA DE LICENCIAS PARA LA APP DE MARKETING
-# ==========================================
-class MarketingLicenseCheck(BaseModel):
-    key: str
-
-@app.post("/api/validate_marketing_license")
-def validate_marketing_license(data: MarketingLicenseCheck):
-    global licenses_db
-    key = data.key.upper().strip()
-    
-    if key not in licenses_db:
-        return {"valid": False, "message": "❌ Licencia de marketing no encontrada."}
-    
-    info = licenses_db[key]
-    if not info["active"]:
-        return {"valid": False, "message": "🚫 Licencia suspendada. Paga tu suscripción."}
-        
-    expires = datetime.fromisoformat(info["expires"])
-    if datetime.now() > expires:
-        return {"valid": False, "message": "⏳ Suscripción expirada. Renueva para continuar."}
-        
-    user_plan = info.get("plan", "BRONCE")
-    
-    marketing_features = {
-        "BRONCE": {"max_negocios": 1, "pdf_enabled": False, "sync_enabled": False, "plan_name": "BÁSICO"},
-        "PLATA":  {"max_negocios": 3, "pdf_enabled": False, "sync_enabled": True,  "plan_name": "MEDIO"},
-        "ORO":    {"max_negocios": 999, "pdf_enabled": True, "sync_enabled": True,  "plan_name": "AVANZADO"}
-    }
-    
-    features = marketing_features.get(user_plan, marketing_features["BRONCE"])
-    
-    return {
-        "valid": True, 
-        "plan": user_plan,
-        "plan_name": features["plan_name"],
-        "days_left": (expires - datetime.now()).days,
-        "features": features
-    }
 
 # ==========================================
 # 🧠 BASES DE DATOS Y RUTAS API
@@ -1217,44 +1158,32 @@ class LeadCapture(BaseModel):
     name: str = "Usuario"
     email: str
     interaction: str = "Visualizó demo"
-    slug: str = "main"
 
 @app.post("/api/track_view")
-def track_view(request: Request, slug: str = "main"):
+def track_view(request: Request):
     global stats_db
-    
-    # 🚀 FIX: Asegurar que el diccionario de la página exista antes de sumar visitas
-    if slug not in stats_db:
-        stats_db[slug] = {"views": 0, "countries": {}, "captured_leads": []}
-        
     try:
         ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "8.8.8.8").split(",")[0]
         geo_resp = requests.get(f"https://get.geojs.io/v1/ip/country.json?ip={ip}", timeout=2)
         country = geo_resp.json().get("country", "Unknown") if geo_resp.status_code == 200 else "Unknown"
-    except: 
-        country = "Unknown"
-    
-    stats_db[slug]["views"] = stats_db[slug].get("views", 0) + 1
-    stats_db[slug]["countries"][country] = stats_db[slug]["countries"].get(country, 0) + 1
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
+    except: country = "Unknown"
+    stats_db["views"] = stats_db.get("views", 0) + 1
+    stats_db["countries"][country] = stats_db["countries"].get(country, 0) + 1
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"status": "tracked"}
 
 @app.get("/api/get_stats")
-def get_stats(slug: str = "main"):
-    return stats_db.get(slug, {"views": 0, "countries": {}, "captured_leads": []})
+def get_stats(): return stats_db
 
 @app.get("/api/get_ai_config")
-def get_ai_config(slug: str = "main"):
-    return ai_agent_config.get(slug, get_default_ai_config())
+def get_ai_config(): return ai_agent_config
 
 @app.post("/api/save_ai_config")
 def save_ai_config(request: Request, data: dict):
     global ai_agent_config
     if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
-    slug = data.get("slug", "main")
-    config = data.get("config", {})
-    ai_agent_config[slug] = config
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
+    ai_agent_config = data
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"status": "success", "message": "✅ Configuración del Agente IA guardada correctamente."}
 
 def generate_license_key(plan):
@@ -1285,7 +1214,7 @@ def start_trial(data: TrialRequest):
         if datetime.now() > expires: return {"valid": False, "message": "⏳ Prueba expirada."}
         return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": "BRONCE"}
     trials_db[data.hwid] = {"expires": (datetime.now() + timedelta(days=30)).isoformat()}
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"valid": True, "days_left": 30, "plan": "BRONCE"}
 
 @app.post("/api/validate_license")
@@ -1299,7 +1228,7 @@ def validate_license(data: LicenseCheck):
     if datetime.now() > expires: return {"valid": False, "message": "⏳ Expirada."}
     if info["hwid"] is None:
         info["hwid"] = data.hwid
-        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
+        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     elif info["hwid"] != data.hwid: return {"valid": False, "message": "🔒 En uso en otra PC."}
     return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": info["plan"]}
 
@@ -1309,7 +1238,7 @@ def create_license(request: Request, data: LicenseCreate):
     global licenses_db
     key = generate_license_key(data.plan)
     licenses_db[key] = {"hwid": None, "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(), "active": True, "plan": data.plan.upper(), "email": data.email.lower()}
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"status": "success", "key": key}
 
 @app.post("/api/recover_by_email")
@@ -1327,7 +1256,7 @@ def manage_license(request: Request, data: LicenseUpdate):
     key = data.key.upper().strip()
     if key not in licenses_db: return {"status": "error", "message": "❌ Licencia no encontrada."}
     licenses_db[key]["active"] = data.active
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     status = "activada" if data.active else "suspendida"
     return {"status": "success", "message": f"✅ Licencia {key} {status} correctamente."}
 
@@ -1338,7 +1267,7 @@ def reset_hwid(request: Request, data: ResetHWID):
     key = data.key.upper().strip()
     if key not in licenses_db: return {"status": "error", "message": "❌ Licencia no encontrada."}
     licenses_db[key]["hwid"] = None
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"status": "success", "message": f"✅ HWID reseteado para {key}."}
 
 # ==========================================
@@ -1371,7 +1300,7 @@ def make_payment_webhook(data: MakeWebhookData):
             "plan": plan_upper, 
             "email": data.email.lower()
         }
-        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
+        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
         
         client_subject = "✅ Pago Confirmado - Aquí tienes tu Licencia BLENIN77"
         client_body = f"¡Gracias por tu compra!\n\nTu pago ha sido confirmado exitosamente.\n\nAquí tienes tu clave de licencia:\n{key}\n\nPlan: {plan_upper}\nDuración: {data.duration_days} días\n\nPara descargar el sistema, ingresa a: https://blenin77-server.onrender.com/\n\nSaludos,\nEquipo BLENIN77."
@@ -1389,16 +1318,11 @@ def make_payment_webhook(data: MakeWebhookData):
 def capture_lead(lead: LeadCapture):
     global stats_db
     try:
-        slug = lead.slug if lead.slug else "main"
-        if slug not in stats_db:
-            stats_db[slug] = {"views": 0, "countries": {}, "captured_leads": []}
-            
-        if "captured_leads" not in stats_db[slug]: stats_db[slug]["captured_leads"] = []
-        
-        existing_emails = [l.get("email") for l in stats_db[slug]["captured_leads"]]
+        if "captured_leads" not in stats_db: stats_db["captured_leads"] = []
+        existing_emails = [l.get("email") for l in stats_db["captured_leads"]]
         if lead.email.lower() not in existing_emails:
-            stats_db[slug]["captured_leads"].append({"name": lead.name, "email": lead.email.lower(), "interaction": lead.interaction, "date": datetime.now().isoformat(), "follow_up_stage": 0, "last_email_sent": datetime.now().isoformat()})
-            save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
+            stats_db["captured_leads"].append({"name": lead.name, "email": lead.email.lower(), "interaction": lead.interaction, "date": datetime.now().isoformat(), "follow_up_stage": 0, "last_email_sent": datetime.now().isoformat()})
+            save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
         
         client_subject = f"🚀 ¡Bienvenido {lead.name}! Tu acceso a BLENIN.G.77"
         client_body = f"Hola {lead.name},\n\nGracias por tu interés en BLENIN.G.77.\nDetectamos que te interesa nuestro sistema de IA Predictiva por tu interacción: '{lead.interaction}'.\n\nAquí tienes información exclusiva para ti. Si deseas agendar una llamada, responde a este correo.\n\nSaludos,\nEl equipo de BLENIN77."
@@ -1414,47 +1338,44 @@ def capture_lead(lead: LeadCapture):
 # 🧠 AGENTE IA DE SEGUIMIENTO AUTOMÁTICO (SCHEDULER)
 # ==========================================
 def ai_follow_up_agent():
-    global stats_db, ai_agent_config
+    global stats_db
+    if "captured_leads" not in stats_db: return
     leads_updated = False
     now = datetime.now()
 
-    for slug, site_stats in stats_db.items():
-        cfg = ai_agent_config.get(slug, get_default_ai_config())
-        if "captured_leads" not in site_stats: continue
-        
-        for lead in site_stats["captured_leads"]:
-            stage = lead.get("follow_up_stage", 0)
-            last_sent_str = lead.get("last_email_sent")
-            if not last_sent_str: continue
-            last_sent = datetime.fromisoformat(last_sent_str)
-            days_since_last = (now - last_sent).days
+    for lead in stats_db["captured_leads"]:
+        stage = lead.get("follow_up_stage", 0)
+        last_sent_str = lead.get("last_email_sent")
+        if not last_sent_str: continue
+        last_sent = datetime.fromisoformat(last_sent_str)
+        days_since_last = (now - last_sent).days
 
-            if stage == 0 and days_since_last >= int(cfg.get("stage1_days", 2)):
-                subject = cfg.get("stage1_subject", "").replace("{name}", lead["name"])
-                body = cfg.get("stage1_body", "").replace("{name}", lead["name"])
-                if send_email(lead["email"], subject, body):
-                    lead["follow_up_stage"] = 1
-                    lead["last_email_sent"] = now.isoformat()
-                    leads_updated = True
+        if stage == 0 and days_since_last >= int(ai_agent_config.get("stage1_days", 2)):
+            subject = ai_agent_config.get("stage1_subject", "").replace("{name}", lead["name"])
+            body = ai_agent_config.get("stage1_body", "").replace("{name}", lead["name"])
+            if send_email(lead["email"], subject, body)):
+                lead["follow_up_stage"] = 1
+                lead["last_email_sent"] = now.isoformat()
+                leads_updated = True
 
-            elif stage == 1 and days_since_last >= int(cfg.get("stage2_days", 5)):
-                subject = cfg.get("stage2_subject", "").replace("{name}", lead["name"])
-                body = cfg.get("stage2_body", "").replace("{name}", lead["name"])
-                if send_email(lead["email"], subject, body):
-                    lead["follow_up_stage"] = 2
-                    lead["last_email_sent"] = now.isoformat()
-                    leads_updated = True
+        elif stage == 1 and days_since_last >= int(ai_agent_config.get("stage2_days", 5)):
+            subject = ai_agent_config.get("stage2_subject", "").replace("{name}", lead["name"])
+            body = ai_agent_config.get("stage2_body", "").replace("{name}", lead["name"])
+            if send_email(lead["email"], subject, body)):
+                lead["follow_up_stage"] = 2
+                lead["last_email_sent"] = now.isoformat()
+                leads_updated = True
 
-            elif stage == 2 and days_since_last >= int(cfg.get("stage3_days", 10)):
-                subject = cfg.get("stage3_subject", "").replace("{name}", lead["name"])
-                body = cfg.get("stage3_body", "").replace("{name}", lead["name"])
-                if send_email(lead["email"], subject, body):
-                    lead["follow_up_stage"] = 3
-                    lead["last_email_sent"] = now.isoformat()
-                    leads_updated = True
+        elif stage == 2 and days_since_last >= int(ai_agent_config.get("stage3_days", 10)):
+            subject = ai_agent_config.get("stage3_subject", "").replace("{name}", lead["name"])
+            body = ai_agent_config.get("stage3_body", "").replace("{name}", lead["name"])
+            if send_email(lead["email"], subject, body)):
+                lead["follow_up_stage"] = 3
+                lead["last_email_sent"] = now.isoformat()
+                leads_updated = True
 
     if leads_updated:
-        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config)
+        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(ai_follow_up_agent, 'interval', hours=1)
