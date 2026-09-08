@@ -224,7 +224,7 @@ def save_all_pages(data):
     except: return False
 
 # ==========================================
-# 🔄 SISTEMA DE ACTUALIZACIONES DEL BOT (PÚBLICO)
+# 🔄 SISTEMA DE ACTUALIZACIONES DEL BOT (PÚBLICO Y ADMIN)
 # ==========================================
 @app.get("/api/get_latest_version")
 def get_latest_version():
@@ -490,33 +490,17 @@ def admin_panel(request: Request):
             </div>
         </div>
 
-        <!-- PESTAÑA ACTUALIZACIONES (NUEVA) -->
+        <!-- PESTAÑA ACTUALIZACIONES -->
         <div id="content-updates" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-cyan-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🔄 Gestión de Versiones del Bot</h3>
                 <p class="text-sm text-slate-400 mb-4">Configura los parámetros que recibirán los bots de tus usuarios al iniciar sesión. Si la versión del bot del usuario es diferente a la que pongas aquí, se mostrará un aviso.</p>
-                
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label class="text-sm text-slate-400">Última Versión Disponible</label>
-                        <input type="text" id="upd_version" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: 1.1.0">
-                    </div>
-                    <div>
-                        <label class="text-sm text-slate-400">URL de Descarga del .exe</label>
-                        <input type="text" id="upd_url" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="https://drive.google.com/...">
-                    </div>
+                    <div><label class="text-sm text-slate-400">Última Versión Disponible</label><input type="text" id="upd_version" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: 1.1.0"></div>
+                    <div><label class="text-sm text-slate-400">URL de Descarga del .exe</label><input type="text" id="upd_url" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="https://drive.google.com/..."></div>
                 </div>
-                
-                <div class="mb-4">
-                    <label class="text-sm text-slate-400">Mensaje de la Actualización</label>
-                    <textarea id="upd_message" rows="3" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Corrección de errores críticos. Nueva estrategia agregada."></textarea>
-                </div>
-
-                <div class="flex items-center gap-2 mb-6 p-3 bg-slate-900 rounded border border-slate-700">
-                    <input type="checkbox" id="upd_force" class="w-5 h-5 accent-red-500">
-                    <label for="upd_force" class="text-sm text-slate-300 cursor-pointer">Forzar Actualización Obligatoria (Bloquear uso de versiones antiguas)</label>
-                </div>
-                
+                <div class="mb-4"><label class="text-sm text-slate-400">Mensaje de la Actualización</label><textarea id="upd_message" rows="3" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Corrección de errores."></textarea></div>
+                <div class="flex items-center gap-2 mb-6 p-3 bg-slate-900 rounded border border-slate-700"><input type="checkbox" id="upd_force" class="w-5 h-5 accent-red-500"><label for="upd_force" class="text-sm text-slate-300 cursor-pointer">Forzar Actualización Obligatoria (Bloquear uso de versiones antiguas)</label></div>
                 <button onclick="saveUpdateConfig()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition"><i class="fas fa-save mr-2"></i>Guardar y Publicar Versión</button>
             </div>
         </div>
@@ -1353,7 +1337,7 @@ def ai_follow_up_agent():
         if stage == 0 and days_since_last >= int(ai_agent_config.get("stage1_days", 2)):
             subject = ai_agent_config.get("stage1_subject", "").replace("{name}", lead["name"])
             body = ai_agent_config.get("stage1_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body)):
+            if send_email(lead["email"], subject, body):
                 lead["follow_up_stage"] = 1
                 lead["last_email_sent"] = now.isoformat()
                 leads_updated = True
@@ -1361,7 +1345,7 @@ def ai_follow_up_agent():
         elif stage == 1 and days_since_last >= int(ai_agent_config.get("stage2_days", 5)):
             subject = ai_agent_config.get("stage2_subject", "").replace("{name}", lead["name"])
             body = ai_agent_config.get("stage2_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body)):
+            if send_email(lead["email"], subject, body):
                 lead["follow_up_stage"] = 2
                 lead["last_email_sent"] = now.isoformat()
                 leads_updated = True
@@ -1369,7 +1353,7 @@ def ai_follow_up_agent():
         elif stage == 2 and days_since_last >= int(ai_agent_config.get("stage3_days", 10)):
             subject = ai_agent_config.get("stage3_subject", "").replace("{name}", lead["name"])
             body = ai_agent_config.get("stage3_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body)):
+            if send_email(lead["email"], subject, body):
                 lead["follow_up_stage"] = 3
                 lead["last_email_sent"] = now.isoformat()
                 leads_updated = True
