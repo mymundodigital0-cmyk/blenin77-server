@@ -1255,6 +1255,57 @@ def reset_hwid(request: Request, data: ResetHWID):
     return {"status": "success", "message": f"✅ HWID reseteado para {key}."}
 
 # ==========================================
+# 🔥 WEBHOOK DE HOTMART (PASARELA DE PAGOS Y AFILIADOS)
+# ==========================================
+@app.post("/api/hotmart_webhook")
+def hotmart_webhook(request: Request):
+    try:
+        data = request.json()
+        # Hotmart envía esto cuando una venta es aprobada
+        if data.get("event") == "PURCHASE_APPROVED" or data.get("event_type") == "PURCHASE_APPROVED":
+            buyer_data = data.get("data", {}).get("buyer", {})
+            product_data = data.get("data", {}).get("product", {})
+            
+            email = buyer_data.get("email")
+            if not email:
+                # Estructura alternativa de Hotmart
+                email = data.get("data", {}).get("purchase", {}).get("buyer", {}).get("email")
+                
+            product_name = (product_data.get("name") or "BRONCE").upper()
+            
+            # Determinar el plan basado en el nombre del producto en Hotmart
+            if "ORO" in product_name: plan_upper = "ORO"
+            elif "PLATA" in product_name: plan_upper = "PLATA"
+            else: plan_upper = "BRONCE"
+            
+            # Generar la licencia
+            global licenses_db
+            key = generate_license_key(plan_upper)
+            licenses_db[key] = {
+                "hwid": None, 
+                "expires": (datetime.now() + timedelta(days=30)).isoformat(), 
+                "active": True, 
+                "plan": plan_upper, 
+                "email": email.lower()
+            }
+            save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
+            
+            # Enviar correo al cliente con su licencia
+            client_subject = "✅ Pago Confirmado - Aquí tienes tu Licencia BLENIN77"
+            client_body = f"¡Gracias por tu compra!\n\nTu pago ha sido confirmado exitosamente.\n\nAquí tienes tu clave de licencia:\n{key}\n\nPlan: {plan_upper}\nDuración: 30 días\n\nPara descargar el sistema, ingresa a: https://blenin77-server.onrender.com/\n\nSaludos,\nEquipo BLENIN77."
+            send_email(email, client_subject, client_body)
+            
+            # Enviar correo a ti (admin) para avisarte de la venta
+            admin_subject = f"💰 ¡Nueva Venta en Hotmart! Plan {plan_upper}"
+            admin_body = f"Se ha procesado una venta en Hotmart.\n\nCliente: {email}\nPlan: {plan_upper}\nLicencia generada: {key}"
+            send_email(SMTP_EMAIL, admin_subject, admin_body)
+            
+            return {"status": "success", "message": "Licencia generada por Hotmart."}
+        return {"status": "ignored", "message": "Evento no es de compra aprobada."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ==========================================
 # 🔗 WEBHOOK DE MAKE.COM (PASARELA DE PAGOS)
 # ==========================================
 class MakeWebhookData(BaseModel):
@@ -1337,7 +1388,7 @@ def ai_follow_up_agent():
         if stage == 0 and days_since_last >= int(ai_agent_config.get("stage1_days", 2)):
             subject = ai_agent_config.get("stage1_subject", "").replace("{name}", lead["name"])
             body = ai_agent_config.get("stage1_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body):
+            if send_email(lead["email"], subject, body)):
                 lead["follow_up_stage"] = 1
                 lead["last_email_sent"] = now.isoformat()
                 leads_updated = True
@@ -1345,7 +1396,7 @@ def ai_follow_up_agent():
         elif stage == 1 and days_since_last >= int(ai_agent_config.get("stage2_days", 5)):
             subject = ai_agent_config.get("stage2_subject", "").replace("{name}", lead["name"])
             body = ai_agent_config.get("stage2_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body):
+            if send_email(lead["email"], subject, body)):
                 lead["follow_up_stage"] = 2
                 lead["last_email_sent"] = now.isoformat()
                 leads_updated = True
@@ -1353,7 +1404,7 @@ def ai_follow_up_agent():
         elif stage == 2 and days_since_last >= int(ai_agent_config.get("stage3_days", 10)):
             subject = ai_agent_config.get("stage3_subject", "").replace("{name}", lead["name"])
             body = ai_agent_config.get("stage3_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body):
+            if send_email(lead["email"], subject, body)):
                 lead["follow_up_stage"] = 3
                 lead["last_email_sent"] = now.isoformat()
                 leads_updated = True
