@@ -97,7 +97,7 @@ JSONBIN_DB_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_DB_ID}"
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SMTP_EMAIL = "mymundodigital0@gmail.com"
-SMTP_PASSWORD = "TU_CONTRASEÑA_DE_16_LETRAS_AQUI"  # ⚠️ REEMPLAZAR POR GOOGLE APP PASSWORD
+SMTP_PASSWORD = "dpfgpzdccpmhllim"  # ✅ Contraseña de aplicación de Google configurada
 
 def send_email(to_email, subject, body):
     try:
@@ -108,15 +108,15 @@ def send_email(to_email, subject, body):
         msg.attach(MIMEText(body, 'plain'))
         
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.set_debuglevel(1)  # ✅ Muestra exactamente qué hace la conexión
+        server.set_debuglevel(1)  # Muestra exactamente qué hace la conexión en los logs
         server.starttls()
         server.login(SMTP_EMAIL, SMTP_PASSWORD)
         server.send_message(msg)
         server.quit()
-        print(f"✅ Correo enviado exitosamente a {to_email}")  # ✅ Log de éxito
+        print(f"✅ Correo enviado exitosamente a {to_email}")  # Log de éxito
         return True
     except Exception as e:
-        print(f"❌ ERROR CRÍTICO ENVIANDO CORREO A {to_email}: {e}")  # ✅ Muestra el error real
+        print(f"❌ ERROR CRÍTICO ENVIANDO CORREO A {to_email}: {e}")  # Muestra el error real
         return False
 
 # ==========================================
@@ -126,13 +126,13 @@ def get_default_ai_config():
     return {
         "stage1_days": 2,
         "stage1_subject": "🚀 {name}, descubre el poder de la IA Institucional con BLENIN.G.77",
-        "stage1_body": "Hola {name},\n\nGracias por tu interés en BLENIN.G.77, el sistema de trading de nivel institucional impulsado por Inteligencia Artificial.\n\nMuchos usuarios nos preguntan si nuestra tecnología (que incluye un Enjambre de 500 Agentes y Análisis Global en Tiempo Real) reemplaza su trabajo. La respuesta es: es tu copiloto perfecto, diseñado para proteger tu capital y maximizar oportunidades mientras tú vives tu vida.\n\n¿Tienes alguna duda sobre cómo adaptar el bot a tu cuenta de MT5? Simplemente responde a este correo y nuestro equipo te ayudará.\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.",
+        "stage1_body": "Hola {name},\n\nGracias por tu interés en BLENIN.G.77, el sistema de trading de nivel institucional impulsado por Inteligencia Artificial.\n\nMuchos usuarios nos preguntan si nuestra tecnología reemplaza el trabajo del trader. La respuesta es: es tu copiloto perfecto, diseñado para proteger tu capital y maximizar oportunidades mientras tú vives tu vida.\n\nCon nuestro sistema, tienes acceso a:\n🔹 IA Predictiva y Análisis Global en tiempo real.\n🔹 Un Enjambre de 500 Agentes analizando el mercado.\n🔹 Modo Híbrido (MT5 + Noticias macroeconómicas).\n\n¿Tienes alguna duda sobre cómo adaptar el bot a tu cuenta de MT5? Simplemente responde a este correo y nuestro equipo te ayudará.\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.\nhttps://blenin77-server.onrender.com/",
         "stage2_days": 5,
         "stage2_subject": "🔥 {name}, esto es lo que estás dejando atrás...",
-        "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que la comunidad de BLENIN.G.77 está logrando hoy. Nuestros usuarios del Plan Oro están reportando resultados excepcionales al combinar nuestra IA Predictiva con el Modo Híbrido (MT5 + Noticias en tiempo real).\n\nSabemos que el trading requiere confianza, pero las oportunidades del mercado no esperan. Si te quedas fuera, el mercado seguirá moviéndose sin tus operaciones optimizadas.\n\nRevisa nuestros planes y elige el que se adapte a tu capital aquí: https://blenin77-server.onrender.com/#pricing\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.",
+        "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que la comunidad de BLENIN.G.77 está logrando hoy. Nuestros usuarios del Plan Oro están reportando resultados excepcionales al combinar nuestra IA Predictiva con el Modo Híbrido (MT5 + Noticias en tiempo real).\n\nSabemos que el trading requiere confianza, pero las oportunidades del mercado no esperan. Si te quedas fuera, el mercado seguirá moviéndose sin tus operaciones optimizadas.\n\nNo dejes tu capital expuesto a la emoción humana. Deja que la matemática y la IA trabajen por ti.\n\nRevisa nuestros planes y elige el que se adapte a tu capital aquí:\n👉 https://blenin77-server.onrender.com/#pricing\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.",
         "stage3_days": 10,
         "stage3_subject": "⏳ {name}, tu acceso VIP a BLENIN.G.77 está por expirar",
-        "stage3_body": "Hola {name},\n\nHemos notado que aún no has dado el paso definitivo para automatizar tu trading con BLENIN.G.77. Entendemos que dar el control a una Inteligencia Artificial puede ser un gran paso.\n\nPor eso, como último intento de ayudarte a dar el salto institucional, hemos habilitado un descuento especial del 10% si adquieres cualquier plan en las próximas 48 horas.\n\nUsa el código: BLENIN10 al momento de tu transferencia o responde a este correo para activarlo.\n\nNo dejes que la volatilidad te tome por sorpresa. Deja que la IA trabaje por ti.\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems."
+        "stage3_body": "Hola {name},\n\nHemos notado que aún no has dado el paso definitivo para automatizar tu trading con BLENIN.G.77. Entendemos que dar el control a una Inteligencia Artificial puede ser un gran paso.\n\nPor eso, como último intento de ayudarte a dar el salto institucional, hemos habilitado un descuento especial del 10% si adquieres cualquier plan en las próximas 48 horas.\n\nUsa el siguiente código al momento de tu transferencia o responde a este correo para activarlo:\n🎁 Código de descuento: BLENIN10\n\nNo dejes que la volatilidad te tome por sorpresa. Protege tu capital y maximiza tus oportunidades hoy.\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.\nhttps://blenin77-server.onrender.com/#pricing"
     }
 
 def get_default_update_config():
@@ -170,6 +170,12 @@ def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
     except: pass
 
 licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config = load_dbs()
+
+# ✅ FORZAR ACTUALIZACIÓN DE MENSAJES IA (Para sobreescribir los viejos)
+if not ai_agent_config or "BLENIN.G.77" not in ai_agent_config.get("stage1_subject", ""):
+    ai_agent_config = get_default_ai_config()
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
+    print("🔄 Mensajes del Agente IA actualizados a la versión institucional.")
 
 if not licenses_db:
     licenses_db = {
