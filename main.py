@@ -97,7 +97,7 @@ JSONBIN_DB_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_DB_ID}"
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SMTP_EMAIL = "mymundodigital0@gmail.com"
-SMTP_PASSWORD = "ysdoqcmnevrnnogy" 
+SMTP_PASSWORD = "TU_CONTRASEÑA_DE_16_LETRAS_AQUI"  # ⚠️ REEMPLAZAR POR GOOGLE APP PASSWORD
 
 def send_email(to_email, subject, body):
     try:
@@ -106,13 +106,18 @@ def send_email(to_email, subject, body):
         msg['To'] = to_email
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
+        
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.set_debuglevel(1)  # ✅ Muestra exactamente qué hace la conexión
         server.starttls()
         server.login(SMTP_EMAIL, SMTP_PASSWORD)
         server.send_message(msg)
         server.quit()
+        print(f"✅ Correo enviado exitosamente a {to_email}")  # ✅ Log de éxito
         return True
-    except: return False
+    except Exception as e:
+        print(f"❌ ERROR CRÍTICO ENVIANDO CORREO A {to_email}: {e}")  # ✅ Muestra el error real
+        return False
 
 # ==========================================
 # 🧠 SISTEMA DE BASE DE DATOS MULTI-PÁGINA
@@ -120,14 +125,14 @@ def send_email(to_email, subject, body):
 def get_default_ai_config():
     return {
         "stage1_days": 2,
-        "stage1_subject": "{name}, ¿tienes dudas sobre la IA de BLENIN77? 🤖",
-        "stage1_body": "Hola {name},\n\nHace un par de días te interesó nuestro sistema. Muchas personas nos preguntan si la IA reemplaza por completo su trabajo. La respuesta es no: es un copiloto que trabaja por ti.\n\n¿Tienes alguna duda sobre los planes? Simplemente responde a este correo.\n\nUn saludo,\nAgente BLENIN77.",
+        "stage1_subject": "🚀 {name}, descubre el poder de la IA Institucional con BLENIN.G.77",
+        "stage1_body": "Hola {name},\n\nGracias por tu interés en BLENIN.G.77, el sistema de trading de nivel institucional impulsado por Inteligencia Artificial.\n\nMuchos usuarios nos preguntan si nuestra tecnología (que incluye un Enjambre de 500 Agentes y Análisis Global en Tiempo Real) reemplaza su trabajo. La respuesta es: es tu copiloto perfecto, diseñado para proteger tu capital y maximizar oportunidades mientras tú vives tu vida.\n\n¿Tienes alguna duda sobre cómo adaptar el bot a tu cuenta de MT5? Simplemente responde a este correo y nuestro equipo te ayudará.\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.",
         "stage2_days": 5,
-        "stage2_subject": "🔥 {name}, mira esto antes de decidir...",
-        "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que está logrando la comunidad. Nuestros usuarios del Plan Oro están reportando resultados increíbles gracias al Enjambre de 500 Agentes.\n\nRecuerda que la oferta de lanzamiento termina pronto. ¡No te quedes fuera!\n\nMira los planes aquí: https://blenin77-server.onrender.com/#pricing\n\nAgente BLENIN77.",
+        "stage2_subject": "🔥 {name}, esto es lo que estás dejando atrás...",
+        "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que la comunidad de BLENIN.G.77 está logrando hoy. Nuestros usuarios del Plan Oro están reportando resultados excepcionales al combinar nuestra IA Predictiva con el Modo Híbrido (MT5 + Noticias en tiempo real).\n\nSabemos que el trading requiere confianza, pero las oportunidades del mercado no esperan. Si te quedas fuera, el mercado seguirá moviéndose sin tus operaciones optimizadas.\n\nRevisa nuestros planes y elige el que se adapte a tu capital aquí: https://blenin77-server.onrender.com/#pricing\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.",
         "stage3_days": 10,
-        "stage3_subject": "⏳ Última oportunidad para ti, {name}",
-        "stage3_body": "Hola {name},\n\nHemos notado que aún no das el paso. Sabemos que el trading requiere confianza.\n\nPor eso, como último intento de ayudarte, hemos habilitado un descuento especial del 10% si adquieres cualquier plan en las próximas 48 horas.\n\nUsa el código: BLENIN10 al momento de tu transferencia o escríbenos para ayudarte.\n\nAgente BLENIN77."
+        "stage3_subject": "⏳ {name}, tu acceso VIP a BLENIN.G.77 está por expirar",
+        "stage3_body": "Hola {name},\n\nHemos notado que aún no has dado el paso definitivo para automatizar tu trading con BLENIN.G.77. Entendemos que dar el control a una Inteligencia Artificial puede ser un gran paso.\n\nPor eso, como último intento de ayudarte a dar el salto institucional, hemos habilitado un descuento especial del 10% si adquieres cualquier plan en las próximas 48 horas.\n\nUsa el código: BLENIN10 al momento de tu transferencia o responde a este correo para activarlo.\n\nNo dejes que la volatilidad te tome por sorpresa. Deja que la IA trabaje por ti.\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems."
     }
 
 def get_default_update_config():
@@ -1388,7 +1393,7 @@ def ai_follow_up_agent():
         if stage == 0 and days_since_last >= int(ai_agent_config.get("stage1_days", 2)):
             subject = ai_agent_config.get("stage1_subject", "").replace("{name}", lead["name"])
             body = ai_agent_config.get("stage1_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body)):
+            if send_email(lead["email"], subject, body):
                 lead["follow_up_stage"] = 1
                 lead["last_email_sent"] = now.isoformat()
                 leads_updated = True
@@ -1396,7 +1401,7 @@ def ai_follow_up_agent():
         elif stage == 1 and days_since_last >= int(ai_agent_config.get("stage2_days", 5)):
             subject = ai_agent_config.get("stage2_subject", "").replace("{name}", lead["name"])
             body = ai_agent_config.get("stage2_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body)):
+            if send_email(lead["email"], subject, body):
                 lead["follow_up_stage"] = 2
                 lead["last_email_sent"] = now.isoformat()
                 leads_updated = True
@@ -1404,7 +1409,7 @@ def ai_follow_up_agent():
         elif stage == 2 and days_since_last >= int(ai_agent_config.get("stage3_days", 10)):
             subject = ai_agent_config.get("stage3_subject", "").replace("{name}", lead["name"])
             body = ai_agent_config.get("stage3_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body)):
+            if send_email(lead["email"], subject, body):
                 lead["follow_up_stage"] = 3
                 lead["last_email_sent"] = now.isoformat()
                 leads_updated = True
