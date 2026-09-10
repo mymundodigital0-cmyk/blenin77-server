@@ -171,7 +171,7 @@ def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
 
 licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config = load_dbs()
 
-# ✅ FORZAR ACTUALIZACIÓN DE MENSAJES IA (Para sobreescribir los viejos)
+# ✅ FORZAR ACTUALIZACIÓN DE MENSAJES IA (Para sobreescribir los viejos en la base de datos)
 if not ai_agent_config or "BLENIN.G.77" not in ai_agent_config.get("stage1_subject", ""):
     ai_agent_config = get_default_ai_config()
     save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
@@ -811,15 +811,25 @@ def admin_panel(request: Request):
         try {{
             const res = await fetch('/api/get_ai_config');
             const data = await res.json();
-            document.getElementById('s1_days').value = data.stage1_days || 2;
-            document.getElementById('s1_subject').value = data.stage1_subject || '';
-            document.getElementById('s1_body').value = data.stage1_body || '';
-            document.getElementById('s2_days').value = data.stage2_days || 5;
-            document.getElementById('s2_subject').value = data.stage2_subject || '';
-            document.getElementById('s2_body').value = data.stage2_body || '';
-            document.getElementById('s3_days').value = data.stage3_days || 10;
-            document.getElementById('s3_subject').value = data.stage3_subject || '';
-            document.getElementById('s3_body').value = data.stage3_body || '';
+            // ✅ Si la base de datos está vacía, usamos los textos por defecto
+            const defaults = {{
+                stage1_days: 2, stage1_subject: "🚀 {{name}}, descubre el poder de la IA Institucional con BLENIN.G.77", stage1_body: "Hola {{name}},\n\nGracias por tu interés en BLENIN.G.77...",
+                stage2_days: 5, stage2_subject: "🔥 {{name}}, esto es lo que estás dejando atrás...", stage2_body: "Hola {{name}},\n\nQueríamos mostrarte lo que la comunidad...",
+                stage3_days: 10, stage3_subject: "⏳ {{name}}, tu acceso VIP a BLENIN.G.77 está por expirar", stage3_body: "Hola {{name}},\n\nHemos notado que aún no has dado el paso..."
+            }};
+            const cfg = Object.keys(data).length > 0 ? data : defaults;
+            
+            document.getElementById('s1_days').value = cfg.stage1_days || 2;
+            document.getElementById('s1_subject').value = cfg.stage1_subject || defaults.stage1_subject;
+            document.getElementById('s1_body').value = cfg.stage1_body || defaults.stage1_body;
+            
+            document.getElementById('s2_days').value = cfg.stage2_days || 5;
+            document.getElementById('s2_subject').value = cfg.stage2_subject || defaults.stage2_subject;
+            document.getElementById('s2_body').value = cfg.stage2_body || defaults.stage2_body;
+            
+            document.getElementById('s3_days').value = cfg.stage3_days || 10;
+            document.getElementById('s3_subject').value = cfg.stage3_subject || defaults.stage3_subject;
+            document.getElementById('s3_body').value = cfg.stage3_body || defaults.stage3_body;
         }} catch(e) {{ console.error(e); }}
     }}
 
@@ -1171,7 +1181,11 @@ def track_view(request: Request):
 def get_stats(): return stats_db
 
 @app.get("/api/get_ai_config")
-def get_ai_config(): return ai_agent_config
+def get_ai_config():
+    # ✅ Si la base de datos está vacía o corrupta, devuelve los mensajes institucionales por defecto
+    if not ai_agent_config or "stage1_subject" not in ai_agent_config:
+        return get_default_ai_config()
+    return ai_agent_config
 
 @app.post("/api/save_ai_config")
 def save_ai_config(request: Request, data: dict):
