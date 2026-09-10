@@ -811,11 +811,11 @@ def admin_panel(request: Request):
         try {{
             const res = await fetch('/api/get_ai_config');
             const data = await res.json();
-            // ✅ Si la base de datos está vacía, usamos los textos por defecto
+            // ✅ Si la base de datos está vacía, usamos los textos por defecto (con \\n para no romper el JS)
             const defaults = {{
-                stage1_days: 2, stage1_subject: "🚀 {{name}}, descubre el poder de la IA Institucional con BLENIN.G.77", stage1_body: "Hola {{name}},\n\nGracias por tu interés en BLENIN.G.77...",
-                stage2_days: 5, stage2_subject: "🔥 {{name}}, esto es lo que estás dejando atrás...", stage2_body: "Hola {{name}},\n\nQueríamos mostrarte lo que la comunidad...",
-                stage3_days: 10, stage3_subject: "⏳ {{name}}, tu acceso VIP a BLENIN.G.77 está por expirar", stage3_body: "Hola {{name}},\n\nHemos notado que aún no has dado el paso..."
+                stage1_days: 2, stage1_subject: "🚀 {{name}}, descubre el poder de la IA Institucional con BLENIN.G.77", stage1_body: "Hola {{name}},\\n\\nGracias por tu interés en BLENIN.G.77...",
+                stage2_days: 5, stage2_subject: "🔥 {{name}}, esto es lo que estás dejando atrás...", stage2_body: "Hola {{name}},\\n\\nQueríamos mostrarte lo que la comunidad...",
+                stage3_days: 10, stage3_subject: "⏳ {{name}}, tu acceso VIP a BLENIN.G.77 está por expirar", stage3_body: "Hola {{name}},\\n\\nHemos notado que aún no has dado el paso..."
             }};
             const cfg = Object.keys(data).length > 0 ? data : defaults;
             
