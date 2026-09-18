@@ -441,7 +441,7 @@ def read_dynamic_page(slug: str):
     pages_data = get_all_pages()
     c = pages_data.get("pages", {}).get(slug)
     if c: return render_landing_page(c)
-    return HTMLResponse("<h1>404 - Página no encontrada</h1>")
+    return HTMLResponse("<h1>404 - Página no encontrada</h1><a href='/'>Volver al inicio</a>")
 
 # ==========================================
 # 🧠 BASES DE DATOS Y RUTAS API
@@ -456,7 +456,11 @@ class TrialRequest(BaseModel): hwid: str
 class LicenseUpdate(BaseModel): key: str; active: bool = False
 class ResetHWID(BaseModel): key: str
 class LeadCapture(BaseModel): name: str = "Usuario"; email: str; interaction: str = "Visualizó demo"
-class UserRiskReport(BaseModel): license_key: str; consecutive_losses: int; current_drawdown_pct: float
+
+class UserRiskReport(BaseModel):
+    license_key: str
+    consecutive_losses: int
+    current_drawdown_pct: float
 
 @app.post("/api/track_view")
 def track_view(request: Request):
@@ -652,26 +656,35 @@ def capture_lead(lead: LeadCapture):
 # ==========================================
 @app.post("/api/report_user_risk")
 def report_user_risk(data: UserRiskReport):
+    """Recibe alertas del bot cuando un usuario va mal para activar retención."""
     global licenses_db
     updated = False
-    for key, info in licenses_db.items():
-        if info.get("email", "").lower() == data.email.lower():
-            if data.consecutive_losses >= 3 or data.current_drawdown_pct > 5.0:
-                last_retention = info.get("last_retention_email")
-                if not last_retention or (datetime.now() - datetime.fromisoformat(last_retention)).days > 15:
-                    prompt = f"Eres un gerente de cuenta de trading. El cliente {data.email} tiene {data.consecutive_losses} pérdidas seguidas y un drawdown del {data.current_drawdown_pct}%. Escríbele un correo corto diciéndole que acabas de lanzar una estrategia optimizada por IA (v17) que se adapta a la volatilidad. Invítalo a actualizar su bot."
-                    email_body = generate_dynamic_content_with_llama(prompt, max_tokens=400)
-                    if not email_body:
-                        email_body = f"Hola,\n\nNotamos que has tenido algunos días difíciles. ¡Buenas noticias! Acabamos de lanzar la actualización v17 de BLENIN77 con un nuevo Agente IA que se adapta automáticamente a la volatilidad.\n\nActualiza tu bot y prueba la nueva estrategia. ¡Recuperaremos el rumbo juntos!\n\nEquipo BLENIN77."
-                    send_email(data.email, "🛡️ Estamos monitoreando tu cuenta - Tenemos novedades", email_body)
-                    info["last_retention_email"] = datetime.now().isoformat()
-                    updated = True
-            break
+    
+    # Buscamos el correo del usuario usando su License Key
+    key = data.license_key.upper().strip()
+    info = licenses_db.get(key)
+    
+    if info and info.get("active"):
+        email = info.get("email")
+        if not email: return {"status": "ignored"}
+        
+        if data.consecutive_losses >= 3 or data.current_drawdown_pct > 5.0:
+            last_retention = info.get("last_retention_email")
+            if not last_retention or (datetime.now() - datetime.fromisoformat(last_retention)).days > 15:
+                prompt = f"Eres un gerente de cuenta de trading. El cliente {email} tiene {data.consecutive_losses} pérdidas seguidas y un drawdown del {data.current_drawdown_pct}%. Escríbele un correo corto diciéndole que acabas de lanzar una estrategia optimizada por IA (v17) que se adapta a la volatilidad. Invítalo a actualizar su bot."
+                email_body = generate_dynamic_content_with_llama(prompt, max_tokens=400)
+                if not email_body:
+                    email_body = f"Hola,\n\nNotamos que has tenido algunos días difíciles. ¡Buenas noticias! Acabamos de lanzar la actualización v17 de BLENIN77 con un nuevo Agente IA que se adapta automáticamente a la volatilidad.\n\nActualiza tu bot y prueba la nueva estrategia. ¡Recuperaremos el rumbo juntos!\n\nEquipo BLENIN77."
+                send_email(email, "🛡️ Estamos monitoreando tu cuenta - Tenemos novedades", email_body)
+                info["last_retention_email"] = datetime.now().isoformat()
+                updated = True
+                
     if updated:
         save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"status": "success"}
 
 def ai_retention_agent():
+    """Busca usuarios cuya licencia haya expirado hace menos de 30 días y les ofrece descuento para volver."""
     global licenses_db
     now = datetime.now()
     updated = False
@@ -720,7 +733,7 @@ def ai_follow_up_agent():
         elif stage == 2 and days_since_last >= int(ai_agent_config.get("stage3_days", 10)):
             subject = ai_agent_config.get("stage3_subject", "").replace("{name}", lead["name"])
             body = ai_agent_config.get("stage3_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body)):
+            if send_email(lead["email"], subject, body):
                 lead["follow_up_stage"] = 3; lead["last_email_sent"] = now.isoformat(); leads_updated = True
     if leads_updated:
         save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
