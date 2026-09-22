@@ -73,7 +73,6 @@ def admin_login_page():
 def admin_login_verify(data: AdminLoginData, response: Response):
     global admin_password_db
     if data.password == admin_password_db:
-        # ✅ CORRECCIÓN: secure=False para que funcione en HTTP y HTTPS localmente
         response.set_cookie(key="blenin_session", value=SESSION_TOKEN, httponly=True, secure=False, samesite="lax", max_age=86400)
         return {"status": "success"}
     raise HTTPException(status_code=401, detail="Contraseña incorrecta")
@@ -163,7 +162,11 @@ def load_dbs():
     try:
         if not supabase: raise Exception("Supabase no configurado")
         response = supabase.table("app_data").select("key, value").execute()
-        data = {item['key']: item['value'] for item in response.data}
+        
+        # ✅ Si hay duplicados en Supabase, nos quedamos con el ÚLTIMO guardado
+        data = {}
+        for item in response.data:
+            data[item['key']] = item['value']
         
         pwd = data.get("admin_password", os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"))
         ai_cfg = data.get("ai_agent_config", get_default_ai_config())
@@ -177,9 +180,12 @@ def load_dbs():
 def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
     try:
         if not supabase: return
-        # ✅ CORRECCIÓN: on_conflict="key" para que el upsert actualice la fila existente
+        # ✅ CORRECCIÓN: Borrar antes de insertar evita duplicados si no hay Primary Key
         def upsert_data(key, value):
-            supabase.table("app_data").upsert({"key": key, "value": value}, on_conflict="key").execute()
+            try:
+                supabase.table("app_data").delete().eq("key", key).execute()
+            except: pass
+            supabase.table("app_data").insert({"key": key, "value": value}).execute()
 
         upsert_data("licenses_db", lic)
         upsert_data("trials_db", trials)
@@ -228,7 +234,7 @@ def get_default_content(page_name="Principal"):
             "email_for_proof": "pagos@blenin77.com",
             "whatsapp_for_proof": "593999999999"
         },
-        "download_links": ["https://drive.google.com/tu-archivo-descarga"],
+        "download_links": ["https://mega.nz/file/tu_enlace"],
         "download_instructions": "1. Descarga el archivo .zip\n2. Extrae el contenido en tu PC\n3. Ejecuta el instalador Blenin77.exe\n4. Ingresa tu licencia al abrir el sistema."
     }
 
@@ -238,7 +244,8 @@ def get_all_pages():
         response = supabase.table("app_data").select("value").eq("key", "pages").execute()
         
         if response.data:
-            data = response.data[0]["value"]
+            # ✅ Si hay múltiples filas con key="pages", tomar la última (la más reciente)
+            data = response.data[-1]["value"]
             # Migración de formato antiguo (sin estructura "pages")
             if "hero_title" in data and "pages" not in data:
                 new_data = {"pages": {"main": data}}
@@ -246,7 +253,6 @@ def get_all_pages():
                 return new_data
             return data
         else:
-            # ✅ Si la base de datos está vacía, la creamos automáticamente
             print("Base de datos vacía. Creando páginas por defecto en Supabase...")
             default_data = {"pages": {"main": get_default_content()}}
             save_all_pages(default_data)
@@ -262,8 +268,11 @@ def get_all_pages():
 def save_all_pages(data):
     try:
         if not supabase: return False
-        # ✅ CORRECCIÓN: on_conflict="key" para actualizar la fila existente
-        supabase.table("app_data").upsert({"key": "pages", "value": data}, on_conflict="key").execute()
+        # ✅ Borrar la fila anterior para evitar duplicados en Supabase
+        try:
+            supabase.table("app_data").delete().eq("key", "pages").execute()
+        except: pass
+        supabase.table("app_data").insert({"key": "pages", "value": data}).execute()
         return True
     except Exception as e:
         print(f"Error guardando páginas: {e}")
@@ -305,7 +314,7 @@ def admin_panel(request: Request):
         
     pages_data = get_all_pages()
     pages_dict = pages_data.get("pages", {})
-    # ✅ CORRECCIÓN: Escapar caracteres HTML peligrosos en el JSON para que no rompa el <script>
+    # ✅ CORRECCIÓN: Escapar caracteres HTML peligrosos en el JSON
     pages_json = json.dumps(pages_dict).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
     
     return f"""
@@ -366,7 +375,7 @@ def admin_panel(request: Request):
             </div>
             <div class="bg-slate-800 p-6 rounded-xl border border-indigo-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">📥 Sistema de Descarga para Clientes</h3>
-                <p class="text-sm text-slate-400 mb-4">Agrega uno o varios enlaces (servidores espejo) por si uno principal se cae. El usuario verá botones de "Servidor 1", "Servidor 2", etc.</p>
+                <p class="text-sm text-slate-400 mb-4">Agrega uno o varios enlaces (Mega, Google Drive, etc). El usuario verá botones de "Servidor 1", "Servidor 2", etc.</p>
                 <label class="text-sm text-slate-400">Enlaces de Descarga</label>
                 <div id="dl-links-container" class="space-y-2 mb-4"></div>
                 <button onclick="addDlLink()" class="mt-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-plus mr-2"></i>Agregar Enlace</button>
@@ -526,7 +535,7 @@ def admin_panel(request: Request):
                 <p class="text-sm text-slate-400 mb-4">Configura los parámetros que recibirán los bots de tus usuarios al iniciar sesión. Si la versión del bot del usuario es diferente a la que pongas aquí, se mostrará un aviso.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div><label class="text-sm text-slate-400">Última Versión Disponible</label><input type="text" id="upd_version" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: 1.1.0"></div>
-                    <div><label class="text-sm text-slate-400">URL de Descarga del .exe</label><input type="text" id="upd_url" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="https://drive.google.com/..."></div>
+                    <div><label class="text-sm text-slate-400">URL de Descarga del .exe</label><input type="text" id="upd_url" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="https://mega.nz/..."></div>
                 </div>
                 <div class="mb-4"><label class="text-sm text-slate-400">Mensaje de la Actualización</label><textarea id="upd_message" rows="3" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Corrección de errores."></textarea></div>
                 <div class="flex items-center gap-2 mb-6 p-3 bg-slate-900 rounded border border-slate-700"><input type="checkbox" id="upd_force" class="w-5 h-5 accent-red-500"><label for="upd_force" class="text-sm text-slate-300 cursor-pointer">Forzar Actualización Obligatoria (Bloquear uso de versiones antiguas)</label></div>
@@ -620,7 +629,6 @@ def admin_panel(request: Request):
         document.getElementById('affiliate_text').value = p.affiliate_text || '';
         document.getElementById('download_instructions').value = p.download_instructions || '';
         
-        // ✅ CORRECCIÓN: Limpieza correcta de links de descarga
         document.getElementById('dl-links-container').innerHTML = '';
         let dlLinks = p.download_links || [];
         if (dlLinks.length === 0 && p.download_link) {{
@@ -640,7 +648,6 @@ def admin_panel(request: Request):
         document.getElementById('bt_email').value = bt.email_for_proof || '';
         document.getElementById('bt_whatsapp').value = bt.whatsapp_for_proof || '';
         
-        // ✅ CORRECCIÓN: Carga segura de redes sociales
         const social = p.social_links || {{}};
         document.getElementById('fb_link').value = social.facebook || '';
         document.getElementById('wa_link').value = social.whatsapp || '';
@@ -721,7 +728,7 @@ def admin_panel(request: Request):
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'dl-url w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500';
-        input.placeholder = 'https://drive.google.com/...';
+        input.placeholder = 'https://mega.nz/... o https://drive.google.com/...';
         input.value = url;
         const btn = document.createElement('button');
         btn.className = 'bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-sm font-bold whitespace-nowrap';
@@ -1016,7 +1023,6 @@ def admin_panel(request: Request):
         }}
     }}
     
-    // ✅ CORRECCIÓN: Inicialización segura
     updateSelector();
     </script>
     </body></html>
@@ -1108,12 +1114,12 @@ def render_landing_page(c):
         social = {}
         
     social_html = ""
-    if social.get('facebook'): social_html += f'<a href="{social.get("facebook")}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-facebook-f"></i></a>'
-    if social.get('whatsapp'): social_html += f'<a href="{social.get("whatsapp")}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-whatsapp"></i></a>'
-    if social.get('youtube'): social_html += f'<a href="{social.get("youtube")}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-youtube"></i></a>'
-    if social.get('tiktok'): social_html += f'<a href="{social.get("tiktok")}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-tiktok"></i></a>'
-    if social.get('telegram'): social_html += f'<a href="{social.get("telegram")}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-telegram-plane"></i></a>'
-    if social.get('instagram'): social_html += f'<a href="{social.get("instagram")}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-instagram"></i></a>'
+    if social.get('facebook'): social_html += f'<a href="{social.get("facebook")}" target="_blank" rel="noopener noreferrer" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-facebook-f"></i></a>'
+    if social.get('whatsapp'): social_html += f'<a href="{social.get("whatsapp")}" target="_blank" rel="noopener noreferrer" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-whatsapp"></i></a>'
+    if social.get('youtube'): social_html += f'<a href="{social.get("youtube")}" target="_blank" rel="noopener noreferrer" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-youtube"></i></a>'
+    if social.get('tiktok'): social_html += f'<a href="{social.get("tiktok")}" target="_blank" rel="noopener noreferrer" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-tiktok"></i></a>'
+    if social.get('telegram'): social_html += f'<a href="{social.get("telegram")}" target="_blank" rel="noopener noreferrer" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-telegram-plane"></i></a>'
+    if social.get('instagram'): social_html += f'<a href="{social.get("instagram")}" target="_blank" rel="noopener noreferrer" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-instagram"></i></a>'
     
     if not social_html:
         social_section_html = ""
@@ -1136,7 +1142,6 @@ def render_landing_page(c):
         """
 
     download_instructions_html = c.get('download_instructions', 'Descarga el archivo, extrae y ejecuta el instalador.').replace('\n', '<br>')
-    # ✅ CORRECCIÓN: Manejo seguro de download_links
     download_links = c.get('download_links', [])
     if not download_links and c.get('download_link'): 
         download_links = [c.get('download_link')]
@@ -1144,10 +1149,13 @@ def render_landing_page(c):
     download_buttons_html = ""
     if download_links:
         if len(download_links) == 1:
-            download_buttons_html = f"""<a href="{download_links[0]}" target="_blank" class="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block w-full"><i class="fas fa-download mr-2"></i> Descargar Blenin77</a>"""
+            download_buttons_html = f"""<a href="{download_links[0]}" target="_blank" rel="noopener noreferrer" class="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block w-full"><i class="fas fa-download mr-2"></i> Descargar Blenin77</a>"""
         else:
             for i, link in enumerate(download_links):
-                download_buttons_html += f"""<a href="{link}" target="_blank" class="bg-slate-700 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block w-full mb-2"><i class="fas fa-server mr-2"></i> Servidor de Descarga {i+1}</a>"""
+                download_buttons_html += f"""<a href="{link}" target="_blank" rel="noopener noreferrer" class="bg-slate-700 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block w-full mb-2"><i class="fas fa-server mr-2"></i> Servidor de Descarga {i+1}</a>"""
+
+    # ✅ Mostrar la caja de descarga inmediatamente si hay enlaces
+    display_style = "block" if download_links else "none"
 
     template = """<!DOCTYPE html>
 <html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>BLENIN.G.77 - Institutional Trading AI</title>
@@ -1167,7 +1175,8 @@ def render_landing_page(c):
     <section id="features" class="py-20 container mx-auto px-6"><h2 class="text-3xl font-bold text-center text-white mb-12">Tecnología de Nivel Institucional</h2><div class="grid md:grid-cols-3 gap-8"><div class="bg-slate-900 p-8 rounded-xl border border-slate-800 hover:border-cyan-500 transition group"><div class="text-cyan-400 text-3xl mb-4 group-hover:scale-110 transition"><i class="fas fa-fish"></i></div><h3 class="text-xl font-bold text-white mb-2">Enjambre 3D</h3><p class="text-slate-400 text-sm">500 agentes virtuales simulan el futuro del mercado en milisegundos basándose en el patrón histórico del activo antes de operar.</p></div><div class="bg-slate-900 p-8 rounded-xl border border-slate-800 hover:border-cyan-500 transition group"><div class="text-cyan-400 text-3xl mb-4 group-hover:scale-110 transition"><i class="fas fa-shield-alt"></i></div><h3 class="text-xl font-bold text-white mb-2">Agente Centinela</h3><p class="text-slate-400 text-sm">Un guardaespaldas que lee Reuters, CNBC y la Fed en tiempo real. Si detecta un crash, bloquea al bot para proteger tu capital.</p></div><div class="bg-slate-900 p-8 rounded-xl border border-slate-800 hover:border-cyan-500 transition group"><div class="text-cyan-400 text-3xl mb-4 group-hover:scale-110 transition"><i class="fas fa-brain"></i></div><h3 class="text-xl font-bold text-white mb-2">Cerebro Global</h3><p class="text-slate-400 text-sm">Red neuronal descentralizada. Tu bot aprende de las operaciones exitosas y fallidas de todos los usuarios a nivel mundial.</p></div></div></section>
     <section id="videos" class="py-20 bg-slate-950"><div class="container mx-auto px-6"><h2 class="text-3xl font-bold text-center text-white mb-12">Mira al Sistema en Acción</h2>{PUBLICATIONS_HTML}</div></section>
     <section id="pricing" class="py-20 container mx-auto px-6"><h2 class="text-3xl font-bold text-center text-white mb-4">Planes de Suscripción</h2><p class="text-slate-400 text-center mb-12">Elige el plan que se adapte a tu capital y estilo de trading.</p><div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">{PLANS_HTML}</div></section>
-    <div class="py-16 px-6 bg-slate-950"><div class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-lg text-center" id="ml-form-wrapper"><h3 class="text-2xl font-bold text-white mb-2">¿Quieres ver al Bot operando en vivo?</h3><p class="text-slate-400 text-sm mb-6">Deja tu correo y te enviaremos un video de cómo el Enjambre de Agentes abre operaciones reales, además de darte acceso al sistema.</p><div class="ml-form-embedContainer ml-subscribe-form ml-subscribe-form-44360624"><div class="ml-form-align-center"><div class="ml-form-embedWrapper embedForm"><div class="ml-form-embedBody ml-form-embedBodyDefault row-form"><div class="ml-form-embedContent"><p style="color: #94a3b8; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 400; line-height: 20px; margin: 0 0 10px 0; text-align: center;">Ingresa tu correo para continuar.</p></div><form class="ml-block-form" action="https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/subscribe" data-code="" method="post" target="_blank" onsubmit="return ml_reveal_download()"><div class="ml-form-formContent"><div class="ml-form-fieldRow ml-last-item"><div class="ml-field-group ml-field-email ml-validate-email ml-validate-required"><input aria-label="email" aria-required="true" type="email" class="form-control" data-inputmask="" name="fields[email]" placeholder="Email" autocomplete="email" style="background-color: #0f172a !important; color: #fff !important; border: 1px solid #334155 !important; border-radius: 6px !important; padding: 12px !important; width: 100% !important; margin-bottom: 10px !important;"></div></div></div><input type="hidden" name="ml-submit" value="1"><div class="ml-form-embedSubmit" style="margin-top: 0;"><button type="submit" class="primary" style="background-color: #00e5ff !important; color: #020617 !important; border-radius: 6px !important; font-weight: 700; font-family: 'Inter', sans-serif; padding: 12px !important; width: 100% !important; border: none !important; cursor: pointer;">Quiero Acceso y Descargar</button><button disabled="disabled" style="display: none;" type="button" class="loading"><div class="ml-form-embedSubmitLoad"></div><span class="sr-only">Loading...</span></button></div><input type="hidden" name="anticsrf" value="true"></form></div></div></div></div><script>function ml_webform_success_44360624() {var $ = ml_jQuery || jQuery;$('.ml-subscribe-form-44360624 .row-success').show();$('.ml-subscribe-form-44360624 .row-form').hide();}</script><script src="https://groot.mailerlite.com/js/w/webforms.min.js?v83147fa8ce2d95cb73ece7f28b469519" type="text/javascript"></script><script>fetch("https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/takel")</script></div><div id="download-box" class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-cyan-500 shadow-cyan-500/10 shadow-lg text-center mt-6" style="display: none;"><i class="fas fa-check-circle text-emerald-400 text-4xl mb-4"></i><h4 class="text-xl font-bold text-cyan-400 mb-4">¡Listo! Aquí tienes tu descarga:</h4><div class="text-slate-300 text-sm mb-6 text-left bg-slate-900 p-4 rounded-lg border border-slate-700">{DOWNLOAD_INSTRUCTIONS_HTML}</div><div class="flex flex-col gap-3">{DOWNLOAD_BUTTONS_HTML}</div></div><script>function ml_reveal_download() {setTimeout(function() {document.getElementById('download-box').style.display = 'block';document.getElementById('ml-form-wrapper').style.display = 'none';document.getElementById('download-box').scrollIntoView({behavior: "smooth", block: "center"});}, 1000);return true;}</script></div>
+    <div class="py-16 px-6 bg-slate-950"><div class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-lg text-center" id="ml-form-wrapper"><h3 class="text-2xl font-bold text-white mb-2">¿Quieres ver al Bot operando en vivo?</h3><p class="text-slate-400 text-sm mb-6">Deja tu correo y te enviaremos un video de cómo el Enjambre de Agentes abre operaciones reales, además de darte acceso al sistema.</p><div class="ml-form-embedContainer ml-subscribe-form ml-subscribe-form-44360624"><div class="ml-form-align-center"><div class="ml-form-embedWrapper embedForm"><div class="ml-form-embedBody ml-form-embedBodyDefault row-form"><div class="ml-form-embedContent"><p style="color: #94a3b8; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 400; line-height: 20px; margin: 0 0 10px 0; text-align: center;">Ingresa tu correo para continuar.</p></div><form class="ml-block-form" action="https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/subscribe" data-code="" method="post" target="_blank" onsubmit="return ml_reveal_download()"><div class="ml-form-formContent"><div class="ml-form-fieldRow ml-last-item"><div class="ml-field-group ml-field-email ml-validate-email ml-validate-required"><input aria-label="email" aria-required="true" type="email" class="form-control" data-inputmask="" name="fields[email]" placeholder="Email" autocomplete="email" style="background-color: #0f172a !important; color: #fff !important; border: 1px solid #334155 !important; border-radius: 6px !important; padding: 12px !important; width: 100% !important; margin-bottom: 10px !important;"></div></div></div><input type="hidden" name="ml-submit" value="1"><div class="ml-form-embedSubmit" style="margin-top: 0;"><button type="submit" class="primary" style="background-color: #00e5ff !important; color: #020617 !important; border-radius: 6px !important; font-weight: 700; font-family: 'Inter', sans-serif; padding: 12px !important; width: 100% !important; border: none !important; cursor: pointer;">Quiero Acceso y Descargar</button><button disabled="disabled" style="display: none;" type="button" class="loading"><div class="ml-form-embedSubmitLoad"></div><span class="sr-only">Loading...</span></button></div><input type="hidden" name="anticsrf" value="true"></form></div></div></div></div><script>function ml_webform_success_44360624() {var $ = ml_jQuery || jQuery;$('.ml-subscribe-form-44360624 .row-success').show();$('.ml-subscribe-form-44360624 .row-form').hide();}</script><script src="https://groot.mailerlite.com/js/w/webforms.min.js?v83147fa8ce2d95cb73ece7f28b469519" type="text/javascript"></script><script>fetch("https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/takel")</script></div>
+    <div id="download-box" class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-cyan-500 shadow-cyan-500/10 shadow-lg text-center mt-6" style="display: {DISPLAY_STYLE};"><i class="fas fa-check-circle text-emerald-400 text-4xl mb-4"></i><h4 class="text-xl font-bold text-cyan-400 mb-4">¡Listo! Aquí tienes tu descarga:</h4><div class="text-slate-300 text-sm mb-6 text-left bg-slate-900 p-4 rounded-lg border border-slate-700">{DOWNLOAD_INSTRUCTIONS_HTML}</div><div class="flex flex-col gap-3">{DOWNLOAD_BUTTONS_HTML}</div></div><script>function ml_reveal_download() {setTimeout(function() {document.getElementById('download-box').style.display = 'block';document.getElementById('ml-form-wrapper').style.display = 'none';document.getElementById('download-box').scrollIntoView({behavior: "smooth", block: "center"});}, 1000);return true;}</script></div>
     {SOCIAL_SECTION_HTML}
     <footer class="bg-slate-950 py-10 border-t border-slate-800"><div class="container mx-auto px-6 text-center"><p class="text-slate-500 text-sm mb-4 max-w-3xl mx-auto"><strong>Aviso de Riesgo:</strong> El trading de divisas y CFDs implica un riesgo sustancial y no es adecuado para todos los inversores. El rendimiento pasado no es indicativo de resultados futuros. Operar con apalancamiento puede resultar en la pérdida de su capital.</p><p class="text-slate-600 text-xs">&copy; 2024 BLENIN.G.77 THE BEST FUTURE FOR YOU. Creado por Lenin Benitez.</p></div></footer>
     {BANK_MODAL_HTML}
@@ -1191,6 +1200,7 @@ def render_landing_page(c):
                    .replace("{PLANS_HTML}", plans_html)\
                    .replace("{SOCIAL_SECTION_HTML}", social_section_html)\
                    .replace("{BANK_MODAL_HTML}", bank_modal_html)\
+                   .replace("{DISPLAY_STYLE}", display_style)\
                    .replace("{DOWNLOAD_BUTTONS_HTML}", download_buttons_html)\
                    .replace("{DOWNLOAD_INSTRUCTIONS_HTML}", download_instructions_html)\
                    .replace("{PAYPAL_SCRIPTS}", paypal_scripts)
@@ -1627,6 +1637,6 @@ def ai_retention_agent():
 # 🚀 INICIALIZACIÓN DE AGENTES AUTOMÁTICOS
 # ==========================================
 scheduler = BackgroundScheduler()
-scheduler.add_job(ai_follow_up_agent, 'interval', hours=1)       # Sigue a los leads para que compren
-scheduler.add_job(ai_retention_agent, 'interval', hours=24)      # Salva a los clientes que se dieron de baja
+scheduler.add_job(ai_follow_up_agent, 'interval', hours=1)
+scheduler.add_job(ai_retention_agent, 'interval', hours=24)
 scheduler.start()
