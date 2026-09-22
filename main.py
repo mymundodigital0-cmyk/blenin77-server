@@ -73,7 +73,8 @@ def admin_login_page():
 def admin_login_verify(data: AdminLoginData, response: Response):
     global admin_password_db
     if data.password == admin_password_db:
-        response.set_cookie(key="blenin_session", value=SESSION_TOKEN, httponly=True, secure=True, samesite="lax", max_age=86400)
+        # ✅ CORRECCIÓN: secure=False para que funcione en HTTP y HTTPS localmente
+        response.set_cookie(key="blenin_session", value=SESSION_TOKEN, httponly=True, secure=False, samesite="lax", max_age=86400)
         return {"status": "success"}
     raise HTTPException(status_code=401, detail="Contraseña incorrecta")
 
@@ -176,8 +177,9 @@ def load_dbs():
 def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
     try:
         if not supabase: return
+        # ✅ CORRECCIÓN: on_conflict="key" para que el upsert actualice la fila existente
         def upsert_data(key, value):
-            supabase.table("app_data").upsert({"key": key, "value": value}).execute()
+            supabase.table("app_data").upsert({"key": key, "value": value}, on_conflict="key").execute()
 
         upsert_data("licenses_db", lic)
         upsert_data("trials_db", trials)
@@ -190,7 +192,7 @@ def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
 
 licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config = load_dbs()
 
-if not ai_agent_config or "BLENIN.G.77" not in ai_agent_config.get("stage1_subject", ""):
+if not ai_agent_config or "stage1_subject" not in ai_agent_config:
     ai_agent_config = get_default_ai_config()
     save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
 
@@ -237,13 +239,14 @@ def get_all_pages():
         
         if response.data:
             data = response.data[0]["value"]
+            # Migración de formato antiguo (sin estructura "pages")
             if "hero_title" in data and "pages" not in data:
                 new_data = {"pages": {"main": data}}
                 save_all_pages(new_data)
                 return new_data
             return data
         else:
-            # ✅ MEJORA CLAVE: Si la base de datos está vacía, la creamos automáticamente
+            # ✅ Si la base de datos está vacía, la creamos automáticamente
             print("Base de datos vacía. Creando páginas por defecto en Supabase...")
             default_data = {"pages": {"main": get_default_content()}}
             save_all_pages(default_data)
@@ -259,7 +262,8 @@ def get_all_pages():
 def save_all_pages(data):
     try:
         if not supabase: return False
-        supabase.table("app_data").upsert({"key": "pages", "value": data}).execute()
+        # ✅ CORRECCIÓN: on_conflict="key" para actualizar la fila existente
+        supabase.table("app_data").upsert({"key": "pages", "value": data}, on_conflict="key").execute()
         return True
     except Exception as e:
         print(f"Error guardando páginas: {e}")
@@ -301,11 +305,9 @@ def admin_panel(request: Request):
         
     pages_data = get_all_pages()
     pages_dict = pages_data.get("pages", {})
-    pages_json = json.dumps(pages_dict)
+    # ✅ CORRECCIÓN: Escapar caracteres HTML peligrosos en el JSON para que no rompa el <script>
+    pages_json = json.dumps(pages_dict).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
     
-    # El HTML del panel se incluye resumido para no exceder el límite del chat, 
-    # PERO EN TU CÓDIGO REAL DEBES PEGAR EL HTML COMPLETO QUE YA TENÍAS FUNCIONANDO.
-    # AQUÍ SE MANTIENE LA LÓGICA JS PARA QUE FUNCIONE CON SUPABASE.
     return f"""
     <html lang="es"><head><meta charset="UTF-8"><title>Admin - BLENIN77</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -564,7 +566,8 @@ def admin_panel(request: Request):
         <span id="toast-msg"></span>
     </div>
     <script>
-    const allPages = {pages_json};
+    const allPages = JSON.parse('{pages_json}');
+    
     function showTab(tabId) {{
         ['pages', 'stats', 'ai', 'lic', 'updates', 'settings'].forEach(id => {{
             document.getElementById('content-' + id).classList.add('hidden');
@@ -578,26 +581,35 @@ def admin_panel(request: Request):
         if(tabId === 'stats') loadStats();
         if(tabId === 'updates') loadUpdateConfig();
     }}
+    
     function showToast(msg) {{
         const t = document.getElementById('toast');
         document.getElementById('toast-msg').innerText = msg;
         t.classList.remove('opacity-0');
         setTimeout(() => t.classList.add('opacity-0'), 3000);
     }}
+    
     function updateSelector() {{
         const selector = document.getElementById('page_selector');
         selector.innerHTML = '';
-        Object.keys(allPages).forEach(slug => {{
+        const slugs = Object.keys(allPages);
+        slugs.forEach(slug => {{
             let opt = document.createElement('option');
             opt.value = slug;
             opt.innerText = allPages[slug].page_name || slug;
             selector.appendChild(opt);
         }});
+        if (slugs.length > 0) {{
+            selector.value = slugs[0];
+            loadPageData();
+        }}
     }}
+    
     function loadPageData() {{
         const slug = document.getElementById('page_selector').value;
-        const p = allPages[slug];
-        if(!p) return;
+        if (!slug) return;
+        const p = allPages[slug] || {{}};
+        
         document.getElementById('current_slug').value = slug;
         document.getElementById('page_name').value = p.page_name || '';
         document.getElementById('chatbot_id').value = p.chatbot_id || 'gzEjAzK1VCE72hJ_hBfA4';
@@ -607,9 +619,19 @@ def admin_panel(request: Request):
         document.getElementById('affiliate_link').value = p.affiliate_link || '';
         document.getElementById('affiliate_text').value = p.affiliate_text || '';
         document.getElementById('download_instructions').value = p.download_instructions || '';
+        
+        // ✅ CORRECCIÓN: Limpieza correcta de links de descarga
         document.getElementById('dl-links-container').innerHTML = '';
-        (p.download_links || [p.download_link || '']).forEach(url => addDlLink(url)); 
-        if((p.download_links || []).length === 0) addDlLink();
+        let dlLinks = p.download_links || [];
+        if (dlLinks.length === 0 && p.download_link) {{
+            dlLinks = [p.download_link];
+        }}
+        if (dlLinks.length === 0) {{
+            addDlLink('');
+        }} else {{
+            dlLinks.forEach(url => addDlLink(url || ''));
+        }}
+        
         const bt = p.bank_transfer_info || {{}};
         document.getElementById('bt_bank_name').value = bt.bank_name || '';
         document.getElementById('bt_account_type').value = bt.account_type || '';
@@ -617,21 +639,36 @@ def admin_panel(request: Request):
         document.getElementById('bt_beneficiary').value = bt.beneficiary || '';
         document.getElementById('bt_email').value = bt.email_for_proof || '';
         document.getElementById('bt_whatsapp').value = bt.whatsapp_for_proof || '';
-        document.getElementById('fb_link').value = p.social_links?.facebook || '';
-        document.getElementById('wa_link').value = p.social_links?.whatsapp || '';
-        document.getElementById('yt_link').value = p.social_links?.youtube || '';
-        document.getElementById('tt_link').value = p.social_links?.tiktok || '';
-        document.getElementById('tg_link').value = p.social_links?.telegram || '';
-        document.getElementById('ig_link').value = p.social_links?.instagram || '';
+        
+        // ✅ CORRECCIÓN: Carga segura de redes sociales
+        const social = p.social_links || {{}};
+        document.getElementById('fb_link').value = social.facebook || '';
+        document.getElementById('wa_link').value = social.whatsapp || '';
+        document.getElementById('yt_link').value = social.youtube || '';
+        document.getElementById('tt_link').value = social.tiktok || '';
+        document.getElementById('tg_link').value = social.telegram || '';
+        document.getElementById('ig_link').value = social.instagram || '';
+        
         document.getElementById('pubs-container').innerHTML = '';
-        (p.publications || []).forEach(pub => addPubRow(pub.type, pub.url, pub.desc));
-        if((p.publications || []).length === 0) addPubRow();
+        let pubs = p.publications || [];
+        if (pubs.length === 0) {{
+            addPubRow();
+        }} else {{
+            pubs.forEach(pub => addPubRow(pub.type || 'video', pub.url || '', pub.desc || ''));
+        }}
+        
         document.getElementById('plans-container').innerHTML = '';
-        (p.plans || []).forEach(plan => addPlanRow(plan.name, plan.price, plan.features, plan.link, plan.highlight));
-        if((p.plans || []).length === 0) addPlanRow();
+        let plans = p.plans || [];
+        if (plans.length === 0) {{
+            addPlanRow();
+        }} else {{
+            plans.forEach(plan => addPlanRow(plan.name || '', plan.price || '', plan.features || '', plan.link || '', plan.highlight || false));
+        }}
+        
         const urlText = slug === 'main' ? 'tudominio.com/' : 'tudominio.com/p/' + slug;
         document.getElementById('page_url_preview').innerText = urlText;
     }}
+    
     function createPage() {{
         const name = prompt('Nombre de la nueva página (ej: Promo Black Friday):');
         if(!name) return;
@@ -639,9 +676,24 @@ def admin_panel(request: Request):
         if(!slug) return;
         slug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '');
         if(allPages[slug]) {{ alert('Esa URL ya existe'); return; }}
-        allPages[slug] = {{ page_name: name, chatbot_id: 'gzEjAzK1VCE72hJ_hBfA4', hero_title: name, hero_subtitle: '', hero_text: '', affiliate_link: '', affiliate_text: '', publications: [], plans: [], social_links: {{}}, bank_transfer_info: {{}}, download_links: [], download_instructions: '' }};
+        allPages[slug] = {{ 
+            page_name: name, 
+            chatbot_id: 'gzEjAzK1VCE72hJ_hBfA4', 
+            hero_title: name, 
+            hero_subtitle: '', 
+            hero_text: '', 
+            affiliate_link: '', 
+            affiliate_text: '', 
+            publications: [], 
+            plans: [], 
+            social_links: {{ facebook: '', whatsapp: '', youtube: '', tiktok: '', telegram: '', instagram: '' }}, 
+            bank_transfer_info: {{}}, 
+            download_links: [], 
+            download_instructions: '' 
+        }};
         saveData(true);
     }}
+    
     function duplicatePage() {{
         const currentSlug = document.getElementById('page_selector').value;
         const newSlug = prompt('URL para la copia (ej: promo-v2):');
@@ -652,6 +704,7 @@ def admin_panel(request: Request):
         allPages[slug].page_name += ' (Copia)';
         saveData(true);
     }}
+    
     function deletePage() {{
         const slug = document.getElementById('page_selector').value;
         if(slug === 'main') {{ alert('No puedes eliminar la página principal.'); return; }}
@@ -660,16 +713,25 @@ def admin_panel(request: Request):
             saveData(true);
         }}
     }}
+    
     function addDlLink(url = '') {{
         const c = document.getElementById('dl-links-container');
         const div = document.createElement('div');
         div.className = 'flex gap-2';
-        div.innerHTML = `
-            <input type="text" class="dl-url w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="https://drive.google.com/..." value="${{url}}">
-            <button onclick="this.parentElement.remove()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-sm font-bold whitespace-nowrap"><i class="fas fa-trash"></i></button>
-        `;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'dl-url w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500';
+        input.placeholder = 'https://drive.google.com/...';
+        input.value = url;
+        const btn = document.createElement('button');
+        btn.className = 'bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-sm font-bold whitespace-nowrap';
+        btn.innerHTML = '<i class="fas fa-trash"></i>';
+        btn.onclick = function() {{ this.parentElement.remove(); }};
+        div.appendChild(input);
+        div.appendChild(btn);
         c.appendChild(div);
     }}
+    
     function addPubRow(type = 'video', url = '', desc = '') {{
         const c = document.getElementById('pubs-container');
         const div = document.createElement('div');
@@ -685,6 +747,7 @@ def admin_panel(request: Request):
         `;
         c.appendChild(div);
     }}
+    
     function addPlanRow(name = '', price = '', features = '', link = '', highlight = false) {{
         const c = document.getElementById('plans-container');
         const div = document.createElement('div');
@@ -703,26 +766,48 @@ def admin_panel(request: Request):
         `;
         c.appendChild(div);
     }}
+    
     async function saveData(reloadSelector = false) {{
         const slug = document.getElementById('current_slug').value || document.getElementById('page_selector').value;
+        if (!slug) {{
+            showToast('❌ No hay página seleccionada.');
+            return;
+        }}
+        
         let pubsArray = [];
         document.querySelectorAll('#pubs-container > div').forEach(div => {{
-            if(div.querySelector('.pub-url').value.trim()) {{
-                pubsArray.push({{ type: div.querySelector('.pub-type').value, url: div.querySelector('.pub-url').value, desc: div.querySelector('.pub-desc').value }});
+            const urlInput = div.querySelector('.pub-url');
+            if(urlInput && urlInput.value.trim()) {{
+                pubsArray.push({{ 
+                    type: div.querySelector('.pub-type').value, 
+                    url: urlInput.value, 
+                    desc: div.querySelector('.pub-desc').value 
+                }});
             }}
         }});
+        
         let plansArray = [];
         document.querySelectorAll('#plans-container > div').forEach(div => {{
-            if(div.querySelector('.p-name').value.trim()) {{
-                plansArray.push({{ name: div.querySelector('.p-name').value, price: div.querySelector('.p-price').value, features: div.querySelector('.p-features').value, link: div.querySelector('.p-link').value, highlight: div.querySelector('.p-highlight').checked }});
+            const nameInput = div.querySelector('.p-name');
+            if(nameInput && nameInput.value.trim()) {{
+                plansArray.push({{ 
+                    name: nameInput.value, 
+                    price: div.querySelector('.p-price').value, 
+                    features: div.querySelector('.p-features').value, 
+                    link: div.querySelector('.p-link').value, 
+                    highlight: div.querySelector('.p-highlight').checked 
+                }});
             }}
         }});
+        
         let dlLinksArray = [];
         document.querySelectorAll('#dl-links-container > div').forEach(div => {{
-            if(div.querySelector('.dl-url').value.trim()) {{
-                dlLinksArray.push(div.querySelector('.dl-url').value);
+            const urlInput = div.querySelector('.dl-url');
+            if(urlInput && urlInput.value.trim()) {{
+                dlLinksArray.push(urlInput.value.trim());
             }}
         }});
+        
         allPages[slug] = {{
             page_name: document.getElementById('page_name').value,
             chatbot_id: document.getElementById('chatbot_id').value || 'gzEjAzK1VCE72hJ_hBfA4',
@@ -752,11 +837,24 @@ def admin_panel(request: Request):
             download_links: dlLinksArray,
             download_instructions: document.getElementById('download_instructions').value
         }};
-        const res = await fetch('/api/save_pages', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(allPages) }});
-        const result = await res.json();
-        showToast(result.message);
-        if(reloadSelector) {{ updateSelector(); document.getElementById('page_selector').value = Object.keys(allPages).pop(); loadPageData(); }}
+        
+        try {{
+            const res = await fetch('/api/save_pages', {{ 
+                method: 'POST', 
+                headers: {{'Content-Type': 'application/json'}}, 
+                body: JSON.stringify(allPages) 
+            }});
+            const result = await res.json();
+            showToast(result.message);
+            if(reloadSelector) {{ 
+                updateSelector(); 
+            }}
+        }} catch(e) {{
+            showToast('❌ Error de conexión.');
+            console.error(e);
+        }}
     }}
+    
     async function loadStats() {{
         try {{
             const res = await fetch('/api/get_stats');
@@ -781,17 +879,18 @@ def admin_panel(request: Request):
                                     l.follow_up_stage === 2 ? 'Seguimiento 2 Enviado' : 'Embudo Finalizado';
                     leadsHtml += `<div class="bg-slate-900 p-3 rounded border border-slate-700">
                         <div class="flex justify-between">
-                            <span class="text-cyan-400 font-bold text-sm">${{l.name}} - ${{l.email}}</span>
+                            <span class="text-cyan-400 font-bold text-sm">${{l.name}} - $${l.email}}</span>
                             <span class="text-slate-500 text-xs">${{l.date.split('T')[0]}}</span>
                         </div>
-                        <div class="text-slate-400 text-xs mt-1">Interés: ${{l.interaction}}</div>
-                        <div class="text-emerald-400 text-xs mt-1">🤖 IA: ${{stageText}}</div>
+                        <div class="text-slate-400 text-xs mt-1">Interés: $${l.interaction}}</div>
+                        <div class="text-emerald-400 text-xs mt-1">🤖 IA: $${stageText}}</div>
                     </div>`;
                 }});
             }}
             document.getElementById('stat_leads').innerHTML = leadsHtml;
         }} catch (e) {{ console.error(e); }}
     }}
+    
     async function loadAIConfig() {{
         try {{
             const res = await fetch('/api/get_ai_config');
@@ -813,6 +912,7 @@ def admin_panel(request: Request):
             document.getElementById('s3_body').value = cfg.stage3_body || defaults.stage3_body;
         }} catch(e) {{ console.error(e); }}
     }}
+    
     async function saveAIConfig() {{
         const payload = {{
             stage1_days: parseInt(document.getElementById('s1_days').value),
@@ -829,6 +929,7 @@ def admin_panel(request: Request):
         const result = await res.json();
         showToast(result.message);
     }}
+    
     async function loadUpdateConfig() {{
         try {{
             const res = await fetch('/api/get_update_config');
@@ -839,6 +940,7 @@ def admin_panel(request: Request):
             document.getElementById('upd_force').checked = data.force_update || false;
         }} catch(e) {{ console.error(e); }}
     }}
+    
     async function saveUpdateConfig() {{
         const payload = {{
             latest_version: document.getElementById('upd_version').value,
@@ -850,6 +952,7 @@ def admin_panel(request: Request):
         const result = await res.json();
         showToast(result.message);
     }}
+    
     async function createManualLicense() {{
         const plan = document.getElementById('manual_plan').value;
         const days = document.getElementById('manual_days').value;
@@ -867,6 +970,7 @@ def admin_panel(request: Request):
         }}
         showToast('Proceso de licencia manual completado.');
     }}
+    
     async function manageLic(activeStatus) {{
         const key = document.getElementById('lic_key').value;
         if(!key) {{ alert('Por favor ingresa una clave de licencia.'); return; }}
@@ -876,6 +980,7 @@ def admin_panel(request: Request):
         document.getElementById('lic_msg').innerText = result.message;
         showToast(result.message);
     }}
+    
     async function resetHwid() {{
         const key = document.getElementById('lic_key').value;
         if(!key) {{ alert('Por favor ingresa una clave de licencia.'); return; }}
@@ -885,6 +990,7 @@ def admin_panel(request: Request):
         document.getElementById('lic_msg').innerText = result.message;
         showToast(result.message);
     }}
+    
     async function changePassword() {{
         const current_pwd = document.getElementById('current_pwd').value;
         const new_pwd = document.getElementById('new_pwd').value;
@@ -909,8 +1015,9 @@ def admin_panel(request: Request):
             document.getElementById('confirm_pwd').value = '';
         }}
     }}
+    
+    // ✅ CORRECCIÓN: Inicialización segura
     updateSelector();
-    loadPageData();
     </script>
     </body></html>
     """
@@ -995,6 +1102,7 @@ def render_landing_page(c):
             </div>
             """
 
+    # ✅ CORRECCIÓN: Manejo seguro de social_links
     social = c.get('social_links')
     if not isinstance(social, dict):
         social = {}
@@ -1028,8 +1136,10 @@ def render_landing_page(c):
         """
 
     download_instructions_html = c.get('download_instructions', 'Descarga el archivo, extrae y ejecuta el instalador.').replace('\n', '<br>')
+    # ✅ CORRECCIÓN: Manejo seguro de download_links
     download_links = c.get('download_links', [])
-    if not download_links and c.get('download_link'): download_links = [c.get('download_link')]
+    if not download_links and c.get('download_link'): 
+        download_links = [c.get('download_link')]
 
     download_buttons_html = ""
     if download_links:
