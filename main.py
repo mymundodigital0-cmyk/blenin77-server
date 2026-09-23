@@ -897,11 +897,11 @@ def admin_panel(request: Request):
                                     l.follow_up_stage === 2 ? 'Seguimiento 2 Enviado' : 'Embudo Finalizado';
                     leadsHtml += `<div class="bg-slate-900 p-3 rounded border border-slate-700">
                         <div class="flex justify-between">
-                            <span class="text-cyan-400 font-bold text-sm">${{l.name}} - $${l.email}}</span>
+                            <span class="text-cyan-400 font-bold text-sm">${{l.name}} - $${{l.email}}</span>
                             <span class="text-slate-500 text-xs">${{l.date.split('T')[0]}}</span>
                         </div>
-                        <div class="text-slate-400 text-xs mt-1">Interés: $${l.interaction}}</div>
-                        <div class="text-emerald-400 text-xs mt-1">🤖 IA: $${stageText}}</div>
+                        <div class="text-slate-400 text-xs mt-1">Interés: $${{l.interaction}}</div>
+                        <div class="text-emerald-400 text-xs mt-1">🤖 IA: $${{stageText}}</div>
                     </div>`;
                 }});
             }}
