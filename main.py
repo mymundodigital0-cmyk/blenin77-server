@@ -180,8 +180,7 @@ def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
         if not supabase: return
         def upsert_data(key, value):
             try:
-                supabase.table("app_data").delete().eq("key", key).execute()
-                res = supabase.table("app_data").insert({"key": key, "value": value}).execute()
+                res = supabase.table("app_data").upsert({"key": key, "value": value}, on_conflict="key").execute()
                 if not res.data: print(f"🚨 ALERTA: Supabase no devolvió datos al guardar {key} (¿RLS activo?)", flush=True)
             except Exception as e:
                 print(f"🚨 ERROR SUPABASE GUARDANDO {key}: {e}", flush=True)
@@ -266,22 +265,17 @@ def get_all_pages():
 def save_all_pages(data):
     try:
         if not supabase: 
-            print("❌ Supabase no configurado.", flush=True)
+            print("❌ Supabase no configurado. Revisa las variables de entorno en Render.", flush=True)
             return False
             
-        try:
-            supabase.table("app_data").delete().eq("key", "pages").execute()
-            print("🗑️ Páginas viejas borradas (si existían).", flush=True)
-        except Exception as e:
-            print(f"⚠️ Excepción al borrar: {e}", flush=True)
-        
-        res = supabase.table("app_data").insert({"key": "pages", "value": data}).execute()
+        print("🔄 Intentando hacer upsert en Supabase...", flush=True)
+        res = supabase.table("app_data").upsert({"key": "pages", "value": data}, on_conflict="key").execute()
         
         if hasattr(res, 'error') and res.error:
             print(f"🚨 ERROR EXPLÍCITO DE SUPABASE: {res.error}", flush=True)
             return False
         if not hasattr(res, 'data') or res.data is None or len(res.data) == 0:
-            print("🚨 ERROR SILENCIOSO: Supabase devolvió vacío (RLS probablemente activado).", flush=True)
+            print("🚨 ERROR SILENCIOSO: Supabase no devolvió datos. Revisa si RLS está desactivado.", flush=True)
             return False
             
         print("✅ Páginas guardadas en Supabase correctamente.", flush=True)
@@ -564,11 +558,11 @@ def admin_panel(request: Request):
                     </div>
                     <div>
                         <label class="text-sm text-slate-400">Nueva Contraseña</label>
-                        <input type="password" id="new_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="••••••••">
+                        <input type="password" id="new_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="•••••••">
                     </div>
                     <div>
                         <label class="text-sm text-slate-400">Repetir Nueva Contraseña</label>
-                        <input type="password" id="confirm_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="••••••••">
+                        <input type="password" id="confirm_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="•••••••">
                     </div>
                     <button onclick="changePassword()" class="w-full bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-save mr-2"></i>Actualizar Contraseña</button>
                     <div id="pwd_msg" class="mt-4 font-bold text-sm hidden"></div>
@@ -1047,9 +1041,14 @@ def api_save_pages(request: Request, data: dict):
         return {"message": "❌ No autorizado."}
     
     print("✅ USUARIO VERIFICADO, PROCEDIENDO A GUARDAR...", flush=True)
-    if save_all_pages({"pages": data}):
-        return {"message": "✅ Página guardada correctamente."}
-    return {"message": "❌ Error al guardar en Supabase (Revisa los logs de Render)."}
+    try:
+        if save_all_pages({"pages": data}):
+            return {"message": "✅ Página guardada correctamente."}
+        else:
+            return {"message": "❌ Error al guardar en Supabase (Revisa los logs de Render)."}
+    except Exception as e:
+        print(f"🚨 EXCEPCIÓN EN api_save_pages: {e}", flush=True)
+        return {"message": f"❌ Error interno del servidor: {str(e)}"}
 
 @app.post("/api/change_password")
 def api_change_password(request: Request, data: ChangePasswordData):
@@ -1542,7 +1541,7 @@ def make_payment_webhook(data: MakeWebhookData):
         save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
         
         client_subject = "✅ Pago Confirmado - Aquí tienes tu Licencia BLENIN77"
-        client_body = f"¡Gracias por tu compra!\n\nTu pago ha sido confirmado exitosamente.\n\nAquí tienes tu clave de licencia:\n{key}\n\nPlan: {plan_upper}\nDuración: {data.duration_days} días\n\nPara descargar el sistema, ingresa a: https://blenin77-server.onrender.com/\n\nSaludos,\nEquipo BLENIN77."
+        client_body = f"¡Gracias for tu compra!\n\nTu pago ha sido confirmado exitosamente.\n\nAquí tienes tu clave de licencia:\n{key}\n\nPlan: {plan_upper}\nDuración: {data.duration_days} días\n\nPara descargar el sistema, ingresa a: https://blenin77-server.onrender.com/\n\nSaludos,\nEquipo BLENIN77."
         send_email(data.email, client_subject, client_body)
         
         admin_subject = f"💰 ¡Nueva Venta Automática! Plan {plan_upper}"
