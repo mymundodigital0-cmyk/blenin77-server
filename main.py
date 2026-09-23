@@ -135,7 +135,7 @@ def generate_dynamic_content_with_llama(prompt, max_tokens=500):
     return None
 
 # ==========================================
-# 🧠 SISTEMA DE BASE DE DATOS (SUPABASE)
+# 🧠 SISTEMA DE BASE DE DATOS (SUPABASE) - CON DETECTOR DE ERRORES
 # ==========================================
 def get_default_ai_config():
     return {
@@ -163,7 +163,9 @@ def load_dbs():
         if not supabase: raise Exception("Supabase no configurado")
         response = supabase.table("app_data").select("key, value").execute()
         
-        # ✅ Si hay duplicados en Supabase, nos quedamos con el ÚLTIMO guardado
+        if hasattr(response, 'error') and response.error:
+            print(f"🚨 ERROR DE SUPABASE LEYENDO DBs: {response.error}")
+            
         data = {}
         for item in response.data:
             data[item['key']] = item['value']
@@ -180,12 +182,15 @@ def load_dbs():
 def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
     try:
         if not supabase: return
-        # ✅ CORRECCIÓN: Borrar antes de insertar evita duplicados si no hay Primary Key
         def upsert_data(key, value):
             try:
-                supabase.table("app_data").delete().eq("key", key).execute()
-            except: pass
-            supabase.table("app_data").insert({"key": key, "value": value}).execute()
+                res = supabase.table("app_data").upsert({"key": key, "value": value}, on_conflict="key").execute()
+                if hasattr(res, 'error') and res.error:
+                    print(f"🚨 ERROR SUPABASE ({key}): {res.error}")
+                elif not hasattr(res, 'data') or res.data is None:
+                    print(f"🚨 ERROR SUPABASE ({key}): Escritura bloqueada (¿RLS activado?)")
+            except Exception as e:
+                print(f"Excepción guardando {key}: {e}")
 
         upsert_data("licenses_db", lic)
         upsert_data("trials_db", trials)
@@ -194,7 +199,7 @@ def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
         if ai_cfg: upsert_data("ai_agent_config", ai_cfg)
         if upd_cfg: upsert_data("bot_update_config", upd_cfg)
     except Exception as e:
-        print(f"Error guardando DBs en Supabase: {e}")
+        print(f"Error general guardando DBs en Supabase: {e}")
 
 licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config = load_dbs()
 
@@ -243,10 +248,11 @@ def get_all_pages():
         if not supabase: raise Exception("Supabase no configurado")
         response = supabase.table("app_data").select("value").eq("key", "pages").execute()
         
+        if hasattr(response, 'error') and response.error:
+            print(f"🚨 ERROR DE SUPABASE LEYENDO PÁGINAS: {response.error}")
+            
         if response.data:
-            # ✅ Si hay múltiples filas con key="pages", tomar la última (la más reciente)
-            data = response.data[-1]["value"]
-            # Migración de formato antiguo (sin estructura "pages")
+            data = response.data[0]["value"]
             if "hero_title" in data and "pages" not in data:
                 new_data = {"pages": {"main": data}}
                 save_all_pages(new_data)
@@ -268,14 +274,19 @@ def get_all_pages():
 def save_all_pages(data):
     try:
         if not supabase: return False
-        # ✅ Borrar la fila anterior para evitar duplicados en Supabase
-        try:
-            supabase.table("app_data").delete().eq("key", "pages").execute()
-        except: pass
-        supabase.table("app_data").insert({"key": "pages", "value": data}).execute()
+        res = supabase.table("app_data").upsert({"key": "pages", "value": data}, on_conflict="key").execute()
+        
+        if hasattr(res, 'error') and res.error:
+            print(f"🚨 ERROR DE SUPABASE AL GUARDAR PÁGINAS: {res.error}")
+            return False
+        if not hasattr(res, 'data') or res.data is None:
+            print("🚨 ERROR: Supabase no permitió guardar (Posible RLS activado).")
+            return False
+
+        print("✅ Páginas guardadas en Supabase correctamente.")
         return True
     except Exception as e:
-        print(f"Error guardando páginas: {e}")
+        print(f"Excepción guardando páginas: {e}")
         return False
 
 # ==========================================
@@ -314,7 +325,6 @@ def admin_panel(request: Request):
         
     pages_data = get_all_pages()
     pages_dict = pages_data.get("pages", {})
-    # ✅ CORRECCIÓN: Escapar caracteres HTML peligrosos en el JSON
     pages_json = json.dumps(pages_dict).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
     
     return f"""
@@ -1033,7 +1043,7 @@ def api_save_pages(request: Request, data: dict):
     if not verify_admin(request): return {"message": "❌ No autorizado."}
     if save_all_pages({"pages": data}):
         return {"message": "✅ Página guardada correctamente."}
-    return {"message": "❌ Error al guardar."}
+    return {"message": "❌ Error al guardar en Supabase (Revisa los logs de Render)."}
 
 @app.post("/api/change_password")
 def api_change_password(request: Request, data: ChangePasswordData):
@@ -1108,7 +1118,6 @@ def render_landing_page(c):
             </div>
             """
 
-    # ✅ CORRECCIÓN: Manejo seguro de social_links
     social = c.get('social_links')
     if not isinstance(social, dict):
         social = {}
@@ -1154,7 +1163,6 @@ def render_landing_page(c):
             for i, link in enumerate(download_links):
                 download_buttons_html += f"""<a href="{link}" target="_blank" rel="noopener noreferrer" class="bg-slate-700 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block w-full mb-2"><i class="fas fa-server mr-2"></i> Servidor de Descarga {i+1}</a>"""
 
-    # ✅ Mostrar la caja de descarga inmediatamente si hay enlaces
     display_style = "block" if download_links else "none"
 
     template = """<!DOCTYPE html>
