@@ -316,7 +316,6 @@ def admin_panel(request: Request):
         
     pages_data = get_all_pages()
     pages_dict = pages_data.get("pages", {})
-    # Inyección segura de JSON para evitar romper el script con comillas simples o apóstrofes
     pages_json = json.dumps(pages_dict, ensure_ascii=False).replace('</', '<\\/')
     
     return f"""
@@ -335,6 +334,7 @@ def admin_panel(request: Request):
             <button onclick="showTab('ai')" id="tab-ai" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">🤖 Agente IA</button>
             <button onclick="showTab('lic')" id="tab-lic" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">Licencias</button>
             <button onclick="showTab('updates')" id="tab-updates" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">🔄 Actualizaciones</button>
+            <button onclick="showTab('marketing')" id="tab-marketing" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">🧠 Marketing IA</button>
             <button onclick="showTab('settings')" id="tab-settings" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">⚙️ Ajustes</button>
             <a href="/admin/logout" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded text-sm font-bold transition ml-2"><i class="fas fa-sign-out-alt mr-1"></i>Salir</a>
         </div>
@@ -544,6 +544,23 @@ def admin_panel(request: Request):
                 <button onclick="saveUpdateConfig()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition"><i class="fas fa-save mr-2"></i>Guardar y Publicar Versión</button>
             </div>
         </div>
+        <div id="content-marketing" class="hidden space-y-6">
+            <div class="bg-slate-800 p-6 rounded-xl border border-purple-700 shadow-lg">
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🧠 Generador de Tráfico y Leads con IA</h3>
+                <p class="text-sm text-slate-400 mb-4">Elige qué tipo de contenido quieres que la IA (Llama 3) cree para atraer clientes a tu web.</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <button onclick="generateMarketing('seo_blog')" class="bg-purple-600 hover:bg-purple-500 text-white p-4 rounded text-sm font-bold transition"><i class="fas fa-blog mr-2"></i>Artículo SEO (Google)</button>
+                    <button onclick="generateMarketing('tiktok_script')" class="bg-pink-600 hover:bg-pink-500 text-white p-4 rounded text-sm font-bold transition"><i class="fab fa-tiktok mr-2"></i>Guion Viral (TikTok/Reels)</button>
+                    <button onclick="generateMarketing('forum_post')" class="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded text-sm font-bold transition"><i class="fab fa-reddit mr-2"></i>Post para Foros (Reddit)</button>
+                </div>
+                
+                <div id="marketing_output" class="bg-slate-900 p-4 rounded border border-slate-700 text-slate-300 text-sm whitespace-pre-wrap min-h-[200px]">
+                    El contenido generado por la IA aparecerá aquí...
+                </div>
+                <button onclick="copyMarketing()" class="mt-4 bg-cyan-500 hover:bg-cyan-400 text-slate-900 px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-copy mr-2"></i>Copiar Contenido</button>
+            </div>
+        </div>
         <div id="content-settings" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-amber-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🔑 Cambiar Contraseña de Administrador</h3>
@@ -579,9 +596,10 @@ def admin_panel(request: Request):
     <script id="pages-data" type="application/json">{pages_json}</script>
     <script>
     const allPages = JSON.parse(document.getElementById('pages-data').textContent);
+    let currentMarketingText = "";
     
     function showTab(tabId) {{
-        ['pages', 'stats', 'ai', 'lic', 'updates', 'settings'].forEach(id => {{
+        ['pages', 'stats', 'ai', 'lic', 'updates', 'marketing', 'settings'].forEach(id => {{
             document.getElementById('content-' + id).classList.add('hidden');
             document.getElementById('tab-' + id).classList.remove('tab-active');
             document.getElementById('tab-' + id).classList.add('bg-slate-800', 'hover:bg-slate-700');
@@ -967,6 +985,30 @@ def admin_panel(request: Request):
         const result = await res.json();
         showToast(result.message);
     }}
+
+    async function generateMarketing(type) {{
+        const outputDiv = document.getElementById('marketing_output');
+        outputDiv.innerText = "🧠 La IA está pensando y redactando el contenido... (Esto puede tardar 15-30 segundos)";
+        const res = await fetch('/api/generate_marketing', {{
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {{'Content-Type': 'application/json'}},
+            body: JSON.stringify({{ type: type }})
+        }});
+        const result = await res.json();
+        if(result.status === 'success') {{
+            currentMarketingText = result.content;
+            outputDiv.innerText = result.content;
+        }} else {{
+            outputDiv.innerText = "❌ Error: " + result.message;
+        }}
+    }}
+
+    function copyMarketing() {{
+        navigator.clipboard.writeText(currentMarketingText).then(() => {{
+            showToast('✅ Contenido copiado al portapapeles.');
+        }});
+    }}
     
     async function createManualLicense() {{
         const plan = document.getElementById('manual_plan').value;
@@ -1053,6 +1095,28 @@ def api_save_pages(request: Request, data: dict):
     except Exception as e:
         print(f"🚨 EXCEPCIÓN EN api_save_pages: {e}", flush=True)
         return {"status": "error", "message": f"❌ Error interno: {str(e)}"}
+
+@app.post("/api/generate_marketing")
+def generate_marketing_api(request: Request, data: dict):
+    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
+    
+    prompt_type = data.get("type")
+    
+    if prompt_type == "seo_blog":
+        prompt = "Eres un experto en SEO y copywriting de trading. Escribe un artículo de blog persuasivo de 500 palabras sobre 'Por qué automatizar tu trading con IA es el futuro'. Menciona BLENIN.G.77, el enjambre de 500 agentes y la IA predictiva. Incluye títulos H2, H3 y una llamada a la acción para visitar https://blenin77-server.onrender.com/#pricing. Usa formato HTML."
+    elif prompt_type == "tiktok_script":
+        prompt = "Eres un creador de contenido viral de trading. Escribe un guion para un video de TikTok/Reels de 45 segundos. El gancho debe ser polémico sobre por qué los traders pierden dinero. Luego presenta BLENIN.G.77 como el bot con IA institucional que opera mientras duermes. Indica las instrucciones visuales entre corchetes [Así]. Termina con un llamado a la acción para hacer clic en el enlace de la bio."
+    elif prompt_type == "forum_post":
+        prompt = "Eres un trader experimentado en foros de Reddit (r/Forex). Escribe un post genuino y no spammy compartiendo tu experiencia usando un enjambre de agentes de IA para hacer trading. Habla sobre cómo BLENIN.G.77 usa IA predictiva y modo híbrido con MT5. Pregunta a la comunidad si han probado tecnologías similares. Incluye el enlace https://blenin77-server.onrender.com de forma natural."
+    else:
+        return {"status": "error", "message": "Tipo no válido."}
+        
+    content = generate_dynamic_content_with_llama(prompt, max_tokens=800)
+    
+    if content:
+        return {"status": "success", "content": content}
+    else:
+        return {"status": "error", "message": "La IA no respondió. ¿Está Ollama encendido en el servidor?"}
 
 @app.post("/api/change_password")
 def api_change_password(request: Request, data: ChangePasswordData):
@@ -1218,7 +1282,7 @@ def render_landing_page(c):
     <footer class="bg-slate-950 py-10 border-t border-slate-800"><div class="container mx-auto px-6 text-center"><p class="text-slate-500 text-sm mb-4 max-w-3xl mx-auto"><strong>Aviso de Riesgo:</strong> El trading de divisas y CFDs implica un riesgo sustancial y no es adecuado para todos los inversores. El rendimiento pasado no es indicativo de resultados futuros. Operar con apalancamiento puede resultar en la pérdida de su capital.</p><p class="text-slate-600 text-xs">&copy; 2024 BLENIN.G.77 THE BEST FUTURE FOR YOU. Creado por Lenin Benitez.</p></div></footer>
     {BANK_MODAL_HTML}
     <div id="google_translate_element"></div><script type="text/javascript">function googleTranslateElementInit() { new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'en,fr,pt,ru,it,de,zh-CN,ko,hi', layout: google.translate.TranslateElement.InlineLayout.SIMPLE, autoDisplay: false}, 'google_translate_element'); }</script><script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
-    <script>const langBtn = document.getElementById('lang-btn');const langMenu = document.getElementById('lang-menu');langBtn.addEventListener('click', (e) => { e.stopPropagation(); langMenu.classList.toggle('hidden'); });window.addEventListener('click', (e) => { if (!langMenu.contains(e.target) && !langBtn.contains(e.target)) { langMenu.classList.add('hidden'); } });function changeLang(langCode, langName) {document.getElementById('current-lang-name').innerText = langName;langMenu.classList.add('hidden');var date = new Date(); date.setTime(date.getTime() + (365 * 24 * 60 * 60 * 1000)); var expires = "; expires=" + date.toUTCString();var hostname = window.location.hostname;if (langCode === 'es') {document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + hostname;document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=." + hostname;} else {var cookieValue = "/es/" + langCode;document.cookie = "googtrans=" + cookieValue + expires + "; path=/";document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=" + hostname;document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=." + hostname;}window.location.reload();}window.onload = function() {var match = document.cookie.match(/googtrans=/es/([a-zA-Z\-]+)/);if (match && match[1]) {var langMap = { 'en': '🇬🇧 English', 'fr': '🇫🇷 Français', 'pt': '🇵🇹 Portugués', 'ru': '🇷🇺 Русский', 'it': '🇮🇹 Italiano', 'de': '🇩🇪 Deutsch', 'zh-CN': '🇨🇳 中文', 'ko': '🇰🇷 한국어', 'hi': '🇮🇳 हिन्दी' };if (langMap[match[1]]) document.getElementById('current-lang-name').innerText = langMap[match[1]];}};</script>
+    <script>const langBtn = document.getElementById('lang-btn');const langMenu = document.getElementById('lang-menu');langBtn.addEventListener('click', (e) => { e.stopPropagation(); langMenu.classList.toggle('hidden'); });window.addEventListener('click', (e) => { if (!langMenu.contains(e.target) && !langBtn.contains(e.target)) { langMenu.classList.add('hidden'); } });function changeLang(langCode, langName) {document.getElementById('current-lang-name').innerText = langName;langMenu.classList.add('hidden');var date = new Date(); date.setTime(date.getTime() + (365 * 24 * 60 * 60 * 1000)); var expires = "; expires=" + date.toUTCString();var hostname = window.location.hostname;if (langCode === 'es') {document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + hostname;document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=." + hostname;} else {var cookieValue = "/es/" + langCode;document.cookie = "googtrans=" + cookieValue + expires + "; path=/";document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=" + hostname;document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=." + hostname;}window.location.reload();}window.onload = function() {var match = document.cookie.match(/googtrans=\/es\/([a-zA-Z\-]+)/);if (match && match[1]) {var langMap = { 'en': '🇬🇧 English', 'fr': '🇫🇷 Français', 'pt': '🇵🇹 Portugués', 'ru': '🇷🇺 Русский', 'it': '🇮🇹 Italiano', 'de': '🇩🇪 Deutsch', 'zh-CN': '🇨🇳 中文', 'ko': '🇰🇷 한국어', 'hi': '🇮🇳 हिन्दी' };if (langMap[match[1]]) document.getElementById('current-lang-name').innerText = langMap[match[1]];}};</script>
     <script>fetch('/api/track_view', { method: 'POST' });</script>
     <div id="social-proof-toast" class="fixed bottom-5 left-5 bg-slate-800 border border-cyan-500 text-slate-300 p-4 rounded-lg shadow-2xl flex items-center gap-3 transition-all duration-500 opacity-0 translate-y-10 z-[9998] max-w-xs"><i class="fas fa-check-circle text-cyan-400 text-2xl"></i><div><p id="sp-name" class="font-bold text-white text-sm">Carlos de México</p><p id="sp-action" class="text-xs text-slate-400">Acaba de adquirir el Plan Oro</p></div></div>
     <script>function showSocialProof() {const names = ["Carlos M.", "Ana G.", "John D.", "María F.", "Alex R.", "Sofía L.", "David P.", "Elena V."];const countries = ["México", "España", "Argentina", "Colombia", "Estados Unidos", "Chile", "Perú", "Ecuador"];const actions = ["Acaba de adquirir el Plan Oro", "Acaba de adquirir el Plan Plata", "Está viendo una demostración en vivo", "Solicitó prueba gratuita de 30 días"];const toast = document.getElementById('social-proof-toast');document.getElementById('sp-name').innerText = `${names[Math.floor(Math.random()*names.length)]} de ${countries[Math.floor(Math.random()*countries.length)]}`;document.getElementById('sp-action').innerText = actions[Math.floor(Math.random()*actions.length)];toast.classList.remove('opacity-0', 'translate-y-10');setTimeout(() => toast.classList.add('opacity-0', 'translate-y-10'), 5000);}setTimeout(showSocialProof, 5000);setInterval(showSocialProof, Math.floor(Math.random() * (25000 - 15000 + 1)) + 15000);</script>
