@@ -135,7 +135,7 @@ def generate_dynamic_content_with_llama(prompt, max_tokens=500):
     return None
 
 # ==========================================
-# 🧠 SISTEMA DE BASE DE DATOS (SUPABASE) - CON DETECTOR DE ERRORES
+# 🧠 SISTEMA DE BASE DE DATOS (SUPABASE) - VERSIÓN A PRUEBA DE FALLOS
 # ==========================================
 def get_default_ai_config():
     return {
@@ -144,7 +144,7 @@ def get_default_ai_config():
         "stage1_body": "Hola {name},\n\nGracias por tu interés en BLENIN.G.77, el sistema de trading de nivel institucional impulsado por Inteligencia Artificial.\n\nMuchos usuarios nos preguntan si nuestra tecnología reemplaza el trabajo del trader. La respuesta es: es tu copiloto perfecto, diseñado para proteger tu capital y maximizar oportunidades mientras tú vives tu vida.\n\nCon nuestro sistema, tienes acceso a:\n🔹 IA Predictiva y Análisis Global en tiempo real.\n🔹 Un Enjambre de 500 Agentes analizando el mercado.\n🔹 Modo Híbrido (MT5 + Noticias macroeconómicas).\n\n¿Tienes alguna duda sobre cómo adaptar el bot a tu cuenta de MT5? Simplemente responde a este correo y nuestro equipo te ayudará.\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.\nhttps://blenin77-server.onrender.com/",
         "stage2_days": 5,
         "stage2_subject": "🔥 {name}, esto es lo que estás dejando atrás...",
-        "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que la comunidad de BLENIN.G.77 está logrando hoy. Nuestros usuarios del Plan Oro están reportando resultados excepcionales al combinar nuestra IA Predictiva con el Modo Híbrido (MT5 + Noticias en tiempo real).\n\nSabemos que el trading requiere confianza, pero las oportunidades del mercado no esperan. Si te quedas fuera, el mercado seguirá moviéndose sin tus operaciones optimizadas.\n\nNo dejes tu capital expuesto a la emoción humana. Deja que la matemática y la IA trabajen por ti.\n\nRevisa nuestros planes y elige el que se adapte a tu capital aquí:\n👉 https://blenin77-server.onrender.com/#pricing\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.",
+        "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que la comunidad de BLENIN.G.77 está logrando hoy. Nuestros usuarios del Plan Oro están reportando resultados excepcionales al combinar nuestra IA Predictiva con el Modo Híbrido (MT5 + Noticias en tiempo real).\n\nSabemos que el trading requiere confianza, pero las oportunidades del mercado no esperan. Si te quedas fuera, el mercado seguirá moviéndose sin tus operaciones optimizadas.\n\nNo dejes tu capital expuesto a la emoción humana. Deja que la matemática y la IA trabajan por ti.\n\nRevisa nuestros planes y elige el que se adapte a tu capital aquí:\n👉 https://blenin77-server.onrender.com/#pricing\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.",
         "stage3_days": 10,
         "stage3_subject": "⏳ {name}, tu acceso VIP a BLENIN.G.77 está por expirar",
         "stage3_body": "Hola {name},\n\nHemos notado que aún no has dado el paso definitivo para automatizar tu trading con BLENIN.G.77. Entendemos que dar el control a una Inteligencia Artificial puede ser un gran paso.\n\nPor eso, como último intento de ayudarte a dar el salto institucional, hemos habilitado un descuento especial del 10% si adquieres cualquier plan en las próximas 48 horas.\n\nUsa el siguiente código al momento de tu transferencia o responde a este correo para activarlo:\n🎁 Código de descuento: BLENIN10\n\nNo dejes que la volatilidad te tome por sorpresa. Protege tu capital y maximiza tus oportunidades hoy.\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.\nhttps://blenin77-server.onrender.com/#pricing"
@@ -162,10 +162,6 @@ def load_dbs():
     try:
         if not supabase: raise Exception("Supabase no configurado")
         response = supabase.table("app_data").select("key, value").execute()
-        
-        if hasattr(response, 'error') and response.error:
-            print(f"🚨 ERROR DE SUPABASE LEYENDO DBs: {response.error}")
-            
         data = {}
         for item in response.data:
             data[item['key']] = item['value']
@@ -184,13 +180,11 @@ def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
         if not supabase: return
         def upsert_data(key, value):
             try:
-                res = supabase.table("app_data").upsert({"key": key, "value": value}, on_conflict="key").execute()
-                if hasattr(res, 'error') and res.error:
-                    print(f"🚨 ERROR SUPABASE ({key}): {res.error}")
-                elif not hasattr(res, 'data') or res.data is None:
-                    print(f"🚨 ERROR SUPABASE ({key}): Escritura bloqueada (¿RLS activado?)")
+                supabase.table("app_data").delete().eq("key", key).execute()
+                res = supabase.table("app_data").insert({"key": key, "value": value}).execute()
+                if not res.data: print(f"🚨 ALERTA: Supabase no devolvió datos al guardar {key} (¿RLS activo?)")
             except Exception as e:
-                print(f"Excepción guardando {key}: {e}")
+                print(f"🚨 ERROR SUPABASE GUARDANDO {key}: {e}")
 
         upsert_data("licenses_db", lic)
         upsert_data("trials_db", trials)
@@ -247,12 +241,8 @@ def get_all_pages():
     try:
         if not supabase: raise Exception("Supabase no configurado")
         response = supabase.table("app_data").select("value").eq("key", "pages").execute()
-        
-        if hasattr(response, 'error') and response.error:
-            print(f"🚨 ERROR DE SUPABASE LEYENDO PÁGINAS: {response.error}")
-            
         if response.data:
-            data = response.data[0]["value"]
+            data = response.data[-1]["value"]
             if "hero_title" in data and "pages" not in data:
                 new_data = {"pages": {"main": data}}
                 save_all_pages(new_data)
@@ -263,7 +253,6 @@ def get_all_pages():
             default_data = {"pages": {"main": get_default_content()}}
             save_all_pages(default_data)
             return default_data
-            
     except Exception as e:
         print(f"Error obteniendo páginas: {e}")
         default_data = {"pages": {"main": get_default_content()}}
@@ -274,19 +263,17 @@ def get_all_pages():
 def save_all_pages(data):
     try:
         if not supabase: return False
-        res = supabase.table("app_data").upsert({"key": "pages", "value": data}, on_conflict="key").execute()
-        
-        if hasattr(res, 'error') and res.error:
-            print(f"🚨 ERROR DE SUPABASE AL GUARDAR PÁGINAS: {res.error}")
+        try:
+            supabase.table("app_data").delete().eq("key", "pages").execute()
+        except: pass
+        res = supabase.table("app_data").insert({"key": "pages", "value": data}).execute()
+        if not res.data:
+            print("🚨 ERROR: Supabase bloqueó el guardado de páginas. Revisa RLS.")
             return False
-        if not hasattr(res, 'data') or res.data is None:
-            print("🚨 ERROR: Supabase no permitió guardar (Posible RLS activado).")
-            return False
-
         print("✅ Páginas guardadas en Supabase correctamente.")
         return True
     except Exception as e:
-        print(f"Excepción guardando páginas: {e}")
+        print(f"🚨 EXCEPCIÓN guardando páginas: {e}")
         return False
 
 # ==========================================
@@ -1189,7 +1176,7 @@ def render_landing_page(c):
     <footer class="bg-slate-950 py-10 border-t border-slate-800"><div class="container mx-auto px-6 text-center"><p class="text-slate-500 text-sm mb-4 max-w-3xl mx-auto"><strong>Aviso de Riesgo:</strong> El trading de divisas y CFDs implica un riesgo sustancial y no es adecuado para todos los inversores. El rendimiento pasado no es indicativo de resultados futuros. Operar con apalancamiento puede resultar en la pérdida de su capital.</p><p class="text-slate-600 text-xs">&copy; 2024 BLENIN.G.77 THE BEST FUTURE FOR YOU. Creado por Lenin Benitez.</p></div></footer>
     {BANK_MODAL_HTML}
     <div id="google_translate_element"></div><script type="text/javascript">function googleTranslateElementInit() { new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'en,fr,pt,ru,it,de,zh-CN,ko,hi', layout: google.translate.TranslateElement.InlineLayout.SIMPLE, autoDisplay: false}, 'google_translate_element'); }</script><script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
-    <script>const langBtn = document.getElementById('lang-btn');const langMenu = document.getElementById('lang-menu');langBtn.addEventListener('click', (e) => { e.stopPropagation(); langMenu.classList.toggle('hidden'); });window.addEventListener('click', (e) => { if (!langMenu.contains(e.target) && !langBtn.contains(e.target)) { langMenu.classList.add('hidden'); } });function changeLang(langCode, langName) {document.getElementById('current-lang-name').innerText = langName;langMenu.classList.add('hidden');var date = new Date(); date.setTime(date.getTime() + (365 * 24 * 60 * 60 * 1000)); var expires = "; expires=" + date.toUTCString();var hostname = window.location.hostname;if (langCode === 'es') {document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + hostname;document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=." + hostname;} else {var cookieValue = "/es/" + langCode;document.cookie = "googtrans=" + cookieValue + expires + "; path=/";document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=" + hostname;document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=." + hostname;}window.location.reload();}window.onload = function() {var match = document.cookie.match(/googtrans=\/es\/([a-zA-Z\-]+)/);if (match && match[1]) {var langMap = { 'en': '🇬🇧 English', 'fr': '🇫🇷 Français', 'pt': '🇵🇹 Portugués', 'ru': '🇷🇺 Русский', 'it': '🇮🇹 Italiano', 'de': '🇩🇪 Deutsch', 'zh-CN': '🇨🇳 中文', 'ko': '🇰🇷 한국어', 'hi': '🇮🇳 हिन्दी' };if (langMap[match[1]]) document.getElementById('current-lang-name').innerText = langMap[match[1]];}};</script>
+    <script>const langBtn = document.getElementById('lang-btn');const langMenu = document.getElementById('lang-menu');langBtn.addEventListener('click', (e) => { e.stopPropagation(); langMenu.classList.toggle('hidden'); });window.addEventListener('click', (e) => { if (!langMenu.contains(e.target) && !langBtn.contains(e.target)) { langMenu.classList.add('hidden'); } });function changeLang(langCode, langName) {document.getElementById('current-lang-name').innerText = langName;langMenu.classList.add('hidden');var date = new Date(); date.setTime(date.getTime() + (365 * 24 * 60 * 60 * 1000)); var expires = "; expires=" + date.toUTCString();var hostname = window.location.hostname;if (langCode === 'es') {document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + hostname;document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=." + hostname;} else {var cookieValue = "/es/" + langCode;document.cookie = "googtrans=" + cookieValue + expires + "; path=/";document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=" + hostname;document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=." + hostname;}window.location.reload();}window.onload = function() {var match = document.cookie.match(/googtrans=/es/([a-zA-Z\\-]+)/);if (match && match[1]) {var langMap = { 'en': '🇬🇧 English', 'fr': '🇫🇷 Français', 'pt': '🇵🇹 Portugués', 'ru': '🇷🇺 Русский', 'it': '🇮🇹 Italiano', 'de': '🇩🇪 Deutsch', 'zh-CN': '🇨🇳 中文', 'ko': '🇰🇷 한국어', 'hi': '🇮🇳 हिन्दी' };if (langMap[match[1]]) document.getElementById('current-lang-name').innerText = langMap[match[1]];}};</script>
     <script>fetch('/api/track_view', { method: 'POST' });</script>
     <div id="social-proof-toast" class="fixed bottom-5 left-5 bg-slate-800 border border-cyan-500 text-slate-300 p-4 rounded-lg shadow-2xl flex items-center gap-3 transition-all duration-500 opacity-0 translate-y-10 z-[9998] max-w-xs"><i class="fas fa-check-circle text-cyan-400 text-2xl"></i><div><p id="sp-name" class="font-bold text-white text-sm">Carlos de México</p><p id="sp-action" class="text-xs text-slate-400">Acaba de adquirir el Plan Oro</p></div></div>
     <script>function showSocialProof() {const names = ["Carlos M.", "Ana G.", "John D.", "María F.", "Alex R.", "Sofía L.", "David P.", "Elena V."];const countries = ["México", "España", "Argentina", "Colombia", "Estados Unidos", "Chile", "Perú", "Ecuador"];const actions = ["Acaba de adquirir el Plan Oro", "Acaba de adquirir el Plan Plata", "Está viendo una demostración en vivo", "Solicitó prueba gratuita de 30 días"];const toast = document.getElementById('social-proof-toast');document.getElementById('sp-name').innerText = `${names[Math.floor(Math.random()*names.length)]} de ${countries[Math.floor(Math.random()*countries.length)]}`;document.getElementById('sp-action').innerText = actions[Math.floor(Math.random()*actions.length)];toast.classList.remove('opacity-0', 'translate-y-10');setTimeout(() => toast.classList.add('opacity-0', 'translate-y-10'), 5000);}setTimeout(showSocialProof, 5000);setInterval(showSocialProof, Math.floor(Math.random() * (25000 - 15000 + 1)) + 15000);</script>
