@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Optional
-import random, string, smtplib, os, requests, json
+import random, string, smtplib, os, requests, json, re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -56,6 +56,7 @@ def admin_login_page():
                 const pwd = document.getElementById('pwd').value;
                 const res = await fetch('/api/login', {{
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify({{ password: pwd }})
                 }});
@@ -135,7 +136,7 @@ def generate_dynamic_content_with_llama(prompt, max_tokens=500):
     return None
 
 # ==========================================
-# 🧠 SISTEMA DE BASE DE DATOS (SUPABASE) - VERSIÓN A PRUEBA DE FALLOS
+# 🧠 SISTEMA DE BASE DE DATOS (SUPABASE)
 # ==========================================
 def get_default_ai_config():
     return {
@@ -181,7 +182,7 @@ def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
         def upsert_data(key, value):
             try:
                 res = supabase.table("app_data").upsert({"key": key, "value": value}, on_conflict="key").execute()
-                if not res.data: print(f"🚨 ALERTA: Supabase no devolvió datos al guardar {key} (¿RLS activo?)", flush=True)
+                if not res.data: print(f"🚨 ALERTA: Supabase no devolvió datos al guardar {key} (¿RLS activo o falta UNIQUE?)", flush=True)
             except Exception as e:
                 print(f"🚨 ERROR SUPABASE GUARDANDO {key}: {e}", flush=True)
 
@@ -239,11 +240,8 @@ def get_default_content(page_name="Principal"):
 def get_all_pages():
     try:
         if not supabase: raise Exception("Supabase no configurado")
-        print("📥 Cargando páginas desde Supabase...", flush=True)
         response = supabase.table("app_data").select("value").eq("key", "pages").execute()
-        
         if response.data:
-            print("✅ Datos encontrados en Supabase.", flush=True)
             data = response.data[0]["value"]
             if "hero_title" in data and "pages" not in data:
                 new_data = {"pages": {"main": data}}
@@ -251,7 +249,6 @@ def get_all_pages():
                 return new_data
             return data
         else:
-            print("⚠️ Base de datos vacía. Creando páginas por defecto...", flush=True)
             default_data = {"pages": {"main": get_default_content()}}
             save_all_pages(default_data)
             return default_data
@@ -268,14 +265,13 @@ def save_all_pages(data):
             print("❌ Supabase no configurado. Revisa las variables de entorno en Render.", flush=True)
             return False
             
-        print("🔄 Intentando hacer upsert en Supabase...", flush=True)
         res = supabase.table("app_data").upsert({"key": "pages", "value": data}, on_conflict="key").execute()
         
         if hasattr(res, 'error') and res.error:
             print(f"🚨 ERROR EXPLÍCITO DE SUPABASE: {res.error}", flush=True)
             return False
         if not hasattr(res, 'data') or res.data is None or len(res.data) == 0:
-            print("🚨 ERROR SILENCIOSO: Supabase no devolvió datos. Revisa si RLS está desactivado.", flush=True)
+            print("🚨 ERROR SILENCIOSO: Supabase no devolvió datos. Revisa si RLS está desactivado o si falta UNIQUE en 'key'.", flush=True)
             return False
             
         print("✅ Páginas guardadas en Supabase correctamente.", flush=True)
@@ -320,7 +316,8 @@ def admin_panel(request: Request):
         
     pages_data = get_all_pages()
     pages_dict = pages_data.get("pages", {})
-    pages_json = json.dumps(pages_dict).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
+    # Inyección segura de JSON para evitar romper el script con comillas simples o apóstrofes
+    pages_json = json.dumps(pages_dict, ensure_ascii=False).replace('</', '<\\/')
     
     return f"""
     <html lang="es"><head><meta charset="UTF-8"><title>Admin - BLENIN77</title>
@@ -579,8 +576,9 @@ def admin_panel(request: Request):
     <div id="toast" class="fixed bottom-5 right-5 bg-slate-700 text-white px-4 py-3 rounded-lg shadow-2xl opacity-0 transition-opacity duration-300 pointer-events-none">
         <span id="toast-msg"></span>
     </div>
+    <script id="pages-data" type="application/json">{pages_json}</script>
     <script>
-    const allPages = JSON.parse('{pages_json}');
+    const allPages = JSON.parse(document.getElementById('pages-data').textContent);
     
     function showTab(tabId) {{
         ['pages', 'stats', 'ai', 'lic', 'updates', 'settings'].forEach(id => {{
@@ -853,11 +851,16 @@ def admin_panel(request: Request):
         try {{
             const res = await fetch('/api/save_pages', {{ 
                 method: 'POST', 
+                credentials: 'same-origin', 
                 headers: {{'Content-Type': 'application/json'}}, 
                 body: JSON.stringify(allPages) 
             }});
             const result = await res.json();
             showToast(result.message);
+            if (result.status === 'error') {{
+                console.error('Error guardando:', result);
+                return;
+            }}
             if(reloadSelector) {{ 
                 updateSelector(); 
             }}
@@ -869,7 +872,7 @@ def admin_panel(request: Request):
     
     async function loadStats() {{
         try {{
-            const res = await fetch('/api/get_stats');
+            const res = await fetch('/api/get_stats', {{ credentials: 'same-origin' }});
             const data = await res.json();
             document.getElementById('stat_views').innerText = data.views || 0;
             const countries = data.countries || {{}};
@@ -905,7 +908,7 @@ def admin_panel(request: Request):
     
     async function loadAIConfig() {{
         try {{
-            const res = await fetch('/api/get_ai_config');
+            const res = await fetch('/api/get_ai_config', {{ credentials: 'same-origin' }});
             const data = await res.json();
             const defaults = {{
                 stage1_days: 2, stage1_subject: "🚀 {{name}}, descubre el poder de la IA Institucional con BLENIN.G.77", stage1_body: "Hola {{name}},\\n\\nGracias por tu interés en BLENIN.G.77...",
@@ -937,14 +940,14 @@ def admin_panel(request: Request):
             stage3_subject: document.getElementById('s3_subject').value,
             stage3_body: document.getElementById('s3_body').value
         }};
-        const res = await fetch('/api/save_ai_config', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
+        const res = await fetch('/api/save_ai_config', {{ method: 'POST', credentials: 'same-origin', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
         const result = await res.json();
         showToast(result.message);
     }}
     
     async function loadUpdateConfig() {{
         try {{
-            const res = await fetch('/api/get_update_config');
+            const res = await fetch('/api/get_update_config', {{ credentials: 'same-origin' }});
             const data = await res.json();
             document.getElementById('upd_version').value = data.latest_version || '1.0.0';
             document.getElementById('upd_url').value = data.download_url || '';
@@ -960,7 +963,7 @@ def admin_panel(request: Request):
             force_update: document.getElementById('upd_force').checked,
             update_message: document.getElementById('upd_message').value
         }};
-        const res = await fetch('/api/save_update_config', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
+        const res = await fetch('/api/save_update_config', {{ method: 'POST', credentials: 'same-origin', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
         const result = await res.json();
         showToast(result.message);
     }}
@@ -970,7 +973,7 @@ def admin_panel(request: Request):
         const days = document.getElementById('manual_days').value;
         const email = document.getElementById('manual_email').value;
         if(!email) {{ alert('Por favor ingresa el correo del cliente.'); return; }}
-        const res = await fetch('/api/create_license', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{ plan: plan, duration_days: parseInt(days), email: email }}) }});
+        const res = await fetch('/api/create_license', {{ method: 'POST', credentials: 'same-origin', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{ plan: plan, duration_days: parseInt(days), email: email }}) }});
         const result = await res.json();
         const msgDiv = document.getElementById('manual_lic_msg');
         msgDiv.classList.remove('hidden');
@@ -986,7 +989,7 @@ def admin_panel(request: Request):
     async function manageLic(activeStatus) {{
         const key = document.getElementById('lic_key').value;
         if(!key) {{ alert('Por favor ingresa una clave de licencia.'); return; }}
-        const res = await fetch('/api/manage_license', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{key: key, active: activeStatus}}) }});
+        const res = await fetch('/api/manage_license', {{ method: 'POST', credentials: 'same-origin', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{key: key, active: activeStatus}}) }});
         const result = await res.json();
         document.getElementById('lic_msg').classList.remove('hidden');
         document.getElementById('lic_msg').innerText = result.message;
@@ -996,7 +999,7 @@ def admin_panel(request: Request):
     async function resetHwid() {{
         const key = document.getElementById('lic_key').value;
         if(!key) {{ alert('Por favor ingresa una clave de licencia.'); return; }}
-        const res = await fetch('/api/reset_hwid', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{key: key}}) }});
+        const res = await fetch('/api/reset_hwid', {{ method: 'POST', credentials: 'same-origin', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{key: key}}) }});
         const result = await res.json();
         document.getElementById('lic_msg').classList.remove('hidden');
         document.getElementById('lic_msg').innerText = result.message;
@@ -1014,7 +1017,7 @@ def admin_panel(request: Request):
             msgDiv.classList.remove('hidden');
             return;
         }}
-        const res = await fetch('/api/change_password', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{ current_password: current_pwd, new_password: new_pwd }}) }});
+        const res = await fetch('/api/change_password', {{ method: 'POST', credentials: 'same-origin', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{ current_password: current_pwd, new_password: new_pwd }}) }});
         const result = await res.json();
         const msgDiv = document.getElementById('pwd_msg');
         msgDiv.className = "mt-4 font-bold text-sm " + (result.status === 'success' ? 'text-emerald-400' : 'text-red-400');
@@ -1037,18 +1040,19 @@ def admin_panel(request: Request):
 def api_save_pages(request: Request, data: dict):
     print("🔥 RECIBIDA PETICIÓN DE GUARDADO DE PÁGINAS...", flush=True)
     if not verify_admin(request): 
-        print("❌ NO AUTORIZADO", flush=True)
-        return {"message": "❌ No autorizado."}
+        print("❌ NO AUTORIZADO - cookie no presente o inválida", flush=True)
+        return {"status": "error", "message": "❌ No autorizado. ¿Tu sesión expiró?"}
     
-    print("✅ USUARIO VERIFICADO, PROCEDIENDO A GUARDAR...", flush=True)
+    print(f"✅ Usuario verificado. Páginas a guardar: {list(data.keys())}", flush=True)
     try:
-        if save_all_pages({"pages": data}):
-            return {"message": "✅ Página guardada correctamente."}
+        ok = save_all_pages({"pages": data})
+        if ok:
+            return {"status": "success", "message": "✅ Página guardada correctamente."}
         else:
-            return {"message": "❌ Error al guardar en Supabase (Revisa los logs de Render)."}
+            return {"status": "error", "message": "❌ Supabase rechazó el guardado. Revisa: (1) RLS desactivado, (2) UNIQUE en columna 'key'. Mira los logs de Render."}
     except Exception as e:
         print(f"🚨 EXCEPCIÓN EN api_save_pages: {e}", flush=True)
-        return {"message": f"❌ Error interno del servidor: {str(e)}"}
+        return {"status": "error", "message": f"❌ Error interno: {str(e)}"}
 
 @app.post("/api/change_password")
 def api_change_password(request: Request, data: ChangePasswordData):
@@ -1067,14 +1071,34 @@ def recover_page():
     <body class="bg-slate-900 text-slate-300 flex items-center justify-center min-h-screen"><div class="bg-slate-800 p-8 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md text-center"><h1 class="text-2xl font-bold text-cyan-400 mb-2">🔑 Recuperar Licencia</h1><p class="text-slate-400 mb-6 text-sm">Ingresa el correo electrónico con el que realizaste tu compra.</p><input type="email" id="email" placeholder="tu.correo@gmail.com" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 outline-none focus:border-cyan-500"><button onclick="recover()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Enviar mi licencia</button><div id="msg" class="mt-4 text-emerald-400 font-bold text-sm hidden"></div></div><script>function recover(){var email = document.getElementById('email').value;fetch('/api/recover_by_email', {method: 'POST',headers: {'Content-Type': 'application/json'},body: JSON.stringify({email: email})}).then(r => r.json()).then(d => {const msgDiv = document.getElementById('msg');msgDiv.innerText = d.message;msgDiv.classList.remove('hidden');});}</script></body></html>
     """
 
+def normalize_youtube_url(url):
+    """Convierte cualquier URL de YouTube al formato embed."""
+    if not url:
+        return url
+    url = url.strip()
+    if "youtube.com/embed/" in url:
+        return url
+    m = re.search(r'youtu\.be/([a-zA-Z0-9_-]{11})', url)
+    if m:
+        return f"https://www.youtube.com/embed/{m.group(1)}"
+    m = re.search(r'[?&]v=([a-zA-Z0-9_-]{11})', url)
+    if m:
+        return f"https://www.youtube.com/embed/{m.group(1)}"
+    m = re.search(r'youtube\.com/shorts/([a-zA-Z0-9_-]{11})', url)
+    if m:
+        return f"https://www.youtube.com/embed/{m.group(1)}"
+    return url
+
 def render_landing_page(c):
     pubs_html = ""
     for p in c.get('publications', []):
         if p.get('url'):
+            raw_url = p['url'].strip()
             if p.get('type') == 'video':
-                pubs_html += f"""<div class="text-center mb-12"><div class="relative aspect-video w-full max-w-2xl mx-auto shadow-2xl rounded-xl overflow-hidden border-2 border-slate-800"><iframe src="{p['url']}" class="absolute top-0 left-0 w-full h-full" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div><p class="mt-4 text-slate-400 max-w-xl mx-auto">{p.get('desc', '')}</p></div>"""
+                embed_url = normalize_youtube_url(raw_url)
+                pubs_html += f"""<div class="text-center mb-12"><div class="relative aspect-video w-full max-w-2xl mx-auto shadow-2xl rounded-xl overflow-hidden border-2 border-slate-800"><iframe src="{embed_url}" class="absolute top-0 left-0 w-full h-full" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div><p class="mt-4 text-slate-400 max-w-xl mx-auto">{p.get('desc', '')}</p></div>"""
             elif p.get('type') == 'image':
-                pubs_html += f"""<div class="text-center mb-12"><img src="{p['url']}" alt="Publicación" class="max-w-2xl mx-auto rounded-xl border-2 border-slate-800 shadow-xl"><p class="mt-4 text-slate-400 max-w-xl mx-auto">{p.get('desc', '')}</p></div>"""
+                pubs_html += f"""<div class="text-center mb-12"><img src="{raw_url}" alt="Publicación" class="max-w-2xl mx-auto rounded-xl border-2 border-slate-800 shadow-xl"><p class="mt-4 text-slate-400 max-w-xl mx-auto">{p.get('desc', '')}</p></div>"""
 
     bt = c.get('bank_transfer_info', {})
     has_bank_info = bt.get('account_number')
