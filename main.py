@@ -182,9 +182,9 @@ def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
             try:
                 supabase.table("app_data").delete().eq("key", key).execute()
                 res = supabase.table("app_data").insert({"key": key, "value": value}).execute()
-                if not res.data: print(f"🚨 ALERTA: Supabase no devolvió datos al guardar {key} (¿RLS activo?)")
+                if not res.data: print(f"🚨 ALERTA: Supabase no devolvió datos al guardar {key} (¿RLS activo?)", flush=True)
             except Exception as e:
-                print(f"🚨 ERROR SUPABASE GUARDANDO {key}: {e}")
+                print(f"🚨 ERROR SUPABASE GUARDANDO {key}: {e}", flush=True)
 
         upsert_data("licenses_db", lic)
         upsert_data("trials_db", trials)
@@ -193,7 +193,7 @@ def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
         if ai_cfg: upsert_data("ai_agent_config", ai_cfg)
         if upd_cfg: upsert_data("bot_update_config", upd_cfg)
     except Exception as e:
-        print(f"Error general guardando DBs en Supabase: {e}")
+        print(f"Error general guardando DBs en Supabase: {e}", flush=True)
 
 licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config = load_dbs()
 
@@ -240,21 +240,24 @@ def get_default_content(page_name="Principal"):
 def get_all_pages():
     try:
         if not supabase: raise Exception("Supabase no configurado")
+        print("📥 Cargando páginas desde Supabase...", flush=True)
         response = supabase.table("app_data").select("value").eq("key", "pages").execute()
+        
         if response.data:
-            data = response.data[-1]["value"]
+            print("✅ Datos encontrados en Supabase.", flush=True)
+            data = response.data[0]["value"]
             if "hero_title" in data and "pages" not in data:
                 new_data = {"pages": {"main": data}}
                 save_all_pages(new_data)
                 return new_data
             return data
         else:
-            print("Base de datos vacía. Creando páginas por defecto en Supabase...")
+            print("⚠️ Base de datos vacía. Creando páginas por defecto...", flush=True)
             default_data = {"pages": {"main": get_default_content()}}
             save_all_pages(default_data)
             return default_data
     except Exception as e:
-        print(f"Error obteniendo páginas: {e}")
+        print(f"Error obteniendo páginas: {e}", flush=True)
         default_data = {"pages": {"main": get_default_content()}}
         try: save_all_pages(default_data)
         except: pass
@@ -262,18 +265,29 @@ def get_all_pages():
 
 def save_all_pages(data):
     try:
-        if not supabase: return False
+        if not supabase: 
+            print("❌ Supabase no configurado.", flush=True)
+            return False
+            
         try:
             supabase.table("app_data").delete().eq("key", "pages").execute()
-        except: pass
+            print("🗑️ Páginas viejas borradas (si existían).", flush=True)
+        except Exception as e:
+            print(f"⚠️ Excepción al borrar: {e}", flush=True)
+        
         res = supabase.table("app_data").insert({"key": "pages", "value": data}).execute()
-        if not res.data:
-            print("🚨 ERROR: Supabase bloqueó el guardado de páginas. Revisa RLS.")
+        
+        if hasattr(res, 'error') and res.error:
+            print(f"🚨 ERROR EXPLÍCITO DE SUPABASE: {res.error}", flush=True)
             return False
-        print("✅ Páginas guardadas en Supabase correctamente.")
+        if not hasattr(res, 'data') or res.data is None or len(res.data) == 0:
+            print("🚨 ERROR SILENCIOSO: Supabase devolvió vacío (RLS probablemente activado).", flush=True)
+            return False
+            
+        print("✅ Páginas guardadas en Supabase correctamente.", flush=True)
         return True
     except Exception as e:
-        print(f"🚨 EXCEPCIÓN guardando páginas: {e}")
+        print(f"🚨 EXCEPCIÓN guardando páginas: {e}", flush=True)
         return False
 
 # ==========================================
@@ -1027,7 +1041,12 @@ def admin_panel(request: Request):
 
 @app.post("/api/save_pages")
 def api_save_pages(request: Request, data: dict):
-    if not verify_admin(request): return {"message": "❌ No autorizado."}
+    print("🔥 RECIBIDA PETICIÓN DE GUARDADO DE PÁGINAS...", flush=True)
+    if not verify_admin(request): 
+        print("❌ NO AUTORIZADO", flush=True)
+        return {"message": "❌ No autorizado."}
+    
+    print("✅ USUARIO VERIFICADO, PROCEDIENDO A GUARDAR...", flush=True)
     if save_all_pages({"pages": data}):
         return {"message": "✅ Página guardada correctamente."}
     return {"message": "❌ Error al guardar en Supabase (Revisa los logs de Render)."}
@@ -1176,7 +1195,7 @@ def render_landing_page(c):
     <footer class="bg-slate-950 py-10 border-t border-slate-800"><div class="container mx-auto px-6 text-center"><p class="text-slate-500 text-sm mb-4 max-w-3xl mx-auto"><strong>Aviso de Riesgo:</strong> El trading de divisas y CFDs implica un riesgo sustancial y no es adecuado para todos los inversores. El rendimiento pasado no es indicativo de resultados futuros. Operar con apalancamiento puede resultar en la pérdida de su capital.</p><p class="text-slate-600 text-xs">&copy; 2024 BLENIN.G.77 THE BEST FUTURE FOR YOU. Creado por Lenin Benitez.</p></div></footer>
     {BANK_MODAL_HTML}
     <div id="google_translate_element"></div><script type="text/javascript">function googleTranslateElementInit() { new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'en,fr,pt,ru,it,de,zh-CN,ko,hi', layout: google.translate.TranslateElement.InlineLayout.SIMPLE, autoDisplay: false}, 'google_translate_element'); }</script><script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
-    <script>const langBtn = document.getElementById('lang-btn');const langMenu = document.getElementById('lang-menu');langBtn.addEventListener('click', (e) => { e.stopPropagation(); langMenu.classList.toggle('hidden'); });window.addEventListener('click', (e) => { if (!langMenu.contains(e.target) && !langBtn.contains(e.target)) { langMenu.classList.add('hidden'); } });function changeLang(langCode, langName) {document.getElementById('current-lang-name').innerText = langName;langMenu.classList.add('hidden');var date = new Date(); date.setTime(date.getTime() + (365 * 24 * 60 * 60 * 1000)); var expires = "; expires=" + date.toUTCString();var hostname = window.location.hostname;if (langCode === 'es') {document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + hostname;document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=." + hostname;} else {var cookieValue = "/es/" + langCode;document.cookie = "googtrans=" + cookieValue + expires + "; path=/";document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=" + hostname;document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=." + hostname;}window.location.reload();}window.onload = function() {var match = document.cookie.match(/googtrans=/es/([a-zA-Z\\-]+)/);if (match && match[1]) {var langMap = { 'en': '🇬🇧 English', 'fr': '🇫🇷 Français', 'pt': '🇵🇹 Portugués', 'ru': '🇷🇺 Русский', 'it': '🇮🇹 Italiano', 'de': '🇩🇪 Deutsch', 'zh-CN': '🇨🇳 中文', 'ko': '🇰🇷 한국어', 'hi': '🇮🇳 हिन्दी' };if (langMap[match[1]]) document.getElementById('current-lang-name').innerText = langMap[match[1]];}};</script>
+    <script>const langBtn = document.getElementById('lang-btn');const langMenu = document.getElementById('lang-menu');langBtn.addEventListener('click', (e) => { e.stopPropagation(); langMenu.classList.toggle('hidden'); });window.addEventListener('click', (e) => { if (!langMenu.contains(e.target) && !langBtn.contains(e.target)) { langMenu.classList.add('hidden'); } });function changeLang(langCode, langName) {document.getElementById('current-lang-name').innerText = langName;langMenu.classList.add('hidden');var date = new Date(); date.setTime(date.getTime() + (365 * 24 * 60 * 60 * 1000)); var expires = "; expires=" + date.toUTCString();var hostname = window.location.hostname;if (langCode === 'es') {document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + hostname;document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=." + hostname;} else {var cookieValue = "/es/" + langCode;document.cookie = "googtrans=" + cookieValue + expires + "; path=/";document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=" + hostname;document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=." + hostname;}window.location.reload();}window.onload = function() {var match = document.cookie.match(/googtrans=/es/([a-zA-Z\-]+)/);if (match && match[1]) {var langMap = { 'en': '🇬🇧 English', 'fr': '🇫🇷 Français', 'pt': '🇵🇹 Portugués', 'ru': '🇷🇺 Русский', 'it': '🇮🇹 Italiano', 'de': '🇩🇪 Deutsch', 'zh-CN': '🇨🇳 中文', 'ko': '🇰🇷 한국어', 'hi': '🇮🇳 हिन्दी' };if (langMap[match[1]]) document.getElementById('current-lang-name').innerText = langMap[match[1]];}};</script>
     <script>fetch('/api/track_view', { method: 'POST' });</script>
     <div id="social-proof-toast" class="fixed bottom-5 left-5 bg-slate-800 border border-cyan-500 text-slate-300 p-4 rounded-lg shadow-2xl flex items-center gap-3 transition-all duration-500 opacity-0 translate-y-10 z-[9998] max-w-xs"><i class="fas fa-check-circle text-cyan-400 text-2xl"></i><div><p id="sp-name" class="font-bold text-white text-sm">Carlos de México</p><p id="sp-action" class="text-xs text-slate-400">Acaba de adquirir el Plan Oro</p></div></div>
     <script>function showSocialProof() {const names = ["Carlos M.", "Ana G.", "John D.", "María F.", "Alex R.", "Sofía L.", "David P.", "Elena V."];const countries = ["México", "España", "Argentina", "Colombia", "Estados Unidos", "Chile", "Perú", "Ecuador"];const actions = ["Acaba de adquirir el Plan Oro", "Acaba de adquirir el Plan Plata", "Está viendo una demostración en vivo", "Solicitó prueba gratuita de 30 días"];const toast = document.getElementById('social-proof-toast');document.getElementById('sp-name').innerText = `${names[Math.floor(Math.random()*names.length)]} de ${countries[Math.floor(Math.random()*countries.length)]}`;document.getElementById('sp-action').innerText = actions[Math.floor(Math.random()*actions.length)];toast.classList.remove('opacity-0', 'translate-y-10');setTimeout(() => toast.classList.add('opacity-0', 'translate-y-10'), 5000);}setTimeout(showSocialProof, 5000);setInterval(showSocialProof, Math.floor(Math.random() * (25000 - 15000 + 1)) + 15000);</script>
