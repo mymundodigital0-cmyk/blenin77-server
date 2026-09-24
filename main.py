@@ -126,7 +126,7 @@ def generate_dynamic_content_with_llama(prompt, max_tokens=800):
         print("❌ ERROR: Falta la variable de entorno GEMINI_API_KEY en Render.", flush=True)
         return None
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key={gemini_api_key}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7}
