@@ -118,33 +118,28 @@ def send_email(to_email, subject, body):
         return False
 
 # ==========================================
-# 🧠 INTELIGENCIA ARTIFICIAL (GROQ API - LLAMA 3.1 70B ULTRA RÁPIDO)
+# 🧠 INTELIGENCIA ARTIFICIAL (GOOGLE GEMINI API)
 # ==========================================
 def generate_dynamic_content_with_llama(prompt, max_tokens=800):
-    groq_api_key = os.environ.get("GROQ_API_KEY", "")
-    if not groq_api_key:
-        print("❌ ERROR: Falta la variable de entorno GROQ_API_KEY en Render.", flush=True)
+    gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not gemini_api_key:
+        print("❌ ERROR: Falta la variable de entorno GEMINI_API_KEY en Render.", flush=True)
         return None
     try:
-        headers = {
-            "Authorization": f"Bearer {groq_api_key}",
-            "Content-Type": "application/json"
-        }
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_api_key}"
         payload = {
-            "model": "gemma2-9b-it",
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-            "temperature": 0.7
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7}
         }
-        response = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
+        response = requests.post(url, json=payload, timeout=30)
         
         if response.status_code == 200:
-            return response.json().get("choices", [{}])[0].get("message", {}).get("content", "")
+            return response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
         else:
-            print(f"❌ ERROR EN API DE GROQ: {response.text}", flush=True)
+            print(f"❌ ERROR EN API DE GEMINI: {response.text}", flush=True)
             return None
     except Exception as e:
-        print(f"❌ EXCEPCIÓN CONECTANDO A GROQ: {e}", flush=True)
+        print(f"❌ EXCEPCIÓN CONECTANDO A GEMINI: {e}", flush=True)
         return None
 
 # ==========================================
