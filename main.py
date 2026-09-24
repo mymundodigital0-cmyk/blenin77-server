@@ -131,7 +131,7 @@ def generate_dynamic_content_with_llama(prompt, max_tokens=800):
             "Content-Type": "application/json"
         }
         payload = {
-            "model": "llama-3.3-70b-versatile",
+            "model": "gemma2-9b-it",
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
             "temperature": 0.7
