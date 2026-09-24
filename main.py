@@ -118,7 +118,7 @@ def send_email(to_email, subject, body):
         return False
 
 # ==========================================
-# 🧠 INTELIGENCIA ARTIFICIAL (GROQ API - LLAMA 3.1 ULTRA RÁPIDO)
+# 🧠 INTELIGENCIA ARTIFICIAL (GROQ API - LLAMA 3.1 70B ULTRA RÁPIDO)
 # ==========================================
 def generate_dynamic_content_with_llama(prompt, max_tokens=800):
     groq_api_key = os.environ.get("GROQ_API_KEY", "")
@@ -131,7 +131,7 @@ def generate_dynamic_content_with_llama(prompt, max_tokens=800):
             "Content-Type": "application/json"
         }
         payload = {
-            "model": "llama-3.1-8b-instant",
+            "model": "llama3-70b-8192",
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
             "temperature": 0.7
@@ -559,7 +559,7 @@ def admin_panel(request: Request):
         <div id="content-marketing" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-purple-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🧠 Generador de Tráfico y Leads con IA</h3>
-                <p class="text-sm text-slate-400 mb-4">Elige qué tipo de contenido quieres que la IA (Groq Llama 3) cree para atraer clientes a tu web.</p>
+                <p class="text-sm text-slate-400 mb-4">Elige qué tipo de contenido quieres que la IA (Groq Llama 3 70B) cree para atraer clientes a tu web.</p>
                 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                     <button onclick="generateMarketing('seo_blog')" class="bg-purple-600 hover:bg-purple-500 text-white p-4 rounded text-sm font-bold transition"><i class="fas fa-blog mr-2"></i>Artículo SEO (Google)</button>
