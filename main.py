@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Optional
-import random, string, smtplib, os, requests, json, re
+import random, string, smtplib, os, requests, json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -56,7 +56,6 @@ def admin_login_page():
                 const pwd = document.getElementById('pwd').value;
                 const res = await fetch('/api/login', {{
                     method: 'POST',
-                    credentials: 'same-origin',
                     headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify({{ password: pwd }})
                 }});
@@ -118,32 +117,54 @@ def send_email(to_email, subject, body):
         return False
 
 # ==========================================
-# 🧠 INTELIGENCIA ARTIFICIAL (GOOGLE GEMINI API)
+# 🧠 INTELIGENCIA ARTIFICIAL CON GOOGLE GEMINI
 # ==========================================
-def generate_dynamic_content_with_llama(prompt, max_tokens=800):
-    gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
-    if not gemini_api_key:
-        print("❌ ERROR: Falta la variable de entorno GEMINI_API_KEY en Render.", flush=True)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+
+def generate_dynamic_content_with_llama(prompt, max_tokens=1200):
+    """Genera contenido usando Google Gemini API."""
+    if not GEMINI_API_KEY:
+        print("❌ ERROR: GEMINI_API_KEY no configurada en variables de entorno de Render.", flush=True)
         return None
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={gemini_api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
         payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7}
+            "contents": [
+                {
+                    "parts": [{"text": prompt}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.8,
+                "maxOutputTokens": max_tokens,
+                "topP": 0.95
+            },
+            "systemInstruction": {
+                "parts": [
+                    {"text": "Eres un copywriter experto en marketing digital y trading automatizado. Respondes SIEMPRE en español, con tono persuasivo, profesional y orientado a conversión. Usas formato Markdown cuando sea apropiado."}
+                ]
+            }
         }
-        response = requests.post(url, json=payload, timeout=30)
-        
+        response = requests.post(url, json=payload, timeout=90)
         if response.status_code == 200:
-            return response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            data = response.json()
+            candidates = data.get("candidates", [])
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if parts:
+                    return parts[0].get("text", "")
+            print(f"⚠️ GEMINI: Respuesta vacía. Body: {data}", flush=True)
+            return None
         else:
-            print(f"❌ ERROR EN API DE GEMINI: {response.text}", flush=True)
+            print(f"❌ GEMINI API ERROR {response.status_code}: {response.text}", flush=True)
             return None
     except Exception as e:
-        print(f"❌ EXCEPCIÓN CONECTANDO A GEMINI: {e}", flush=True)
+        print(f"❌ EXCEPCIÓN llamando a Gemini: {e}", flush=True)
         return None
 
 # ==========================================
-# 🧠 SISTEMA DE BASE DE DATOS (SUPABASE)
+# 🧠 SISTEMA DE BASE DE DATOS (SUPABASE) - VERSIÓN A PRUEBA DE FALLOS
 # ==========================================
 def get_default_ai_config():
     return {
@@ -155,7 +176,7 @@ def get_default_ai_config():
         "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que la comunidad de BLENIN.G.77 está logrando hoy. Nuestros usuarios del Plan Oro están reportando resultados excepcionales al combinar nuestra IA Predictiva con el Modo Híbrido (MT5 + Noticias en tiempo real).\n\nSabemos que el trading requiere confianza, pero las oportunidades del mercado no esperan. Si te quedas fuera, el mercado seguirá moviéndose sin tus operaciones optimizadas.\n\nNo dejes tu capital expuesto a la emoción humana. Deja que la matemática y la IA trabajan por ti.\n\nRevisa nuestros planes y elige el que se adapte a tu capital aquí:\n👉 https://blenin77-server.onrender.com/#pricing\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.",
         "stage3_days": 10,
         "stage3_subject": "⏳ {name}, tu acceso VIP a BLENIN.G.77 está por expirar",
-        "stage3_body": "Hola {name},\n\nHemos notado que aún no has dado el paso definitivo para automatizar tu trading con BLENIN.G.77. Entendemos que dar el control a una Inteligencia Artificial puede ser un gran paso.\n\nPor eso, como último intento de ayudarte a dar el salto institucional, hemos habilitado un descuento especial del 10% si adquieres cualquier plan en las próximas 48 horas.\n\nUsa el siguiente código al momento de tu transferencia o responde a este correo para activarlo:\n🎁 Código de descuento: BLENIN10\n\nNo dejes que la volatilidad te toma por sorpresa. Protege tu capital y maximiza tus oportunidades hoy.\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.\nhttps://blenin77-server.onrender.com/#pricing"
+        "stage3_body": "Hola {name},\n\nHemos notado que aún no has dado el paso definitivo para automatizar tu trading con BLENIN.G.77. Entendemos que dar el control a una Inteligencia Artificial puede ser un gran paso.\n\nPor eso, como último intento de ayudarte a dar el salto institucional, hemos habilitado un descuento especial del 10% si adquieres cualquier plan en las próximas 48 horas.\n\nUsa el siguiente código al momento de tu transferencia o responde a este correo para activarlo:\n🎁 Código de descuento: BLENIN10\n\nNo dejes que la volatilidad te tome por sorpresa. Protege tu capital y maximiza tus oportunidades hoy.\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.\nhttps://blenin77-server.onrender.com/#pricing"
     }
 
 def get_default_update_config():
@@ -189,7 +210,7 @@ def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
         def upsert_data(key, value):
             try:
                 res = supabase.table("app_data").upsert({"key": key, "value": value}, on_conflict="key").execute()
-                if not res.data: print(f"🚨 ALERTA: Supabase no devolvió datos al guardar {key} (¿RLS activo o falta UNIQUE?)", flush=True)
+                if not res.data: print(f"🚨 ALERTA: Supabase no devolvió datos al guardar {key} (¿RLS activo?)", flush=True)
             except Exception as e:
                 print(f"🚨 ERROR SUPABASE GUARDANDO {key}: {e}", flush=True)
 
@@ -247,8 +268,11 @@ def get_default_content(page_name="Principal"):
 def get_all_pages():
     try:
         if not supabase: raise Exception("Supabase no configurado")
+        print("📥 Cargando páginas desde Supabase...", flush=True)
         response = supabase.table("app_data").select("value").eq("key", "pages").execute()
+        
         if response.data:
+            print("✅ Datos encontrados en Supabase.", flush=True)
             data = response.data[0]["value"]
             if "hero_title" in data and "pages" not in data:
                 new_data = {"pages": {"main": data}}
@@ -256,6 +280,7 @@ def get_all_pages():
                 return new_data
             return data
         else:
+            print("⚠️ Base de datos vacía. Creando páginas por defecto...", flush=True)
             default_data = {"pages": {"main": get_default_content()}}
             save_all_pages(default_data)
             return default_data
@@ -272,13 +297,14 @@ def save_all_pages(data):
             print("❌ Supabase no configurado. Revisa las variables de entorno en Render.", flush=True)
             return False
             
+        print("🔄 Intentando hacer upsert en Supabase...", flush=True)
         res = supabase.table("app_data").upsert({"key": "pages", "value": data}, on_conflict="key").execute()
         
         if hasattr(res, 'error') and res.error:
             print(f"🚨 ERROR EXPLÍCITO DE SUPABASE: {res.error}", flush=True)
             return False
         if not hasattr(res, 'data') or res.data is None or len(res.data) == 0:
-            print("🚨 ERROR SILENCIOSO: Supabase no devolvió datos. Revisa si RLS está desactivado o si falta UNIQUE en 'key'.", flush=True)
+            print("🚨 ERROR SILENCIOSO: Supabase no devolvió datos. Revisa si RLS está desactivado.", flush=True)
             return False
             
         print("✅ Páginas guardadas en Supabase correctamente.", flush=True)
@@ -323,7 +349,7 @@ def admin_panel(request: Request):
         
     pages_data = get_all_pages()
     pages_dict = pages_data.get("pages", {})
-    pages_json = json.dumps(pages_dict, ensure_ascii=False).replace('</', '<\\/')
+    pages_json = json.dumps(pages_dict).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
     
     return f"""
     <html lang="es"><head><meta charset="UTF-8"><title>Admin - BLENIN77</title>
@@ -341,7 +367,7 @@ def admin_panel(request: Request):
             <button onclick="showTab('ai')" id="tab-ai" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">🤖 Agente IA</button>
             <button onclick="showTab('lic')" id="tab-lic" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">Licencias</button>
             <button onclick="showTab('updates')" id="tab-updates" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">🔄 Actualizaciones</button>
-            <button onclick="showTab('marketing')" id="tab-marketing" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">🧠 Marketing IA</button>
+            <button onclick="showTab('mkt')" id="tab-mkt" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">🧠 Marketing IA</button>
             <button onclick="showTab('settings')" id="tab-settings" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">⚙️ Ajustes</button>
             <a href="/admin/logout" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded text-sm font-bold transition ml-2"><i class="fas fa-sign-out-alt mr-1"></i>Salir</a>
         </div>
@@ -551,21 +577,50 @@ def admin_panel(request: Request):
                 <button onclick="saveUpdateConfig()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition"><i class="fas fa-save mr-2"></i>Guardar y Publicar Versión</button>
             </div>
         </div>
-        <div id="content-marketing" class="hidden space-y-6">
+        <div id="content-mkt" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-purple-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🧠 Generador de Tráfico y Leads con IA</h3>
-                <p class="text-sm text-slate-400 mb-4">Elige qué tipo de contenido quieres que la IA (Groq Llama 3 70B) cree para atraer clientes a tu web.</p>
+                <p class="text-sm text-slate-400 mb-6">Elige qué tipo de contenido quieres que la IA (<strong class="text-purple-400">Google Gemini</strong>) cree para atraer clientes a tu web.</p>
                 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <button onclick="generateMarketing('seo_blog')" class="bg-purple-600 hover:bg-purple-500 text-white p-4 rounded text-sm font-bold transition"><i class="fas fa-blog mr-2"></i>Artículo SEO (Google)</button>
-                    <button onclick="generateMarketing('tiktok_script')" class="bg-pink-600 hover:bg-pink-500 text-white p-4 rounded text-sm font-bold transition"><i class="fab fa-tiktok mr-2"></i>Guion Viral (TikTok/Reels)</button>
-                    <button onclick="generateMarketing('forum_post')" class="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded text-sm font-bold transition"><i class="fab fa-reddit mr-2"></i>Post para Foros (Reddit)</button>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <button onclick="setMktType('seo')" id="mkt-btn-seo" class="bg-slate-900 hover:bg-purple-600 border-2 border-purple-500 p-4 rounded-lg text-left transition">
+                        <i class="fas fa-search text-2xl text-purple-400 mb-2"></i>
+                        <h4 class="text-white font-bold">Artículo SEO (Google)</h4>
+                        <p class="text-xs text-slate-400 mt-1">Blog optimizado para rankear en Google.</p>
+                    </button>
+                    <button onclick="setMktType('tiktok')" id="mkt-btn-tiktok" class="bg-slate-900 hover:bg-purple-600 border-2 border-slate-700 p-4 rounded-lg text-left transition">
+                        <i class="fab fa-tiktok text-2xl text-purple-400 mb-2"></i>
+                        <h4 class="text-white font-bold">Guion Viral (TikTok/Reels)</h4>
+                        <p class="text-xs text-slate-400 mt-1">Guion con hook + desarrollo + CTA.</p>
+                    </button>
+                    <button onclick="setMktType('reddit')" id="mkt-btn-reddit" class="bg-slate-900 hover:bg-purple-600 border-2 border-slate-700 p-4 rounded-lg text-left transition">
+                        <i class="fab fa-reddit text-2xl text-purple-400 mb-2"></i>
+                        <h4 class="text-white font-bold">Post para Foros (Reddit)</h4>
+                        <p class="text-xs text-slate-400 mt-1">Post natural para generar tráfico orgánico.</p>
+                    </button>
                 </div>
-                
-                <div id="marketing_output" class="bg-slate-900 p-4 rounded border border-slate-700 text-slate-300 text-sm whitespace-pre-wrap min-h-[200px]">
-                    El contenido generado por la IA aparecerá aquí...
+
+                <div class="mb-4">
+                    <label class="text-sm text-slate-400">Tema / Palabra clave (opcional)</label>
+                    <input type="text" id="mkt_topic" placeholder="Ej: bot de trading IA, automatizar forex, señal MT5" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-purple-500">
                 </div>
-                <button onclick="copyMarketing()" class="mt-4 bg-cyan-500 hover:bg-cyan-400 text-slate-900 px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-copy mr-2"></i>Copiar Contenido</button>
+
+                <input type="hidden" id="mkt_selected_type" value="seo">
+
+                <button onclick="generateMktContent()" id="mkt_generate_btn" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded transition">
+                    <i class="fas fa-magic mr-2"></i> Generar Contenido con IA
+                </button>
+
+                <div id="mkt_result_box" class="mt-6 hidden">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="text-white font-bold">📝 Contenido generado:</h4>
+                        <div class="flex gap-2">
+                            <button onclick="copyMktResult()" class="bg-cyan-500 hover:bg-cyan-400 text-slate-900 px-3 py-1 rounded text-xs font-bold"><i class="fas fa-copy mr-1"></i>Copiar</button>
+                            <button onclick="downloadMktResult()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded text-xs font-bold"><i class="fas fa-download mr-1"></i>Descargar .txt</button>
+                        </div>
+                    </div>
+                    <textarea id="mkt_result" rows="18" class="w-full bg-slate-900 rounded p-4 border border-slate-700 text-slate-200 font-mono text-sm outline-none focus:border-purple-500"></textarea>
+                </div>
             </div>
         </div>
         <div id="content-settings" class="hidden space-y-6">
@@ -579,11 +634,11 @@ def admin_panel(request: Request):
                     </div>
                     <div>
                         <label class="text-sm text-slate-400">Nueva Contraseña</label>
-                        <input type="password" id="new_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="•••••••">
+                        <input type="password" id="new_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="••••••">
                     </div>
                     <div>
                         <label class="text-sm text-slate-400">Repetir Nueva Contraseña</label>
-                        <input type="password" id="confirm_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="•••••••">
+                        <input type="password" id="confirm_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="••••••">
                     </div>
                     <button onclick="changePassword()" class="w-full bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-save mr-2"></i>Actualizar Contraseña</button>
                     <div id="pwd_msg" class="mt-4 font-bold text-sm hidden"></div>
@@ -600,13 +655,13 @@ def admin_panel(request: Request):
     <div id="toast" class="fixed bottom-5 right-5 bg-slate-700 text-white px-4 py-3 rounded-lg shadow-2xl opacity-0 transition-opacity duration-300 pointer-events-none">
         <span id="toast-msg"></span>
     </div>
-    <script id="pages-data" type="application/json">{pages_json}</script>
     <script>
-    const allPages = JSON.parse(document.getElementById('pages-data').textContent);
-    let currentMarketingText = "";
+    const allPages = JSON.parse('{pages_json}');
+    
+    let mktCurrentType = 'seo';
     
     function showTab(tabId) {{
-        ['pages', 'stats', 'ai', 'lic', 'updates', 'marketing', 'settings'].forEach(id => {{
+        ['pages', 'stats', 'ai', 'lic', 'updates', 'mkt', 'settings'].forEach(id => {{
             document.getElementById('content-' + id).classList.add('hidden');
             document.getElementById('tab-' + id).classList.remove('tab-active');
             document.getElementById('tab-' + id).classList.add('bg-slate-800', 'hover:bg-slate-700');
@@ -876,16 +931,11 @@ def admin_panel(request: Request):
         try {{
             const res = await fetch('/api/save_pages', {{ 
                 method: 'POST', 
-                credentials: 'same-origin', 
                 headers: {{'Content-Type': 'application/json'}}, 
                 body: JSON.stringify(allPages) 
             }});
             const result = await res.json();
             showToast(result.message);
-            if (result.status === 'error') {{
-                console.error('Error guardando:', result);
-                return;
-            }}
             if(reloadSelector) {{ 
                 updateSelector(); 
             }}
@@ -897,7 +947,7 @@ def admin_panel(request: Request):
     
     async function loadStats() {{
         try {{
-            const res = await fetch('/api/get_stats', {{ credentials: 'same-origin' }});
+            const res = await fetch('/api/get_stats');
             const data = await res.json();
             document.getElementById('stat_views').innerText = data.views || 0;
             const countries = data.countries || {{}};
@@ -933,7 +983,7 @@ def admin_panel(request: Request):
     
     async function loadAIConfig() {{
         try {{
-            const res = await fetch('/api/get_ai_config', {{ credentials: 'same-origin' }});
+            const res = await fetch('/api/get_ai_config');
             const data = await res.json();
             const defaults = {{
                 stage1_days: 2, stage1_subject: "🚀 {{name}}, descubre el poder de la IA Institucional con BLENIN.G.77", stage1_body: "Hola {{name}},\\n\\nGracias por tu interés en BLENIN.G.77...",
@@ -965,14 +1015,14 @@ def admin_panel(request: Request):
             stage3_subject: document.getElementById('s3_subject').value,
             stage3_body: document.getElementById('s3_body').value
         }};
-        const res = await fetch('/api/save_ai_config', {{ method: 'POST', credentials: 'same-origin', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
+        const res = await fetch('/api/save_ai_config', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
         const result = await res.json();
         showToast(result.message);
     }}
     
     async function loadUpdateConfig() {{
         try {{
-            const res = await fetch('/api/get_update_config', {{ credentials: 'same-origin' }});
+            const res = await fetch('/api/get_update_config');
             const data = await res.json();
             document.getElementById('upd_version').value = data.latest_version || '1.0.0';
             document.getElementById('upd_url').value = data.download_url || '';
@@ -988,33 +1038,9 @@ def admin_panel(request: Request):
             force_update: document.getElementById('upd_force').checked,
             update_message: document.getElementById('upd_message').value
         }};
-        const res = await fetch('/api/save_update_config', {{ method: 'POST', credentials: 'same-origin', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
+        const res = await fetch('/api/save_update_config', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
         const result = await res.json();
         showToast(result.message);
-    }}
-
-    async function generateMarketing(type) {{
-        const outputDiv = document.getElementById('marketing_output');
-        outputDiv.innerText = "🧠 La IA está pensando y redactando el contenido... (Esto puede tardar 15-30 segundos)";
-        const res = await fetch('/api/generate_marketing', {{
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {{'Content-Type': 'application/json'}},
-            body: JSON.stringify({{ type: type }})
-        }});
-        const result = await res.json();
-        if(result.status === 'success') {{
-            currentMarketingText = result.content;
-            outputDiv.innerText = result.content;
-        }} else {{
-            outputDiv.innerText = "❌ Error: " + result.message;
-        }}
-    }}
-
-    function copyMarketing() {{
-        navigator.clipboard.writeText(currentMarketingText).then(() => {{
-            showToast('✅ Contenido copiado al portapapeles.');
-        }});
     }}
     
     async function createManualLicense() {{
@@ -1022,7 +1048,7 @@ def admin_panel(request: Request):
         const days = document.getElementById('manual_days').value;
         const email = document.getElementById('manual_email').value;
         if(!email) {{ alert('Por favor ingresa el correo del cliente.'); return; }}
-        const res = await fetch('/api/create_license', {{ method: 'POST', credentials: 'same-origin', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{ plan: plan, duration_days: parseInt(days), email: email }}) }});
+        const res = await fetch('/api/create_license', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{ plan: plan, duration_days: parseInt(days), email: email }}) }});
         const result = await res.json();
         const msgDiv = document.getElementById('manual_lic_msg');
         msgDiv.classList.remove('hidden');
@@ -1038,7 +1064,7 @@ def admin_panel(request: Request):
     async function manageLic(activeStatus) {{
         const key = document.getElementById('lic_key').value;
         if(!key) {{ alert('Por favor ingresa una clave de licencia.'); return; }}
-        const res = await fetch('/api/manage_license', {{ method: 'POST', credentials: 'same-origin', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{key: key, active: activeStatus}}) }});
+        const res = await fetch('/api/manage_license', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{key: key, active: activeStatus}}) }});
         const result = await res.json();
         document.getElementById('lic_msg').classList.remove('hidden');
         document.getElementById('lic_msg').innerText = result.message;
@@ -1048,7 +1074,7 @@ def admin_panel(request: Request):
     async function resetHwid() {{
         const key = document.getElementById('lic_key').value;
         if(!key) {{ alert('Por favor ingresa una clave de licencia.'); return; }}
-        const res = await fetch('/api/reset_hwid', {{ method: 'POST', credentials: 'same-origin', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{key: key}}) }});
+        const res = await fetch('/api/reset_hwid', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{key: key}}) }});
         const result = await res.json();
         document.getElementById('lic_msg').classList.remove('hidden');
         document.getElementById('lic_msg').innerText = result.message;
@@ -1066,7 +1092,7 @@ def admin_panel(request: Request):
             msgDiv.classList.remove('hidden');
             return;
         }}
-        const res = await fetch('/api/change_password', {{ method: 'POST', credentials: 'same-origin', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{ current_password: current_pwd, new_password: new_pwd }}) }});
+        const res = await fetch('/api/change_password', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{ current_password: current_pwd, new_password: new_pwd }}) }});
         const result = await res.json();
         const msgDiv = document.getElementById('pwd_msg');
         msgDiv.className = "mt-4 font-bold text-sm " + (result.status === 'success' ? 'text-emerald-400' : 'text-red-400');
@@ -1080,6 +1106,75 @@ def admin_panel(request: Request):
         }}
     }}
     
+    function setMktType(type) {{
+        mktCurrentType = type;
+        document.getElementById('mkt_selected_type').value = type;
+        ['seo','tiktok','reddit'].forEach(t => {{
+            const btn = document.getElementById('mkt-btn-' + t);
+            if(t === type) {{
+                btn.classList.remove('border-slate-700');
+                btn.classList.add('border-purple-500', 'bg-purple-900/30');
+            }} else {{
+                btn.classList.add('border-slate-700');
+                btn.classList.remove('border-purple-500', 'bg-purple-900/30');
+            }}
+        }});
+    }}
+    
+    async function generateMktContent() {{
+        const topic = document.getElementById('mkt_topic').value || 'automatizar trading con IA en MT5';
+        const btn = document.getElementById('mkt_generate_btn');
+        const resultBox = document.getElementById('mkt_result_box');
+        const resultArea = document.getElementById('mkt_result');
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Gemini está redactando el contenido...';
+        resultBox.classList.remove('hidden');
+        resultArea.value = '⏳ La IA está redactando el contenido... (esto puede tardar 15-30 segundos)';
+        
+        try {{
+            const res = await fetch('/api/generate_marketing', {{
+                method: 'POST',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{ type: mktCurrentType, topic: topic }})
+            }});
+            const data = await res.json();
+            if(data.status === 'success') {{
+                resultArea.value = data.content;
+                showToast('✅ Contenido generado correctamente.');
+            }} else {{
+                resultArea.value = '❌ Error: ' + (data.message || 'La IA no respondió.');
+                showToast('❌ Error al generar contenido.');
+            }}
+        }} catch(e) {{
+            resultArea.value = '❌ Error de conexión con el servidor.';
+            console.error(e);
+            showToast('❌ Error de conexión.');
+        }} finally {{
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-magic mr-2"></i> Generar Contenido con IA';
+        }}
+    }}
+    
+    function copyMktResult() {{
+        const txt = document.getElementById('mkt_result');
+        txt.select();
+        document.execCommand('copy');
+        showToast('✅ Contenido copiado al portapapeles.');
+    }}
+    
+    function downloadMktResult() {{
+        const content = document.getElementById('mkt_result').value;
+        const blob = new Blob([content], {{type: 'text/plain'}});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'blenin77_marketing_' + mktCurrentType + '.txt';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('✅ Archivo descargado.');
+    }}
+    
     updateSelector();
     </script>
     </body></html>
@@ -1089,41 +1184,18 @@ def admin_panel(request: Request):
 def api_save_pages(request: Request, data: dict):
     print("🔥 RECIBIDA PETICIÓN DE GUARDADO DE PÁGINAS...", flush=True)
     if not verify_admin(request): 
-        print("❌ NO AUTORIZADO - cookie no presente o inválida", flush=True)
-        return {"status": "error", "message": "❌ No autorizado. ¿Tu sesión expiró?"}
+        print("❌ NO AUTORIZADO", flush=True)
+        return {"message": "❌ No autorizado."}
     
-    print(f"✅ Usuario verificado. Páginas a guardar: {list(data.keys())}", flush=True)
+    print("✅ USUARIO VERIFICADO, PROCEDIENDO A GUARDAR...", flush=True)
     try:
-        ok = save_all_pages({"pages": data})
-        if ok:
-            return {"status": "success", "message": "✅ Página guardada correctamente."}
+        if save_all_pages({"pages": data}):
+            return {"message": "✅ Página guardada correctamente."}
         else:
-            return {"status": "error", "message": "❌ Supabase rechazó el guardado. Revisa: (1) RLS desactivado, (2) UNIQUE en columna 'key'. Mira los logs de Render."}
+            return {"message": "❌ Error al guardar en Supabase (Revisa los logs de Render)."}
     except Exception as e:
         print(f"🚨 EXCEPCIÓN EN api_save_pages: {e}", flush=True)
-        return {"status": "error", "message": f"❌ Error interno: {str(e)}"}
-
-@app.post("/api/generate_marketing")
-def generate_marketing_api(request: Request, data: dict):
-    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
-    
-    prompt_type = data.get("type")
-    
-    if prompt_type == "seo_blog":
-        prompt = "Eres un experto en SEO y copywriting de trading. Escribe un artículo de blog persuasivo de 500 palabras sobre 'Por qué automatizar tu trading con IA es el futuro'. Menciona BLENIN.G.77, el enjambre de 500 agentes y la IA predictiva. Incluye títulos H2, H3 y una llamada a la acción para visitar https://blenin77-server.onrender.com/#pricing. Usa formato HTML."
-    elif prompt_type == "tiktok_script":
-        prompt = "Eres un copywriter experto en retención viral de TikTok y trading. Escribe un guion para un video corto (45-60 segundos). Estructura: 1) Gancho polémico en los primeros 3 segundos (ej: 'Por qué pierdes dinero en trading'). 2) Agitación del problema (las emociones humanas, el cansancio). 3) Presentación de la solución: BLENIN.G.77 (un enjambre de 500 agentes de IA que opera en MT5 sin emociones). 4) Llamado a la acción fuerte para hacer clic en el enlace de la bio. Indica las instrucciones visuales entre corchetes [Así]. El tono debe ser directo, institucional y persuasivo."
-    elif prompt_type == "forum_post":
-        prompt = "Eres un trader experimentado en foros de Reddit (r/Forex). Escribe un post genuino y no spammy compartiendo tu experiencia usando un enjambre de agentes de IA para hacer trading. Habla sobre cómo BLENIN.G.77 usa IA predictiva y modo híbrido con MT5. Pregunta a la comunidad si han probado tecnologías similares. Incluye el enlace https://blenin77-server.onrender.com de forma natural."
-    else:
-        return {"status": "error", "message": "Tipo no válido."}
-        
-    content = generate_dynamic_content_with_llama(prompt, max_tokens=800)
-    
-    if content:
-        return {"status": "success", "content": content}
-    else:
-        return {"status": "error", "message": "La IA no respondió. Revisa los logs de Render o si la API Key de Groq es correcta."}
+        return {"message": f"❌ Error interno del servidor: {str(e)}"}
 
 @app.post("/api/change_password")
 def api_change_password(request: Request, data: ChangePasswordData):
@@ -1142,34 +1214,14 @@ def recover_page():
     <body class="bg-slate-900 text-slate-300 flex items-center justify-center min-h-screen"><div class="bg-slate-800 p-8 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md text-center"><h1 class="text-2xl font-bold text-cyan-400 mb-2">🔑 Recuperar Licencia</h1><p class="text-slate-400 mb-6 text-sm">Ingresa el correo electrónico con el que realizaste tu compra.</p><input type="email" id="email" placeholder="tu.correo@gmail.com" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 outline-none focus:border-cyan-500"><button onclick="recover()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Enviar mi licencia</button><div id="msg" class="mt-4 text-emerald-400 font-bold text-sm hidden"></div></div><script>function recover(){var email = document.getElementById('email').value;fetch('/api/recover_by_email', {method: 'POST',headers: {'Content-Type': 'application/json'},body: JSON.stringify({email: email})}).then(r => r.json()).then(d => {const msgDiv = document.getElementById('msg');msgDiv.innerText = d.message;msgDiv.classList.remove('hidden');});}</script></body></html>
     """
 
-def normalize_youtube_url(url):
-    """Convierte cualquier URL de YouTube al formato embed."""
-    if not url:
-        return url
-    url = url.strip()
-    if "youtube.com/embed/" in url:
-        return url
-    m = re.search(r'youtu\.be/([a-zA-Z0-9_-]{11})', url)
-    if m:
-        return f"https://www.youtube.com/embed/{m.group(1)}"
-    m = re.search(r'[?&]v=([a-zA-Z0-9_-]{11})', url)
-    if m:
-        return f"https://www.youtube.com/embed/{m.group(1)}"
-    m = re.search(r'youtube\.com/shorts/([a-zA-Z0-9_-]{11})', url)
-    if m:
-        return f"https://www.youtube.com/embed/{m.group(1)}"
-    return url
-
 def render_landing_page(c):
     pubs_html = ""
     for p in c.get('publications', []):
         if p.get('url'):
-            raw_url = p['url'].strip()
             if p.get('type') == 'video':
-                embed_url = normalize_youtube_url(raw_url)
-                pubs_html += f"""<div class="text-center mb-12"><div class="relative aspect-video w-full max-w-2xl mx-auto shadow-2xl rounded-xl overflow-hidden border-2 border-slate-800"><iframe src="{embed_url}" class="absolute top-0 left-0 w-full h-full" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div><p class="mt-4 text-slate-400 max-w-xl mx-auto">{p.get('desc', '')}</p></div>"""
+                pubs_html += f"""<div class="text-center mb-12"><div class="relative aspect-video w-full max-w-2xl mx-auto shadow-2xl rounded-xl overflow-hidden border-2 border-slate-800"><iframe src="{p['url']}" class="absolute top-0 left-0 w-full h-full" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div><p class="mt-4 text-slate-400 max-w-xl mx-auto">{p.get('desc', '')}</p></div>"""
             elif p.get('type') == 'image':
-                pubs_html += f"""<div class="text-center mb-12"><img src="{raw_url}" alt="Publicación" class="max-w-2xl mx-auto rounded-xl border-2 border-slate-800 shadow-xl"><p class="mt-4 text-slate-400 max-w-xl mx-auto">{p.get('desc', '')}</p></div>"""
+                pubs_html += f"""<div class="text-center mb-12"><img src="{p['url']}" alt="Publicación" class="max-w-2xl mx-auto rounded-xl border-2 border-slate-800 shadow-xl"><p class="mt-4 text-slate-400 max-w-xl mx-auto">{p.get('desc', '')}</p></div>"""
 
     bt = c.get('bank_transfer_info', {})
     has_bank_info = bt.get('account_number')
@@ -1246,7 +1298,7 @@ def render_landing_page(c):
         wa_link = f"https://wa.me/{bt.get('whatsapp_for_proof', '')}?text=Hola%2C%20adjunto%20el%20comprobante%20de%20pago%20para%20el%20plan%20"
         mail_link = f"mailto:{bt.get('email_for_proof', '')}?subject=Comprobante%20de%20Pago%20Plan%20"
         bank_modal_html = f"""
-        <div id="bankModal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4"><div class="bg-slate-800 p-8 rounded-xl max-w-md w-full border border-slate-700 shadow-2xl relative"><button onclick="closeBankModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">&times;</button><h3 class="text-2xl font-bold text-cyan-400 mb-2">Instrucciones de Pago</h3><p class="text-slate-400 text-sm mb-6">Estás comprando el plan: <span id="modal_plan_name" class="font-bold text-white"></span> por <span id="modal_plan_price" class="font-bold text-white"></span></p><div class="bg-slate-900 p-4 rounded-lg border border-slate-700 space-y-3 text-sm"><p><strong class="text-slate-400">Banco:</strong> <span class="text-white">{bt.get('bank_name', '')}</span></p><p><strong class="text-slate-400">Tipo de Cuenta:</strong> <span class="text-white">{bt.get('account_type', '')}</span></p><p><strong class="text-slate-400">Número de Cuenta:</strong> <span class="text-cyan-400 font-mono">{bt.get('account_number', '')}</span></p><p><strong class="text-slate-400">Beneficiario:</strong> <span class="text-white">{bt.get('beneficiary', '')}</span></p></div><div class="mt-6"><h4 class="text-white font-bold mb-2">¿Qué hacer después?</h4><p class="text-slate-400 text-sm mb-4">1. Realiza la transferencia por el monto exacto del plan.<br>2. Envía el comprobante de pago por WhatsApp or Correo.<br>3. Recibirás tu licencia de activación en cuanto confirmemos el pago.</p></div><div class="flex flex-col gap-2 mt-4"><a id="wa_send_btn" href="{wa_link}" target="_blank" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-center font-bold py-3 rounded transition"><i class="fab fa-whatsapp mr-2"></i> Enviar comprobante por WhatsApp</a><a id="mail_send_btn" href="{mail_link}" class="w-full bg-slate-600 hover:bg-slate-500 text-white text-center font-bold py-3 rounded transition"><i class="fas fa-envelope mr-2"></i> Enviar comprobante por Correo</a></div></div></div>
+        <div id="bankModal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4"><div class="bg-slate-800 p-8 rounded-xl max-w-md w-full border border-slate-700 shadow-2xl relative"><button onclick="closeBankModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">&times;</button><h3 class="text-2xl font-bold text-cyan-400 mb-2">Instrucciones de Pago</h3><p class="text-slate-400 text-sm mb-6">Estás comprando el plan: <span id="modal_plan_name" class="font-bold text-white"></span> por <span id="modal_plan_price" class="font-bold text-white"></span></p><div class="bg-slate-900 p-4 rounded-lg border border-slate-700 space-y-3 text-sm"><p><strong class="text-slate-400">Banco:</strong> <span class="text-white">{bt.get('bank_name', '')}</span></p><p><strong class="text-slate-400">Tipo de Cuenta:</strong> <span class="text-white">{bt.get('account_type', '')}</span></p><p><strong class="text-slate-400">Número de Cuenta:</strong> <span class="text-cyan-400 font-mono">{bt.get('account_number', '')}</span></p><p><strong class="text-slate-400">Beneficiario:</strong> <span class="text-white">{bt.get('beneficiary', '')}</span></p></div><div class="mt-6"><h4 class="text-white font-bold mb-2">¿Qué hacer después?</h4><p class="text-slate-400 text-sm mb-4">1. Realiza la transferencia por el monto exacto del plan.<br>2. Envía el comprobante de pago por WhatsApp o Correo.<br>3. Recibirás tu licencia de activación en cuanto confirmemos el pago.</p></div><div class="flex flex-col gap-2 mt-4"><a id="wa_send_btn" href="{wa_link}" target="_blank" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-center font-bold py-3 rounded transition"><i class="fab fa-whatsapp mr-2"></i> Enviar comprobante por WhatsApp</a><a id="mail_send_btn" href="{mail_link}" class="w-full bg-slate-600 hover:bg-slate-500 text-white text-center font-bold py-3 rounded transition"><i class="fas fa-envelope mr-2"></i> Enviar comprobante por Correo</a></div></div></div>
         <script>function openBankModal(planName, planPrice) {{document.getElementById('modal_plan_name').innerText = planName;document.getElementById('modal_plan_price').innerText = planPrice;let waLink = "{wa_link}" + encodeURIComponent(planName);let mailLink = "{mail_link}" + encodeURIComponent(planName);document.getElementById('wa_send_btn').href = waLink;document.getElementById('mail_send_btn').href = mailLink;document.getElementById('bankModal').classList.remove('hidden');}}function closeBankModal() {{document.getElementById('bankModal').classList.add('hidden');}}</script>
         """
 
@@ -1321,7 +1373,7 @@ def google_verification():
     return "google-site-verification: google80facc731870c13b.html"
 
 # ==========================================
-# 📝 BLOG SEO AUTOMÁTICO (IA GROQ)
+# 📝 BLOG SEO AUTOMÁTICO (IA GEMINI)
 # ==========================================
 @app.get("/blog", response_class=HTMLResponse)
 def blog_index():
@@ -1393,6 +1445,9 @@ class UserRiskReport(BaseModel):
     license_key: str
     consecutive_losses: int
     current_drawdown_pct: float
+class MarketingRequest(BaseModel):
+    type: str = "seo"
+    topic: str = "automatizar trading con IA"
 
 @app.post("/api/track_view")
 def track_view(request: Request):
@@ -1530,6 +1585,63 @@ def reset_hwid(request: Request, data: ResetHWID):
     return {"status": "success", "message": f"✅ HWID reseteado para {key}."}
 
 # ==========================================
+# 🧠 ENDPOINT DE MARKETING CON GEMINI
+# ==========================================
+@app.post("/api/generate_marketing")
+def generate_marketing_content(request: Request, data: MarketingRequest):
+    if not verify_admin(request):
+        return {"status": "error", "message": "❌ No autorizado."}
+
+    topic = (data.topic or "").strip() or "automatizar trading con IA en MT5"
+    base_url = "https://blenin77-server.onrender.com/#pricing"
+
+    if data.type == "seo":
+        prompt = f"""Eres un experto en SEO y copywriting. Escribe un artículo de blog de unas 600-800 palabras optimizado para Google sobre el tema: "{topic}".
+
+Requisitos:
+- Empieza con un título H1 (# Título) atractivo que incluya la palabra clave.
+- Incluye 3-5 subtítulos H2 (## Subtítulo).
+- Menciona de forma natural el bot BLENIN.G.77 destacando: IA Predictiva, Enjambre de 500 agentes, Modo Híbrido MT5 + Noticias macroeconómicas.
+- Usa **negritas** en conceptos clave.
+- Termina con un CTA hacia: {base_url}
+- Formato Markdown.
+
+Responde SOLO con el artículo, sin comentarios extra."""
+    
+    elif data.type == "tiktok":
+        prompt = f"""Eres un guionista viral de TikTok/Reels experto en trading. Crea un guion de 45-60 segundos sobre: "{topic}".
+
+Formato estricto:
+[HOOK 0-3s]: Frase impactante que detenga el scroll.
+[DESARROLLO 3-45s]: 3 puntos clave en lenguaje simple y dinámico.
+[CTA 45-60s]: Llamada a la acción hacia el bot BLENIN.G.77 ({base_url}).
+
+Incluye sugerencias de texto en pantalla y música recomendada.
+Responde SOLO con el guion, sin comentarios extra."""
+    
+    else:  # reddit
+        prompt = f"""Eres un usuario real de Reddit (r/Forex, r/Trading). Escribe un post genuino y NO spammy sobre: "{topic}".
+
+Requisitos:
+- Tono casual, como un trader compartiendo su experiencia.
+- Menciona BLENIN.G.77 de forma natural, como si lo hubieras descubierto y probado.
+- No uses lenguaje comercial ni mayúsculas excesivas.
+- Título atractivo (máx 100 caracteres).
+- Cuerpo de 200-300 palabras.
+- Al final, enlace sutil a {base_url}
+
+Responde SOLO con el post, sin comentarios extra."""
+
+    content = generate_dynamic_content_with_llama(prompt, max_tokens=2000)
+    if not content:
+        return {
+            "status": "error",
+            "message": "La IA no respondió. Revisa los logs de Render o si la API Key de Gemini es correcta."
+        }
+
+    return {"status": "success", "content": content, "type": data.type}
+
+# ==========================================
 # 🛡️ ALERTA DE RIESGO DEL BOT (ANTI-BAJAS)
 # ==========================================
 @app.post("/api/report_user_risk")
@@ -1549,7 +1661,7 @@ def report_user_risk(data: UserRiskReport):
                 prompt = f"Eres un gerente de cuenta de trading. El cliente {email} tiene {data.consecutive_losses} pérdidas seguidas y un drawdown del {data.current_drawdown_pct}%. Escríbele un correo corto diciéndole que acabas de lanzar una estrategia optimizada por IA (v17) que se adapta a la volatilidad. Invítalo a actualizar su bot."
                 email_body = generate_dynamic_content_with_llama(prompt, max_tokens=400)
                 if not email_body:
-                    email_body = f"Hola,\n\nNotamos que has tenido algunos días difíciles. ¡Buenas noticias! Acabamos de lanzar la actualización v17 de BLENIN77 avec un nouveau Agente IA que se adapta automáticamente a la volatilidad.\n\nActualiza tu bot y prueba la nueva estrategia. ¡Recuperaremos el rumbo juntos!\n\nEquipo BLENIN77."
+                    email_body = f"Hola,\n\nNotamos que has tenido algunos días difíciles. ¡Buenas noticias! Acabamos de lanzar la actualización v17 de BLENIN77 con un nuevo Agente IA que se adapta automáticamente a la volatilidad.\n\nActualiza tu bot y prueba la nueva estrategia. ¡Recuperaremos el rumbo juntos!\n\nEquipo BLENIN77."
                 send_email(email, "🛡️ Estamos monitoreando tu cuenta - Tenemos novedades", email_body)
                 info["last_retention_email"] = datetime.now().isoformat()
                 updated = True
@@ -1636,7 +1748,7 @@ def make_payment_webhook(data: MakeWebhookData):
         save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
         
         client_subject = "✅ Pago Confirmado - Aquí tienes tu Licencia BLENIN77"
-        client_body = f"¡Gracias for tu compra!\n\nTu pago ha sido confirmado exitosamente.\n\nAquí tienes tu clave de licencia:\n{key}\n\nPlan: {plan_upper}\nDuración: {data.duration_days} días\n\nPara descargar el sistema, ingresa a: https://blenin77-server.onrender.com/\n\nSaludos,\nEquipo BLENIN77."
+        client_body = f"¡Gracias por tu compra!\n\nTu pago ha sido confirmado exitosamente.\n\nAquí tienes tu clave de licencia:\n{key}\n\nPlan: {plan_upper}\nDuración: {data.duration_days} días\n\nPara descargar el sistema, ingresa a: https://blenin77-server.onrender.com/\n\nSaludos,\nEquipo BLENIN77."
         send_email(data.email, client_subject, client_body)
         
         admin_subject = f"💰 ¡Nueva Venta Automática! Plan {plan_upper}"
@@ -1648,7 +1760,7 @@ def make_payment_webhook(data: MakeWebhookData):
         return {"status": "error", "message": str(e)}
 
 # ==========================================
-# 📧 CAPTURA DE LEADS DINÁMICA (IA GROQ)
+# 📧 CAPTURA DE LEADS DINÁMICA (IA GEMINI)
 # ==========================================
 @app.post("/api/capture_lead")
 def capture_lead(lead: LeadCapture):
@@ -1734,7 +1846,7 @@ def ai_retention_agent():
                 prompt = f"Eres un experto en retención. El cliente {email} dejó de pagar su suscripción de trading. Escríbele un correo persuasivo. Dile que el bot ha estado ganando operaciones recientemente. Menciona estas estadísticas: {win_stats_text}. Ofrécele un 30% de descuento con el código VOLVER30."
                 email_body = generate_dynamic_content_with_llama(prompt, max_tokens=400)
                 if not email_body:
-                    email_body = f"Hola,\n\nExtrastramos tenerte en la familia BLENIN77.\n\nMientras no estuviste, nuestra IA ha estado operando con excelentes resultados:\n{win_stats_text}\n\nQueremos que vuelvas. Usa el código VOLVER30 al reactivar tu plan y obtén un 30% de descuento.\n\n👉 https://blenin77-server.onrender.com/#pricing"
+                    email_body = f"Hola,\n\nExtrañamos tenerte en la familia BLENIN77.\n\nMientras no estuviste, nuestra IA ha estado operando con excelentes resultados:\n{win_stats_text}\n\nQueremos que vuelvas. Usa el código VOLVER30 al reactivar tu plan y obtén un 30% de descuento.\n\n👉 https://blenin77-server.onrender.com/#pricing"
                 send_email(email, "🎁 Te extrañamos en BLENIN77 - Tenemos un regalo para ti", email_body)
                 info["retention_email_sent"] = True
                 updated = True
