@@ -1,17 +1,14 @@
-from fastapi import FastAPI, Request, Response, HTTPException, Query
+from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Optional, List
-import random, string, smtplib, os, requests, json, re, hashlib, time
+from typing import Optional
+import random, string, smtplib, os, requests, json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from apscheduler.schedulers.background import BackgroundScheduler
-
-# Importación de Supabase
-from supabase import create_client, Client
 
 app = FastAPI()
 
@@ -26,9 +23,6 @@ app.add_middleware(
 # 🔐 SISTEMA DE SEGURIDAD Y LOGIN
 # ==========================================
 SESSION_TOKEN = "blenin_secure_session_2024"
-
-# Tokens de acceso a página de descarga (generados tras capturar email)
-download_access_tokens = {}  # {token: {"email": ..., "name": ..., "expires": timestamp}}
 
 class AdminLoginData(BaseModel):
     password: str
@@ -59,7 +53,6 @@ def admin_login_page():
                 const pwd = document.getElementById('pwd').value;
                 const res = await fetch('/api/login', {{
                     method: 'POST',
-                    credentials: 'same-origin',
                     headers: {{'Content-Type': 'application/json'}},
                     body: JSON.stringify({{ password: pwd }})
                 }});
@@ -77,7 +70,7 @@ def admin_login_page():
 def admin_login_verify(data: AdminLoginData, response: Response):
     global admin_password_db
     if data.password == admin_password_db:
-        response.set_cookie(key="blenin_session", value=SESSION_TOKEN, httponly=True, secure=False, samesite="lax", max_age=86400)
+        response.set_cookie(key="blenin_session", value=SESSION_TOKEN, httponly=True, secure=True, samesite="lax", max_age=86400)
         return {"status": "success"}
     raise HTTPException(status_code=401, detail="Contraseña incorrecta")
 
@@ -92,16 +85,19 @@ def verify_admin(request: Request):
     return True
 
 # ==========================================
-# 🔧 CONFIGURACIÓN SUPABASE Y CORREO
+# 🔧 CONFIGURACIÓN JSONBIN Y CORREO
 # ==========================================
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
+JSONBIN_BIN_ID = os.environ.get("JSONBIN_BIN_ID", "")
+JSONBIN_API_KEY = os.environ.get("JSONBIN_API_KEY", "")
+JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
+
+JSONBIN_DB_ID = os.environ.get("JSONBIN_DB_ID", "")
+JSONBIN_DB_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_DB_ID}"
 
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 SMTP_EMAIL = "mymundodigital0@gmail.com"
-SMTP_PASSWORD = "dpfgpzdccpmhllim"
+SMTP_PASSWORD = "dpfgpzdccpmhllim"  # ✅ Contraseña de aplicación de Google configurada
 
 def send_email(to_email, subject, body):
     try:
@@ -110,43 +106,21 @@ def send_email(to_email, subject, body):
         msg['To'] = to_email
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
+        
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.set_debuglevel(1)  # Muestra exactamente qué hace la conexión en los logs
         server.starttls()
         server.login(SMTP_EMAIL, SMTP_PASSWORD)
         server.send_message(msg)
         server.quit()
+        print(f"✅ Correo enviado exitosamente a {to_email}")  # Log de éxito
         return True
     except Exception as e:
-        print(f"❌ ERROR ENVIANDO CORREO A {to_email}: {e}")
+        print(f"❌ ERROR CRÍTICO ENVIANDO CORREO A {to_email}: {e}")  # Muestra el error real
         return False
 
 # ==========================================
-# 🧠 INTELIGENCIA ARTIFICIAL (GOOGLE GEMINI API)
-# ==========================================
-def generate_dynamic_content_with_llama(prompt, max_tokens=800):
-    gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
-    if not gemini_api_key:
-        print("❌ ERROR: Falta la variable de entorno GEMINI_API_KEY en Render.", flush=True)
-        return None
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={gemini_api_key}"
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.7}
-        }
-        response = requests.post(url, json=payload, timeout=30)
-        
-        if response.status_code == 200:
-            return response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-        else:
-            print(f"❌ ERROR EN API DE GEMINI: {response.text}", flush=True)
-            return None
-    except Exception as e:
-        print(f"❌ EXCEPCIÓN CONECTANDO A GEMINI: {e}", flush=True)
-        return None
-
-# ==========================================
-# 🧠 SISTEMA DE BASE DE DATOS (SUPABASE)
+# 🧠 SISTEMA DE BASE DE DATOS MULTI-PÁGINA
 # ==========================================
 def get_default_ai_config():
     return {
@@ -155,10 +129,10 @@ def get_default_ai_config():
         "stage1_body": "Hola {name},\n\nGracias por tu interés en BLENIN.G.77, el sistema de trading de nivel institucional impulsado por Inteligencia Artificial.\n\nMuchos usuarios nos preguntan si nuestra tecnología reemplaza el trabajo del trader. La respuesta es: es tu copiloto perfecto, diseñado para proteger tu capital y maximizar oportunidades mientras tú vives tu vida.\n\nCon nuestro sistema, tienes acceso a:\n🔹 IA Predictiva y Análisis Global en tiempo real.\n🔹 Un Enjambre de 500 Agentes analizando el mercado.\n🔹 Modo Híbrido (MT5 + Noticias macroeconómicas).\n\n¿Tienes alguna duda sobre cómo adaptar el bot a tu cuenta de MT5? Simplemente responde a este correo y nuestro equipo te ayudará.\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.\nhttps://blenin77-server.onrender.com/",
         "stage2_days": 5,
         "stage2_subject": "🔥 {name}, esto es lo que estás dejando atrás...",
-        "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que la comunidad de BLENIN.G.77 está logrando hoy. Nuestros usuarios del Plan Oro están reportando resultados excepcionales al combinar nuestra IA Predictiva con el Modo Híbrido (MT5 + Noticias en tiempo real).\n\nSabemos que el trading requiere confianza, pero las oportunidades del mercado no esperan. Si te quedas fuera, el mercado seguirá moviéndose sin tus operaciones optimizadas.\n\nNo dejes tu capital expuesto a la emoción humana. Deja que la matemática y la IA trabajan por ti.\n\nRevisa nuestros planes y elige el que se adapte a tu capital aquí:\n👉 https://blenin77-server.onrender.com/#pricing\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.",
+        "stage2_body": "Hola {name},\n\nQueríamos mostrarte lo que la comunidad de BLENIN.G.77 está logrando hoy. Nuestros usuarios del Plan Oro están reportando resultados excepcionales al combinar nuestra IA Predictiva con el Modo Híbrido (MT5 + Noticias en tiempo real).\n\nSabemos que el trading requiere confianza, pero las oportunidades del mercado no esperan. Si te quedas fuera, el mercado seguirá moviéndose sin tus operaciones optimizadas.\n\nNo dejes tu capital expuesto a la emoción humana. Deja que la matemática y la IA trabajen por ti.\n\nRevisa nuestros planes y elige el que se adapte a tu capital aquí:\n👉 https://blenin77-server.onrender.com/#pricing\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.",
         "stage3_days": 10,
         "stage3_subject": "⏳ {name}, tu acceso VIP a BLENIN.G.77 está por expirar",
-        "stage3_body": "Hola {name},\n\nHemos notado que aún no has dado el paso definitivo para automatizar tu trading con BLENIN.G.77. Entendemos que dar el control a una Inteligencia Artificial puede ser un gran paso.\n\nPor eso, como último intento de ayudarte a dar el salto institucional, hemos habilitado un descuento especial del 10% si adquieres cualquier plan en las próximas 48 horas.\n\nUsa el siguiente código al momento de tu transferencia o responde a este correo para activarlo:\n🎁 Código de descuento: BLENIN10\n\nNo dejes que la volatilidad te toma por sorpresa. Protege tu capital y maximiza tus oportunidades hoy.\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.\nhttps://blenin77-server.onrender.com/#pricing"
+        "stage3_body": "Hola {name},\n\nHemos notado que aún no has dado el paso definitivo para automatizar tu trading con BLENIN.G.77. Entendemos que dar el control a una Inteligencia Artificial puede ser un gran paso.\n\nPor eso, como último intento de ayudarte a dar el salto institucional, hemos habilitado un descuento especial del 10% si adquieres cualquier plan en las próximas 48 horas.\n\nUsa el siguiente código al momento de tu transferencia o responde a este correo para activarlo:\n🎁 Código de descuento: BLENIN10\n\nNo dejes que la volatilidad te tome por sorpresa. Protege tu capital y maximiza tus oportunidades hoy.\n\nUn saludo institucional,\nEquipo de BLENIN.G.77 Trading Systems.\nhttps://blenin77-server.onrender.com/#pricing"
     }
 
 def get_default_update_config():
@@ -169,125 +143,39 @@ def get_default_update_config():
         "update_message": "Hay una nueva versión disponible."
     }
 
-def get_default_downloads():
-    """Configuración por defecto del sistema de descargas multi-OS"""
-    return {
-        "page_title": "Centro de Descargas - BLENIN.G.77",
-        "page_subtitle": "Descarga la versión más reciente de tu sistema para tu plataforma favorita",
-        "instructions": "1. Selecciona tu sistema operativo\n2. Descarga el archivo correspondiente\n3. Extrae el contenido\n4. Ejecuta el instalador\n5. Ingresa tu licencia al abrir el sistema",
-        "systems": [
-            {
-                "id": "sys_windows_v1",
-                "name": "BLENIN.G.77 Trading System",
-                "version": "1.0.0",
-                "os": "windows",
-                "description": "Versión completa para Windows con IA Predictiva, Enjambre de 500 Agentes y Modo Híbrido. Compatible con Windows 10/11 (64 bits).",
-                "links": [
-                    {"label": "Servidor 1 (Mega)", "url": "https://mega.nz/file/tu_enlace_windows_1"},
-                    {"label": "Servidor 2 (Drive)", "url": "https://drive.google.com/tu_enlace_windows_2"}
-                ],
-                "active": True
-            },
-            {
-                "id": "sys_linux_v1",
-                "name": "BLENIN.G.77 Trading System",
-                "version": "1.0.0",
-                "os": "linux",
-                "description": "Versión para distribuciones Linux (Ubuntu 20.04+, Debian, Fedora). Incluye soporte para Wine y MT5 nativo vía API.",
-                "links": [
-                    {"label": "Servidor 1 (Mega)", "url": "https://mega.nz/file/tu_enlace_linux_1"}
-                ],
-                "active": True
-            },
-            {
-                "id": "sys_android_v1",
-                "name": "BLENIN.G.77 Mobile",
-                "version": "1.0.0",
-                "os": "android",
-                "description": "Aplicación móvil para Android 8.0+. Monitorea tus operaciones y recibe alertas en tiempo real.",
-                "links": [
-                    {"label": "APK Directo", "url": "https://mega.nz/file/tu_enlace_android_apk"}
-                ],
-                "active": True
-            },
-            {
-                "id": "sys_ios_v1",
-                "name": "BLENIN.G.77 Mobile",
-                "version": "1.0.0",
-                "os": "ios",
-                "description": "Aplicación para iOS 13+. Instalación vía TestFlight. Monitoreo y notificaciones push.",
-                "links": [
-                    {"label": "TestFlight", "url": "https://testflight.apple.com/tu_enlace"}
-                ],
-                "active": True
-            },
-            {
-                "id": "sys_macos_v1",
-                "name": "BLENIN.G.77 Trading System",
-                "version": "1.0.0",
-                "os": "macos",
-                "description": "Versión nativa para macOS (Intel y Apple Silicon). Compatible con macOS 11 Big Sur o superior.",
-                "links": [
-                    {"label": "Servidor 1 (Mega)", "url": "https://mega.nz/file/tu_enlace_macos_1"}
-                ],
-                "active": True
-            }
-        ]
-    }
-
-# Mapeo de iconos y colores por sistema operativo
-OS_META = {
-    "windows": {"icon": "fab fa-windows", "color": "from-blue-500 to-cyan-600", "name": "Windows"},
-    "linux": {"icon": "fab fa-linux", "color": "from-amber-500 to-orange-600", "name": "Linux"},
-    "android": {"icon": "fab fa-android", "color": "from-green-500 to-emerald-600", "name": "Android"},
-    "ios": {"icon": "fab fa-apple", "color": "from-slate-400 to-slate-600", "name": "iOS"},
-    "macos": {"icon": "fab fa-apple", "color": "from-slate-500 to-slate-700", "name": "macOS"},
-    "other": {"icon": "fas fa-desktop", "color": "from-purple-500 to-pink-600", "name": "Otro"}
-}
-
 def load_dbs():
     try:
-        if not supabase: raise Exception("Supabase no configurado")
-        response = supabase.table("app_data").select("key, value").execute()
-        data = {}
-        for item in response.data:
-            data[item['key']] = item['value']
-        
-        pwd = data.get("admin_password", os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"))
-        ai_cfg = data.get("ai_agent_config", get_default_ai_config())
-        upd_cfg = data.get("bot_update_config", get_default_update_config())
-        dl_cfg = data.get("downloads_config", get_default_downloads())
-        
-        return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}}), pwd, ai_cfg, upd_cfg, dl_cfg
-    except Exception as e:
-        print(f"Error cargando DBs de Supabase: {e}")
-        return {}, {}, {"views": 0, "countries": {}}, os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"), get_default_ai_config(), get_default_update_config(), get_default_downloads()
+        headers = {"X-Master-Key": JSONBIN_API_KEY}
+        resp = requests.get(JSONBIN_DB_URL, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()["record"]
+            pwd = data.get("admin_password", os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"))
+            ai_cfg = data.get("ai_agent_config", get_default_ai_config())
+            upd_cfg = data.get("bot_update_config", get_default_update_config())
+            return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}}), pwd, ai_cfg, upd_cfg
+    except: pass
+    return {}, {}, {"views": 0, "countries": {}}, os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"), get_default_ai_config(), get_default_update_config()
 
-def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None, dl_cfg=None):
+def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
     try:
-        if not supabase: return
-        def upsert_data(key, value):
-            try:
-                res = supabase.table("app_data").upsert({"key": key, "value": value}, on_conflict="key").execute()
-                if not res.data: print(f"🚨 ALERTA: Supabase no devolvió datos al guardar {key} (¿RLS activo o falta UNIQUE?)", flush=True)
-            except Exception as e:
-                print(f"🚨 ERROR SUPABASE GUARDANDO {key}: {e}", flush=True)
+        headers = {"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}
+        data = {"licenses_db": lic, "trials_db": trials, "stats_db": stats}
+        if pwd:
+            data["admin_password"] = pwd
+        if ai_cfg:
+            data["ai_agent_config"] = ai_cfg
+        if upd_cfg:
+            data["bot_update_config"] = upd_cfg
+        requests.put(JSONBIN_DB_URL, json=data, headers=headers, timeout=5)
+    except: pass
 
-        upsert_data("licenses_db", lic)
-        upsert_data("trials_db", trials)
-        upsert_data("stats_db", stats)
-        if pwd: upsert_data("admin_password", pwd)
-        if ai_cfg: upsert_data("ai_agent_config", ai_cfg)
-        if upd_cfg: upsert_data("bot_update_config", upd_cfg)
-        if dl_cfg: upsert_data("downloads_config", dl_cfg)
-    except Exception as e:
-        print(f"Error general guardando DBs en Supabase: {e}", flush=True)
+licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config = load_dbs()
 
-licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config, downloads_config = load_dbs()
-
-if not ai_agent_config or "stage1_subject" not in ai_agent_config:
+# ✅ FORZAR ACTUALIZACIÓN DE MENSAJES IA (Para sobreescribir los viejos en la base de datos)
+if not ai_agent_config or "BLENIN.G.77" not in ai_agent_config.get("stage1_subject", ""):
     ai_agent_config = get_default_ai_config()
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config, downloads_config)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
+    print("🔄 Mensajes del Agente IA actualizados a la versión institucional.")
 
 if not licenses_db:
     licenses_db = {
@@ -295,7 +183,7 @@ if not licenses_db:
         "BLENIN-TEST-PLATA": {"hwid": None, "expires": "2026-09-15T00:00:00", "active": True, "plan": "PLATA", "email": "test-plata@blenin77.com"},
         "BLENIN-TEST-BRONCE": {"hwid": None, "expires": "2026-09-15T00:00:00", "active": True, "plan": "BRONCE", "email": "test-bronce@blenin77.com"}
     }
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config, downloads_config)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
 
 def get_default_content(page_name="Principal"):
     return {
@@ -304,8 +192,6 @@ def get_default_content(page_name="Principal"):
         "hero_title": "BLENIN.G.77",
         "hero_subtitle": "THE BEST FUTURE FOR YOU",
         "hero_text": "IA Predictiva, Enjambre de 500 Agentes y Análisis Global en Tiempo Real.",
-        "affiliate_link": "https://go.hotmart.com/W107659112D",
-        "affiliate_text": "🚀 Afíliate (75%)",
         "publications": [{"type": "video", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ", "desc": "Mira cómo el Enjambre de Agentes abre operaciones reales."}],
         "plans": [
             {"name": "Bronce", "price": "$49", "features": "✅ 1 Cuenta MT5\n✅ Modo MT5 Puro", "link": "P-78W24779DJ167620XNKNUHYY", "highlight": False},
@@ -321,55 +207,35 @@ def get_default_content(page_name="Principal"):
             "email_for_proof": "pagos@blenin77.com",
             "whatsapp_for_proof": "593999999999"
         },
-        "download_links": ["https://mega.nz/file/tu_enlace"],
+        "download_links": ["https://drive.google.com/tu-archivo-descarga"],
         "download_instructions": "1. Descarga el archivo .zip\n2. Extrae el contenido en tu PC\n3. Ejecuta el instalador Blenin77.exe\n4. Ingresa tu licencia al abrir el sistema."
     }
 
 def get_all_pages():
     try:
-        if not supabase: raise Exception("Supabase no configurado")
-        response = supabase.table("app_data").select("value").eq("key", "pages").execute()
-        if response.data:
-            data = response.data[0]["value"]
+        headers = {"X-Master-Key": JSONBIN_API_KEY}
+        resp = requests.get(JSONBIN_URL, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()["record"]
             if "hero_title" in data and "pages" not in data:
                 new_data = {"pages": {"main": data}}
                 save_all_pages(new_data)
                 return new_data
             return data
-        else:
-            default_data = {"pages": {"main": get_default_content()}}
-            save_all_pages(default_data)
-            return default_data
-    except Exception as e:
-        print(f"Error obteniendo páginas: {e}", flush=True)
-        default_data = {"pages": {"main": get_default_content()}}
-        try: save_all_pages(default_data)
-        except: pass
-        return default_data
+    except: pass
+    default_data = {"pages": {"main": get_default_content()}}
+    save_all_pages(default_data)
+    return default_data
 
 def save_all_pages(data):
     try:
-        if not supabase: 
-            print("❌ Supabase no configurado. Revisa las variables de entorno en Render.", flush=True)
-            return False
-            
-        res = supabase.table("app_data").upsert({"key": "pages", "value": data}, on_conflict="key").execute()
-        
-        if hasattr(res, 'error') and res.error:
-            print(f"🚨 ERROR EXPLÍCITO DE SUPABASE: {res.error}", flush=True)
-            return False
-        if not hasattr(res, 'data') or res.data is None or len(res.data) == 0:
-            print("🚨 ERROR SILENCIOSO: Supabase no devolvió datos. Revisa si RLS está desactivado o si falta UNIQUE en 'key'.", flush=True)
-            return False
-            
-        print("✅ Páginas guardadas en Supabase correctamente.", flush=True)
+        headers = {"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}
+        requests.put(JSONBIN_URL, json=data, headers=headers, timeout=5)
         return True
-    except Exception as e:
-        print(f"🚨 EXCEPCIÓN guardando páginas: {e}", flush=True)
-        return False
+    except: return False
 
 # ==========================================
-# 🔄 SISTEMA DE ACTUALIZACIONES DEL BOT
+# 🔄 SISTEMA DE ACTUALIZACIONES DEL BOT (PÚBLICO Y ADMIN)
 # ==========================================
 @app.get("/api/get_latest_version")
 def get_latest_version():
@@ -391,317 +257,8 @@ def save_update_config_api(request: Request, data: UpdateConfigData):
     global bot_update_config
     if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
     bot_update_config = data.dict()
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config, downloads_config)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"status": "success", "message": "✅ Configuración de actualización guardada."}
-
-# ==========================================
-# 📥 SISTEMA DE DESCARGAS MULTI-OS (NUEVO)
-# ==========================================
-@app.get("/api/get_downloads")
-def get_downloads_api():
-    """API pública para obtener la configuración de descargas (solo sistemas activos)"""
-    cfg = downloads_config or get_default_downloads()
-    active_systems = [s for s in cfg.get("systems", []) if s.get("active", True)]
-    return {
-        "page_title": cfg.get("page_title", "Centro de Descargas"),
-        "page_subtitle": cfg.get("page_subtitle", ""),
-        "instructions": cfg.get("instructions", ""),
-        "systems": active_systems,
-        "os_meta": OS_META
-    }
-
-@app.get("/api/get_downloads_admin")
-def get_downloads_admin_api(request: Request):
-    """API para admin - devuelve todos los sistemas (activos e inactivos)"""
-    if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
-    cfg = downloads_config or get_default_downloads()
-    return cfg
-
-class DownloadSystemData(BaseModel):
-    page_title: str
-    page_subtitle: str
-    instructions: str
-    systems: list
-
-@app.post("/api/save_downloads")
-def save_downloads_api(request: Request, data: DownloadSystemData):
-    global downloads_config
-    if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
-    downloads_config = {
-        "page_title": data.page_title,
-        "page_subtitle": data.page_subtitle,
-        "instructions": data.instructions,
-        "systems": data.systems
-    }
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config, downloads_config)
-    return {"status": "success", "message": "✅ Configuración de descargas guardada correctamente."}
-
-def generate_download_token(email, name=""):
-    """Genera un token único de acceso a la página de descargas"""
-    raw = f"{email}:{name}:{time.time()}:{random.random()}"
-    token = hashlib.sha256(raw.encode()).hexdigest()[:32]
-    download_access_tokens[token] = {
-        "email": email,
-        "name": name,
-        "expires": time.time() + (24 * 3600)  # 24 horas de validez
-    }
-    return token
-
-def validate_download_token(token):
-    """Valida que el token exista y no haya expirado"""
-    if not token: return None
-    info = download_access_tokens.get(token)
-    if not info: return None
-    if time.time() > info.get("expires", 0):
-        download_access_tokens.pop(token, None)
-        return None
-    return info
-
-@app.get("/download", response_class=HTMLResponse)
-def download_page(request: Request, token: Optional[str] = Query(None)):
-    """Página pública de descargas - se abre en nueva pestaña"""
-    # Validar token (opcional pero recomendado)
-    token_info = validate_download_token(token)
-    
-    cfg = downloads_config or get_default_downloads()
-    systems = [s for s in cfg.get("systems", []) if s.get("active", True)]
-    
-    user_name = token_info.get("name", "") if token_info else ""
-    greeting = f"¡Hola {user_name}!" if user_name else "¡Bienvenido!"
-    
-    # Generar tarjetas HTML para cada sistema
-    cards_html = ""
-    for s in systems:
-        os_key = s.get("os", "other").lower()
-        meta = OS_META.get(os_key, OS_META["other"])
-        links_html = ""
-        for i, link in enumerate(s.get("links", []), 1):
-            links_html += f"""
-            <a href="{link.get('url', '#')}" target="_blank" rel="noopener noreferrer" 
-               class="flex-1 min-w-[160px] bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-cyan-500 text-slate-200 hover:text-cyan-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 group">
-                <i class="fas fa-cloud-download-alt group-hover:scale-110 transition-transform"></i>
-                <span>{link.get('label', f'Servidor {i}')}</span>
-            </a>"""
-        
-        if not links_html:
-            links_html = '<p class="text-slate-500 text-sm italic">No hay enlaces disponibles</p>'
-        
-        cards_html += f"""
-        <div class="bg-slate-800/60 backdrop-blur-sm border border-slate-700 hover:border-cyan-500/50 rounded-2xl overflow-hidden shadow-xl hover:shadow-cyan-500/10 transition-all duration-300 group">
-            <div class="bg-gradient-to-br {meta['color']} p-6 flex items-center gap-4">
-                <div class="bg-white/15 backdrop-blur rounded-xl w-16 h-16 flex items-center justify-center text-3xl text-white">
-                    <i class="{meta['icon']}"></i>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <h3 class="text-white font-bold text-lg truncate">{s.get('name', 'Sistema')}</h3>
-                    <div class="flex items-center gap-2 mt-1 flex-wrap">
-                        <span class="bg-white/20 text-white text-xs font-semibold px-2 py-0.5 rounded-full">{meta['name']}</span>
-                        <span class="bg-black/30 text-cyan-100 text-xs font-semibold px-2 py-0.5 rounded-full">v{s.get('version', '1.0.0')}</span>
-                    </div>
-                </div>
-            </div>
-            <div class="p-6">
-                <p class="text-slate-300 text-sm leading-relaxed mb-4">{s.get('description', '')}</p>
-                <div class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">Enlaces de descarga</div>
-                <div class="flex flex-wrap gap-2">
-                    {links_html}
-                </div>
-            </div>
-        </div>
-        """
-    
-    if not cards_html:
-        cards_html = """
-        <div class="col-span-full text-center py-16">
-            <i class="fas fa-box-open text-6xl text-slate-600 mb-4"></i>
-            <h3 class="text-xl font-bold text-slate-300">No hay sistemas disponibles por ahora</h3>
-            <p class="text-slate-500 mt-2">Vuelve a intentarlo más tarde.</p>
-        </div>
-        """
-    
-    instructions_html = ""
-    if cfg.get("instructions"):
-        inst_lines = cfg.get("instructions").split("\n")
-        instructions_html = "<ul class='space-y-2'>"
-        for line in inst_lines:
-            if line.strip():
-                instructions_html += f"<li class='flex items-start gap-3 text-slate-300'><i class='fas fa-check-circle text-cyan-400 mt-1'></i><span>{line.strip()}</span></li>"
-        instructions_html += "</ul>"
-    
-    return f"""
-    <html lang="es"><head><meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{cfg.get('page_title', 'Centro de Descargas')} - BLENIN.G.77</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body {{ font-family: 'Inter', sans-serif; background: #020617; }}
-        .gradient-bg {{
-            background: linear-gradient(135deg, #020617 0%, #0c4a6e 50%, #0e7490 100%);
-        }}
-        .grid-pattern {{
-            background-image: radial-gradient(circle at 1px 1px, rgba(34, 211, 238, 0.08) 1px, transparent 0);
-            background-size: 32px 32px;
-        }}
-        .glass {{
-            backdrop-filter: blur(12px);
-            background: rgba(15, 23, 42, 0.6);
-        }}
-        @keyframes float {{
-            0%, 100% {{ transform: translateY(0); }}
-            50% {{ transform: translateY(-10px); }}
-        }}
-        .float-anim {{ animation: float 4s ease-in-out infinite; }}
-        @keyframes pulse-glow {{
-            0%, 100% {{ box-shadow: 0 0 20px rgba(34, 211, 238, 0.3); }}
-            50% {{ box-shadow: 0 0 40px rgba(34, 211, 238, 0.6); }}
-        }}
-        .pulse-glow {{ animation: pulse-glow 2.5s infinite; }}
-        ::-webkit-scrollbar {{ width: 10px; }}
-        ::-webkit-scrollbar-track {{ background: #0f172a; }}
-        ::-webkit-scrollbar-thumb {{ background: #0e7490; border-radius: 5px; }}
-        ::-webkit-scrollbar-thumb:hover {{ background: #06b6d4; }}
-    </style>
-    </head>
-    <body class="text-slate-200 min-h-screen">
-        <!-- Header con gradiente -->
-        <div class="gradient-bg grid-pattern relative overflow-hidden">
-            <div class="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-950"></div>
-            <div class="absolute top-10 right-10 w-72 h-72 bg-cyan-500/10 rounded-full blur-3xl"></div>
-            <div class="absolute bottom-10 left-10 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl"></div>
-            
-            <div class="relative max-w-6xl mx-auto px-4 py-12 md:py-20">
-                <!-- Nav superior -->
-                <nav class="flex justify-between items-center mb-12">
-                    <a href="/" class="flex items-center gap-2 text-white font-bold text-xl">
-                        <div class="w-10 h-10 bg-gradient-to-br from-cyan-400 to-emerald-500 rounded-lg flex items-center justify-center">
-                            <i class="fas fa-bolt text-slate-900"></i>
-                        </div>
-                        BLENIN.G.77
-                    </a>
-                    <a href="/" class="text-slate-300 hover:text-cyan-400 text-sm flex items-center gap-2 transition">
-                        <i class="fas fa-arrow-left"></i> Volver al inicio
-                    </a>
-                </nav>
-                
-                <!-- Hero -->
-                <div class="text-center max-w-3xl mx-auto">
-                    <div class="inline-flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 px-4 py-1.5 rounded-full text-sm font-semibold mb-6">
-                        <i class="fas fa-shield-check"></i> Descarga Segura y Verificada
-                    </div>
-                    <h1 class="text-4xl md:text-6xl font-extrabold text-white mb-4 leading-tight">
-                        {cfg.get('page_title', 'Centro de Descargas')}
-                    </h1>
-                    <p class="text-lg md:text-xl text-slate-300 mb-2">{greeting}</p>
-                    <p class="text-slate-400 max-w-2xl mx-auto">{cfg.get('page_subtitle', '')}</p>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Contenido principal -->
-        <main class="max-w-6xl mx-auto px-4 py-12 md:py-16 -mt-8 relative z-10">
-            <!-- Sección de sistemas -->
-            <div class="mb-12">
-                <div class="flex items-center gap-3 mb-8">
-                    <div class="w-1 h-8 bg-gradient-to-b from-cyan-400 to-emerald-500 rounded-full"></div>
-                    <h2 class="text-2xl md:text-3xl font-bold text-white">Sistemas Disponibles</h2>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {cards_html}
-                </div>
-            </div>
-            
-            <!-- Instrucciones -->
-            {f'''
-            <div class="glass border border-slate-700 rounded-2xl p-6 md:p-8 mb-12">
-                <div class="flex items-center gap-3 mb-6">
-                    <div class="w-10 h-10 bg-cyan-500/15 rounded-lg flex items-center justify-center">
-                        <i class="fas fa-list-check text-cyan-400"></i>
-                    </div>
-                    <h3 class="text-xl font-bold text-white">Instrucciones de Instalación</h3>
-                </div>
-                {instructions_html}
-            </div>
-            ''' if instructions_html else ''}
-            
-            <!-- Banner de soporte -->
-            <div class="bg-gradient-to-r from-cyan-600/20 to-emerald-600/20 border border-cyan-500/30 rounded-2xl p-6 md:p-8 text-center">
-                <div class="float-anim inline-block mb-4">
-                    <i class="fas fa-headset text-5xl text-cyan-400"></i>
-                </div>
-                <h3 class="text-xl md:text-2xl font-bold text-white mb-2">¿Necesitas ayuda con la instalación?</h3>
-                <p class="text-slate-300 mb-4">Nuestro equipo de soporte está disponible 24/7 para ayudarte</p>
-                <a href="https://t.me/blenin77" target="_blank" class="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold px-6 py-3 rounded-lg transition pulse-glow">
-                    <i class="fab fa-telegram"></i> Contactar Soporte
-                </a>
-            </div>
-        </main>
-        
-        <!-- Footer -->
-        <footer class="border-t border-slate-800 bg-slate-950 py-8">
-            <div class="max-w-6xl mx-auto px-4 text-center">
-                <div class="flex items-center justify-center gap-2 text-white font-bold text-lg mb-2">
-                    <div class="w-8 h-8 bg-gradient-to-br from-cyan-400 to-emerald-500 rounded-lg flex items-center justify-center">
-                        <i class="fas fa-bolt text-slate-900 text-sm"></i>
-                    </div>
-                    BLENIN.G.77
-                </div>
-                <p class="text-slate-500 text-sm">© 2024 BLENIN.G.77 Trading Systems. Todos los derechos reservados.</p>
-            </div>
-        </footer>
-    </body></html>
-    """
-
-# ==========================================
-# 🎯 CAPTURA DE LEADS Y REDIRECCIÓN A DESCARGAS
-# ==========================================
-class CaptureLeadData(BaseModel):
-    email: str
-    name: str = ""
-    interaction: str = "Descarga del sistema"
-
-@app.post("/api/capture_lead_for_download")
-def capture_lead_for_download(request: Request, data: CaptureLeadData):
-    """Captura el correo del usuario y devuelve una URL para abrir en nueva pestaña"""
-    email = data.email.strip().lower()
-    if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-        raise HTTPException(status_code=400, detail="Correo electrónico inválido.")
-    
-    name = data.name.strip() if data.name else email.split("@")[0]
-    
-    # Guardar en trials_db para seguimiento IA
-    global trials_db
-    if email not in trials_db:
-        trials_db[email] = {
-            "name": name,
-            "email": email,
-            "date": datetime.now().isoformat(),
-            "interaction": data.interaction,
-            "follow_up_stage": 0,
-            "last_email_sent": datetime.now().isoformat(),
-            "ip": request.client.host if request.client else "unknown"
-        }
-        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config, downloads_config)
-        
-        # Enviar correo inicial de seguimiento
-        if ai_agent_config:
-            try:
-                subj = ai_agent_config.get("stage1_subject", "Bienvenido a BLENIN.G.77").format(name=name)
-                body = ai_agent_config.get("stage1_body", "Hola {name}").format(name=name)
-                send_email(email, subj, body)
-            except Exception as e:
-                print(f"Error enviando correo de bienvenida: {e}")
-    
-    # Generar token de acceso y devolver URL
-    token = generate_download_token(email, name)
-    download_url = f"/download?token={token}"
-    
-    return {
-        "status": "success",
-        "download_url": download_url,
-        "message": "Correo registrado. Abriendo centro de descargas..."
-    }
 
 # ==========================================
 # 🎛️ PANEL DE ADMINISTRACIÓN (CMS MULTI-PÁGINA)
@@ -713,7 +270,7 @@ def admin_panel(request: Request):
         
     pages_data = get_all_pages()
     pages_dict = pages_data.get("pages", {})
-    pages_json = json.dumps(pages_dict, ensure_ascii=False).replace('</', '<\\/')
+    pages_json = json.dumps(pages_dict)
     
     return f"""
     <html lang="es"><head><meta charset="UTF-8"><title>Admin - BLENIN77</title>
@@ -723,22 +280,23 @@ def admin_panel(request: Request):
     <style>body {{ font-family: 'Inter', sans-serif; }} .tab-active {{ background-color: #0e7490; color: white; }}</style>
     </head>
     <body class="bg-slate-900 text-slate-300 flex flex-col min-h-screen">
+
     <nav class="bg-slate-950 p-4 shadow-lg border-b border-slate-800 flex justify-between items-center">
         <h1 class="text-xl font-bold text-cyan-400">🎛️ Panel BLENIN77</h1>
         <div class="flex gap-2 flex-wrap items-center">
             <button onclick="showTab('pages')" id="tab-pages" class="tab-active px-4 py-2 rounded text-sm font-medium transition">🚀 Páginas</button>
-            <button onclick="showTab('downloads')" id="tab-downloads" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">📥 Descargas</button>
             <button onclick="showTab('stats')" id="tab-stats" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">📊 Estadísticas</button>
             <button onclick="showTab('ai')" id="tab-ai" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">🤖 Agente IA</button>
             <button onclick="showTab('lic')" id="tab-lic" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">Licencias</button>
             <button onclick="showTab('updates')" id="tab-updates" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">🔄 Actualizaciones</button>
-            <button onclick="showTab('marketing')" id="tab-marketing" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">🧠 Marketing IA</button>
             <button onclick="showTab('settings')" id="tab-settings" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded text-sm font-medium transition">⚙️ Ajustes</button>
             <a href="/admin/logout" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded text-sm font-bold transition ml-2"><i class="fas fa-sign-out-alt mr-1"></i>Salir</a>
         </div>
     </nav>
-    <div class="flex-1 container mx-auto p-6 md:p-10 max-w-5xl">
-        <!-- PESTAÑA PÁGINAS -->
+
+    <div class="flex-1 container mx-auto p-6 md:p-10 max-w-4xl">
+        
+        <!-- GESTOR DE PÁGINAS -->
         <div id="content-pages" class="space-y-6 hidden">
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Gestor de Landing Pages</h3>
@@ -750,16 +308,19 @@ def admin_panel(request: Request):
                 </div>
                 <p class="text-xs text-slate-400 mb-4">URL de la página: <span id="page_url_preview" class="text-cyan-400"></span></p>
             </div>
+
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Textos Principales (Hero)</h3>
                 <input type="hidden" id="current_slug">
                 <label class="text-sm text-slate-400">Nombre Interno de la Página</label>
                 <input type="text" id="page_name" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
+                
                 <label class="text-sm text-slate-400">ID del Chatbot para esta página (Chatbase)</label>
                 <div class="flex items-center gap-2 mb-4">
                     <i class="fas fa-robot text-cyan-400"></i>
                     <input type="text" id="chatbot_id" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none" placeholder="Ej: gzEjAzK1VCE72hJ_hBfA4">
                 </div>
+
                 <label class="text-sm text-slate-400">Título Principal (H1)</label>
                 <input type="text" id="hero_title" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none">
                 <label class="text-sm text-slate-400">Subtítulo (H2)</label>
@@ -767,14 +328,21 @@ def admin_panel(request: Request):
                 <label class="text-sm text-slate-400">Texto Descriptivo</label>
                 <textarea id="hero_text" rows="3" class="w-full bg-slate-900 rounded p-2 mb-4 border border-slate-700 focus:border-cyan-500 outline-none"></textarea>
             </div>
-            <div class="bg-slate-800 p-6 rounded-xl border border-emerald-700 shadow-lg">
-                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">💰 Programa de Afiliados</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><label class="text-sm text-slate-400">Enlace de Afiliado (Hotmart)</label><input type="text" id="affiliate_link" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="https://go.hotmart.com/..."></div>
-                    <div><label class="text-sm text-slate-400">Texto del Botón</label><input type="text" id="affiliate_text" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="🚀 Afíliate (75%)"></div>
+
+            <div class="bg-slate-800 p-6 rounded-xl border border-indigo-700 shadow-lg">
+                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">📥 Sistema de Descarga para Clientes</h3>
+                <p class="text-sm text-slate-400 mb-4">Agrega uno o varios enlaces (servidores espejo) por si uno principal se cae. El usuario verá botones de "Servidor 1", "Servidor 2", etc.</p>
+                <label class="text-sm text-slate-400">Enlaces de Descarga</label>
+                <div id="dl-links-container" class="space-y-2 mb-4"></div>
+                <button onclick="addDlLink()" class="mt-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-plus mr-2"></i>Agregar Enlace</button>
+                
+                <div class="mt-6">
+                    <label class="text-sm text-slate-400">Instrucciones de Instalación/Referencia</label>
+                    <textarea id="download_instructions" rows="4" class="w-full bg-slate-900 rounded p-2 border border-slate-700 focus:border-cyan-500 outline-none" placeholder="Ej: 1. Descarga el archivo..."></textarea>
                 </div>
             </div>
-            <div class="bg-slate-800 p-6 rounded-xl border border-indigo-700 shadow-lg">
+
+            <div class="bg-slate-800 p-6 rounded-xl border border-amber-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">💳 Pagos por Transferencia Bancaria</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div><label class="text-sm text-slate-400">Nombre del Banco</label><input type="text" id="bt_bank_name" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Bank of America"></div>
@@ -785,17 +353,20 @@ def admin_panel(request: Request):
                     <div><label class="text-sm text-slate-400">WhatsApp para enviar comprobante</label><input type="text" id="bt_whatsapp" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="593999999999"></div>
                 </div>
             </div>
+
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Publicaciones (Galería)</h3>
                 <div id="pubs-container" class="space-y-4"></div>
                 <button onclick="addPubRow()" class="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-plus mr-2"></i>Agregar Publicación</button>
             </div>
+
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Planes de Suscripción (PayPal)</h3>
                 <div class="bg-slate-900 p-3 rounded mb-4 text-amber-400 text-xs">💡 IMPORTANTE: En el campo "Enlace de pago", pon únicamente el ID del plan de PayPal (Ej: P-78W24779DJ167620XNKNUHYY). El sistema lo convertirá en un botón automático.</div>
                 <div id="plans-container" class="space-y-6"></div>
                 <button onclick="addPlanRow()" class="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-plus mr-2"></i>Agregar Plan</button>
             </div>
+
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Redes Sociales</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -808,49 +379,7 @@ def admin_panel(request: Request):
                 </div>
             </div>
         </div>
-        
-        <!-- PESTAÑA DESCARGAS (NUEVA) -->
-        <div id="content-downloads" class="hidden space-y-6">
-            <div class="bg-slate-800 p-6 rounded-xl border border-cyan-700 shadow-lg">
-                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">📥 Centro de Descargas Multi-OS</h3>
-                <p class="text-sm text-slate-400 mb-4">Configura los sistemas disponibles para descarga. Cuando un usuario deje su correo en la landing, se abrirá una nueva pestaña con esta página de descargas.</p>
-                <div class="bg-slate-900 p-3 rounded mb-6 text-cyan-400 text-xs flex items-center gap-2">
-                    <i class="fas fa-info-circle"></i>
-                    <span>URL pública de descargas: <code class="text-emerald-400">/download</code></span>
-                </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                    <div>
-                        <label class="text-sm text-slate-400">Título de la Página</label>
-                        <input type="text" id="dl_page_title" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Centro de Descargas - BLENIN.G.77">
-                    </div>
-                    <div>
-                        <label class="text-sm text-slate-400">Subtítulo</label>
-                        <input type="text" id="dl_page_subtitle" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Descarga la versión más reciente...">
-                    </div>
-                </div>
-                <div class="mb-6">
-                    <label class="text-sm text-slate-400">Instrucciones de Instalación (una por línea)</label>
-                    <textarea id="dl_instructions" rows="4" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="1. Selecciona tu sistema operativo&#10;2. Descarga el archivo..."></textarea>
-                </div>
-            </div>
-            
-            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
-                <div class="flex justify-between items-center border-b border-slate-700 pb-3 mb-4">
-                    <h3 class="text-lg font-bold text-white">Sistemas / Versiones</h3>
-                    <button onclick="addDownloadSystem()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-plus mr-2"></i>Agregar Sistema</button>
-                </div>
-                <div id="downloads-systems-container" class="space-y-4"></div>
-            </div>
-            
-            <div class="bg-slate-900 p-4 rounded-xl border border-cyan-700/50">
-                <div class="flex items-center gap-3 text-cyan-400 text-sm">
-                    <i class="fas fa-lightbulb"></i>
-                    <p>💡 <strong>Tip:</strong> Puedes crear múltiples versiones del mismo sistema operativo. Por ejemplo: "v1.0.0 Windows" y "v1.1.0 Beta Windows". Cada uno puede tener varios enlaces (servidores) de descarga.</p>
-                </div>
-            </div>
-        </div>
-        
+
         <!-- PESTAÑA ESTADÍSTICAS -->
         <div id="content-stats" class="hidden space-y-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -872,12 +401,13 @@ def admin_panel(request: Request):
                 <div id="stat_leads" class="space-y-2 max-h-96 overflow-y-auto"></div>
             </div>
         </div>
-        
-        <!-- PESTAÑA AI -->
+
+        <!-- PESTAÑA AGENTE IA -->
         <div id="content-ai" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-cyan-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🤖 Configuración del Agente IA (Seguimiento de Leads)</h3>
                 <p class="text-sm text-slate-400 mb-6">Usa la variable <code class="bg-slate-900 p-1 rounded text-cyan-400">{{name}}</code> en los mensajes para personalizarlos con el nombre del cliente.</p>
+                
                 <div class="space-y-8">
                     <div class="bg-slate-900 p-4 rounded-lg border border-slate-700">
                         <h4 class="text-cyan-400 font-bold mb-3">Seguimiento 1</h4>
@@ -894,6 +424,7 @@ def admin_panel(request: Request):
                         <label class="text-sm text-slate-400">Mensaje</label>
                         <textarea id="s1_body" rows="4" class="w-full bg-slate-800 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></textarea>
                     </div>
+
                     <div class="bg-slate-900 p-4 rounded-lg border border-slate-700">
                         <h4 class="text-cyan-400 font-bold mb-3">Seguimiento 2</h4>
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
@@ -909,6 +440,7 @@ def admin_panel(request: Request):
                         <label class="text-sm text-slate-400">Mensaje</label>
                         <textarea id="s2_body" rows="4" class="w-full bg-slate-800 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500"></textarea>
                     </div>
+
                     <div class="bg-slate-900 p-4 rounded-lg border border-slate-700">
                         <h4 class="text-cyan-400 font-bold mb-3">Seguimiento 3 (Cierre)</h4>
                         <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3">
@@ -928,7 +460,7 @@ def admin_panel(request: Request):
                 <button onclick="saveAIConfig()" class="mt-6 w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition"><i class="fas fa-save mr-2"></i>Guardar Configuración del Agente IA</button>
             </div>
         </div>
-        
+
         <!-- PESTAÑA LICENCIAS -->
         <div id="content-lic" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-emerald-700 shadow-lg">
@@ -955,6 +487,7 @@ def admin_panel(request: Request):
                 <button onclick="createManualLicense()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-key mr-2"></i>Generar y Guardar Licencia</button>
                 <div id="manual_lic_msg" class="mt-4 text-cyan-400 font-bold text-sm hidden bg-slate-900 p-3 rounded"></div>
             </div>
+
             <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
                 <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">Gestión de Licencias Existentes</h3>
                 <label class="text-sm text-slate-400">Clave de Licencia</label>
@@ -967,7 +500,7 @@ def admin_panel(request: Request):
                 <div id="lic_msg" class="mt-4 text-cyan-400 font-bold text-sm hidden"></div>
             </div>
         </div>
-        
+
         <!-- PESTAÑA ACTUALIZACIONES -->
         <div id="content-updates" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-cyan-700 shadow-lg">
@@ -975,33 +508,14 @@ def admin_panel(request: Request):
                 <p class="text-sm text-slate-400 mb-4">Configura los parámetros que recibirán los bots de tus usuarios al iniciar sesión. Si la versión del bot del usuario es diferente a la que pongas aquí, se mostrará un aviso.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div><label class="text-sm text-slate-400">Última Versión Disponible</label><input type="text" id="upd_version" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: 1.1.0"></div>
-                    <div><label class="text-sm text-slate-400">URL de Descarga del .exe</label><input type="text" id="upd_url" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="https://mega.nz/..."></div>
+                    <div><label class="text-sm text-slate-400">URL de Descarga del .exe</label><input type="text" id="upd_url" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="https://drive.google.com/..."></div>
                 </div>
                 <div class="mb-4"><label class="text-sm text-slate-400">Mensaje de la Actualización</label><textarea id="upd_message" rows="3" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="Ej: Corrección de errores."></textarea></div>
                 <div class="flex items-center gap-2 mb-6 p-3 bg-slate-900 rounded border border-slate-700"><input type="checkbox" id="upd_force" class="w-5 h-5 accent-red-500"><label for="upd_force" class="text-sm text-slate-300 cursor-pointer">Forzar Actualización Obligatoria (Bloquear uso de versiones antiguas)</label></div>
                 <button onclick="saveUpdateConfig()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition"><i class="fas fa-save mr-2"></i>Guardar y Publicar Versión</button>
             </div>
         </div>
-        
-        <!-- PESTAÑA MARKETING -->
-        <div id="content-marketing" class="hidden space-y-6">
-            <div class="bg-slate-800 p-6 rounded-xl border border-purple-700 shadow-lg">
-                <h3 class="text-lg font-bold text-white border-b border-slate-700 pb-3 mb-4">🧠 Generador de Tráfico y Leads con IA</h3>
-                <p class="text-sm text-slate-400 mb-4">Elige qué tipo de contenido quieres que la IA (Google Gemini) cree para atraer clientes a tu web.</p>
-                
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <button onclick="generateMarketing('seo_blog')" class="bg-purple-600 hover:bg-purple-500 text-white p-4 rounded text-sm font-bold transition"><i class="fas fa-blog mr-2"></i>Artículo SEO (Google)</button>
-                    <button onclick="generateMarketing('tiktok_script')" class="bg-pink-600 hover:bg-pink-500 text-white p-4 rounded text-sm font-bold transition"><i class="fab fa-tiktok mr-2"></i>Guion Viral (TikTok/Reels)</button>
-                    <button onclick="generateMarketing('forum_post')" class="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded text-sm font-bold transition"><i class="fab fa-reddit mr-2"></i>Post para Foros (Reddit)</button>
-                </div>
-                
-                <div id="marketing_output" class="bg-slate-900 p-4 rounded border border-slate-700 text-slate-300 text-sm whitespace-pre-wrap min-h-[200px]">
-                    El contenido generado por la IA aparecerá aquí...
-                </div>
-                <button onclick="copyMarketing()" class="mt-4 bg-cyan-500 hover:bg-cyan-400 text-slate-900 px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-copy mr-2"></i>Copiar Contenido</button>
-            </div>
-        </div>
-        
+
         <!-- PESTAÑA AJUSTES -->
         <div id="content-settings" class="hidden space-y-6">
             <div class="bg-slate-800 p-6 rounded-xl border border-amber-700 shadow-lg">
@@ -1014,93 +528,71 @@ def admin_panel(request: Request):
                     </div>
                     <div>
                         <label class="text-sm text-slate-400">Nueva Contraseña</label>
-                        <input type="password" id="new_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="•••••••">
+                        <input type="password" id="new_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="••••••••">
                     </div>
                     <div>
                         <label class="text-sm text-slate-400">Repetir Nueva Contraseña</label>
-                        <input type="password" id="confirm_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="•••••••">
+                        <input type="password" id="confirm_pwd" class="w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="••••••••">
                     </div>
                     <button onclick="changePassword()" class="w-full bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded text-sm font-bold transition"><i class="fas fa-save mr-2"></i>Actualizar Contraseña</button>
                     <div id="pwd_msg" class="mt-4 font-bold text-sm hidden"></div>
                 </div>
             </div>
         </div>
+
     </div>
+
     <footer class="bg-slate-950 p-4 sticky bottom-0 border-t border-slate-800">
-        <div class="container mx-auto max-w-5xl flex justify-between items-center">
+        <div class="container mx-auto max-w-4xl flex justify-between items-center">
             <span class="text-xs text-slate-500">© 2024 BLENIN.G.77 Systems</span>
-            <div class="flex gap-2">
-                <button onclick="saveDownloadsData()" id="btn-save-downloads" class="hidden bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold px-6 py-2 rounded shadow-lg transition"><i class="fas fa-save mr-2"></i>Guardar Descargas</button>
-                <button onclick="saveData()" class="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold px-6 py-2 rounded shadow-lg transition"><i class="fas fa-save mr-2"></i>Guardar y Publicar</button>
-            </div>
+            <button onclick="saveData()" class="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold px-6 py-2 rounded shadow-lg transition"><i class="fas fa-save mr-2"></i>Guardar y Publicar</button>
         </div>
     </footer>
+
     <div id="toast" class="fixed bottom-5 right-5 bg-slate-700 text-white px-4 py-3 rounded-lg shadow-2xl opacity-0 transition-opacity duration-300 pointer-events-none">
         <span id="toast-msg"></span>
     </div>
-    <script id="pages-data" type="application/json">{pages_json}</script>
+
     <script>
-    const allPages = JSON.parse(document.getElementById('pages-data').textContent);
-    let currentMarketingText = "";
-    let downloadsConfig = null;
-    
-    const OS_META = {{
-        "windows": {{ "icon": "fab fa-windows", "color": "from-blue-500 to-cyan-600", "name": "Windows" }},
-        "linux": {{ "icon": "fab fa-linux", "color": "from-amber-500 to-orange-600", "name": "Linux" }},
-        "android": {{ "icon": "fab fa-android", "color": "from-green-500 to-emerald-600", "name": "Android" }},
-        "ios": {{ "icon": "fab fa-apple", "color": "from-slate-400 to-slate-600", "name": "iOS" }},
-        "macos": {{ "icon": "fab fa-apple", "color": "from-slate-500 to-slate-700", "name": "macOS" }},
-        "other": {{ "icon": "fas fa-desktop", "color": "from-purple-500 to-pink-600", "name": "Otro" }}
-    }};
+    const allPages = {pages_json};
     
     function showTab(tabId) {{
-        ['pages', 'downloads', 'stats', 'ai', 'lic', 'updates', 'marketing', 'settings'].forEach(id => {{
-            const c = document.getElementById('content-' + id);
-            const t = document.getElementById('tab-' + id);
-            if(c) c.classList.add('hidden');
-            if(t) {{ t.classList.remove('tab-active'); t.classList.add('bg-slate-800', 'hover:bg-slate-700'); }}
+        ['pages', 'stats', 'ai', 'lic', 'updates', 'settings'].forEach(id => {{
+            document.getElementById('content-' + id).classList.add('hidden');
+            document.getElementById('tab-' + id).classList.remove('tab-active');
+            document.getElementById('tab-' + id).classList.add('bg-slate-800', 'hover:bg-slate-700');
         }});
-        const c = document.getElementById('content-' + tabId);
-        const t = document.getElementById('tab-' + tabId);
-        if(c) c.classList.remove('hidden');
-        if(t) {{ t.classList.add('tab-active'); t.classList.remove('bg-slate-800', 'hover:bg-slate-700'); }}
-        
-        const btnSaveDl = document.getElementById('btn-save-downloads');
-        if(btnSaveDl) btnSaveDl.classList.toggle('hidden', tabId !== 'downloads');
+        document.getElementById('content-' + tabId).classList.remove('hidden');
+        document.getElementById('tab-' + tabId).classList.add('tab-active');
+        document.getElementById('tab-' + tabId).classList.remove('bg-slate-800', 'hover:bg-slate-700');
         
         if(tabId === 'ai') loadAIConfig();
         if(tabId === 'stats') loadStats();
         if(tabId === 'updates') loadUpdateConfig();
-        if(tabId === 'downloads') loadDownloadsConfig();
     }}
-    
+
     function showToast(msg) {{
         const t = document.getElementById('toast');
         document.getElementById('toast-msg').innerText = msg;
         t.classList.remove('opacity-0');
         setTimeout(() => t.classList.add('opacity-0'), 3000);
     }}
-    
+
     function updateSelector() {{
         const selector = document.getElementById('page_selector');
         selector.innerHTML = '';
-        const slugs = Object.keys(allPages);
-        slugs.forEach(slug => {{
+        Object.keys(allPages).forEach(slug => {{
             let opt = document.createElement('option');
             opt.value = slug;
             opt.innerText = allPages[slug].page_name || slug;
             selector.appendChild(opt);
         }});
-        if (slugs.length > 0) {{
-            selector.value = slugs[0];
-            loadPageData();
-        }}
     }}
-    
+
     function loadPageData() {{
         const slug = document.getElementById('page_selector').value;
-        if (!slug) return;
-        const p = allPages[slug] || {{}};
+        const p = allPages[slug];
+        if(!p) return;
         
         document.getElementById('current_slug').value = slug;
         document.getElementById('page_name').value = p.page_name || '';
@@ -1108,9 +600,13 @@ def admin_panel(request: Request):
         document.getElementById('hero_title').value = p.hero_title || '';
         document.getElementById('hero_subtitle').value = p.hero_subtitle || '';
         document.getElementById('hero_text').value = p.hero_text || '';
-        document.getElementById('affiliate_link').value = p.affiliate_link || '';
-        document.getElementById('affiliate_text').value = p.affiliate_text || '';
         
+        document.getElementById('download_instructions').value = p.download_instructions || '';
+        
+        document.getElementById('dl-links-container').innerHTML = '';
+        (p.download_links || [p.download_link || '']).forEach(url => addDlLink(url)); 
+        if((p.download_links || []).length === 0) addDlLink();
+
         const bt = p.bank_transfer_info || {{}};
         document.getElementById('bt_bank_name').value = bt.bank_name || '';
         document.getElementById('bt_account_type').value = bt.account_type || '';
@@ -1118,29 +614,26 @@ def admin_panel(request: Request):
         document.getElementById('bt_beneficiary').value = bt.beneficiary || '';
         document.getElementById('bt_email').value = bt.email_for_proof || '';
         document.getElementById('bt_whatsapp').value = bt.whatsapp_for_proof || '';
-        
-        const social = p.social_links || {{}};
-        document.getElementById('fb_link').value = social.facebook || '';
-        document.getElementById('wa_link').value = social.whatsapp || '';
-        document.getElementById('yt_link').value = social.youtube || '';
-        document.getElementById('tt_link').value = social.tiktok || '';
-        document.getElementById('tg_link').value = social.telegram || '';
-        document.getElementById('ig_link').value = social.instagram || '';
-        
+
+        document.getElementById('fb_link').value = p.social_links?.facebook || '';
+        document.getElementById('wa_link').value = p.social_links?.whatsapp || '';
+        document.getElementById('yt_link').value = p.social_links?.youtube || '';
+        document.getElementById('tt_link').value = p.social_links?.tiktok || '';
+        document.getElementById('tg_link').value = p.social_links?.telegram || '';
+        document.getElementById('ig_link').value = p.social_links?.instagram || '';
+
         document.getElementById('pubs-container').innerHTML = '';
-        let pubs = p.publications || [];
-        if (pubs.length === 0) {{ addPubRow(); }} 
-        else {{ pubs.forEach(pub => addPubRow(pub.type || 'video', pub.url || '', pub.desc || '')); }}
-        
+        (p.publications || []).forEach(pub => addPubRow(pub.type, pub.url, pub.desc));
+        if((p.publications || []).length === 0) addPubRow();
+
         document.getElementById('plans-container').innerHTML = '';
-        let plans = p.plans || [];
-        if (plans.length === 0) {{ addPlanRow(); }} 
-        else {{ plans.forEach(plan => addPlanRow(plan.name || '', plan.price || '', plan.features || '', plan.link || '', plan.highlight || false)); }}
-        
+        (p.plans || []).forEach(plan => addPlanRow(plan.name, plan.price, plan.features, plan.link, plan.highlight));
+        if((p.plans || []).length === 0) addPlanRow();
+
         const urlText = slug === 'main' ? 'tudominio.com/' : 'tudominio.com/p/' + slug;
         document.getElementById('page_url_preview').innerText = urlText;
     }}
-    
+
     function createPage() {{
         const name = prompt('Nombre de la nueva página (ej: Promo Black Friday):');
         if(!name) return;
@@ -1148,27 +641,23 @@ def admin_panel(request: Request):
         if(!slug) return;
         slug = slug.toLowerCase().replace(/[^a-z0-9-]/g, '');
         if(allPages[slug]) {{ alert('Esa URL ya existe'); return; }}
-        allPages[slug] = {{ 
-            page_name: name, chatbot_id: 'gzEjAzK1VCE72hJ_hBfA4', hero_title: name, 
-            hero_subtitle: '', hero_text: '', affiliate_link: '', affiliate_text: '', 
-            publications: [], plans: [], 
-            social_links: {{ facebook: '', whatsapp: '', youtube: '', tiktok: '', telegram: '', instagram: '' }}, 
-            bank_transfer_info: {{}}, download_links: [], download_instructions: '' 
-        }};
+        
+        allPages[slug] = {{ page_name: name, chatbot_id: 'gzEjAzK1VCE72hJ_hBfA4', hero_title: name, hero_subtitle: '', hero_text: '', publications: [], plans: [], social_links: {{}}, bank_transfer_info: {{}}, download_links: [], download_instructions: '' }};
         saveData(true);
     }}
-    
+
     function duplicatePage() {{
         const currentSlug = document.getElementById('page_selector').value;
         const newSlug = prompt('URL para la copia (ej: promo-v2):');
         if(!newSlug) return;
         const slug = newSlug.toLowerCase().replace(/[^a-z0-9-]/g, '');
         if(allPages[slug]) {{ alert('Esa URL ya existe'); return; }}
+        
         allPages[slug] = JSON.parse(JSON.stringify(allPages[currentSlug]));
         allPages[slug].page_name += ' (Copia)';
         saveData(true);
     }}
-    
+
     function deletePage() {{
         const slug = document.getElementById('page_selector').value;
         if(slug === 'main') {{ alert('No puedes eliminar la página principal.'); return; }}
@@ -1177,7 +666,18 @@ def admin_panel(request: Request):
             saveData(true);
         }}
     }}
-    
+
+    function addDlLink(url = '') {{
+        const c = document.getElementById('dl-links-container');
+        const div = document.createElement('div');
+        div.className = 'flex gap-2';
+        div.innerHTML = `
+            <input type="text" class="dl-url w-full bg-slate-900 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500" placeholder="https://drive.google.com/..." value="${{url}}">
+            <button onclick="this.parentElement.remove()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded text-sm font-bold whitespace-nowrap"><i class="fas fa-trash"></i></button>
+        `;
+        c.appendChild(div);
+    }}
+
     function addPubRow(type = 'video', url = '', desc = '') {{
         const c = document.getElementById('pubs-container');
         const div = document.createElement('div');
@@ -1193,7 +693,7 @@ def admin_panel(request: Request):
         `;
         c.appendChild(div);
     }}
-    
+
     function addPlanRow(name = '', price = '', features = '', link = '', highlight = false) {{
         const c = document.getElementById('plans-container');
         const div = document.createElement('div');
@@ -1212,227 +712,36 @@ def admin_panel(request: Request):
         `;
         c.appendChild(div);
     }}
-    
-    // ==========================================
-    // 📥 GESTIÓN DE DESCARGAS (NUEVO)
-    // ==========================================
-    async function loadDownloadsConfig() {{
-        try {{
-            const res = await fetch('/api/get_downloads_admin', {{ credentials: 'same-origin' }});
-            const data = await res.json();
-            downloadsConfig = data;
-            document.getElementById('dl_page_title').value = data.page_title || '';
-            document.getElementById('dl_page_subtitle').value = data.page_subtitle || '';
-            document.getElementById('dl_instructions').value = data.instructions || '';
-            
-            const container = document.getElementById('downloads-systems-container');
-            container.innerHTML = '';
-            const systems = data.systems || [];
-            if (systems.length === 0) {{
-                addDownloadSystem();
-            }} else {{
-                systems.forEach(s => addDownloadSystemRow(s));
-            }}
-        }} catch(e) {{ console.error('Error cargando descargas:', e); }}
-    }}
-    
-    function addDownloadSystemRow(sys = null) {{
-        const container = document.getElementById('downloads-systems-container');
-        const id = sys ? sys.id : 'sys_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-        const div = document.createElement('div');
-        div.className = 'bg-slate-900 p-4 rounded-lg border border-slate-700';
-        div.dataset.sysId = id;
-        
-        const osValue = sys ? sys.os : 'windows';
-        const osOptions = Object.keys(OS_META).map(k => 
-            `<option value="${{k}}" ${{osValue===k?'selected':''}}>${{OS_META[k].name}}</option>`
-        ).join('');
-        
-        const meta = OS_META[osValue] || OS_META['other'];
-        
-        div.innerHTML = `
-            <div class="flex justify-between items-start mb-3">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-gradient-to-br ${{meta.color}} rounded-lg flex items-center justify-center text-white text-xl">
-                        <i class="${{meta.icon}} sys-icon-display"></i>
-                    </div>
-                    <div>
-                        <div class="text-sm font-bold text-white sys-name-display">${{sys ? (sys.name + ' v' + sys.version) : 'Nuevo Sistema'}}</div>
-                        <div class="text-xs text-slate-500 sys-os-display">${{meta.name}}</div>
-                    </div>
-                </div>
-                <button onclick="this.closest('[data-sys-id]').remove()" class="text-red-500 hover:text-red-400 text-sm"><i class="fas fa-trash"></i></button>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                <div>
-                    <label class="text-xs text-slate-400">Nombre del Sistema</label>
-                    <input type="text" class="sys-name w-full bg-slate-800 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500 text-sm" placeholder="BLENIN.G.77 Trading System" value="${{sys ? sys.name : ''}}">
-                </div>
-                <div>
-                    <label class="text-xs text-slate-400">Versión</label>
-                    <input type="text" class="sys-version w-full bg-slate-800 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500 text-sm" placeholder="1.0.0" value="${{sys ? sys.version : '1.0.0'}}">
-                </div>
-            </div>
-            <div class="mb-3">
-                <label class="text-xs text-slate-400">Sistema Operativo</label>
-                <select class="sys-os w-full bg-slate-800 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500 text-sm" onchange="updateOsDisplay(this)">
-                    ${{osOptions}}
-                </select>
-            </div>
-            <div class="mb-3">
-                <label class="text-xs text-slate-400">Descripción</label>
-                <textarea class="sys-description w-full bg-slate-800 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500 text-sm" rows="2" placeholder="Descripción de esta versión...">${{sys ? sys.description : ''}}</textarea>
-            </div>
-            <div class="mb-3">
-                <div class="flex justify-between items-center mb-2">
-                    <label class="text-xs text-slate-400">Enlaces de Descarga</label>
-                    <button onclick="addDownloadLink(this.closest('[data-sys-id]'))" class="text-cyan-400 hover:text-cyan-300 text-xs"><i class="fas fa-plus"></i> Agregar enlace</button>
-                </div>
-                <div class="sys-links space-y-2"></div>
-            </div>
-            <div class="flex items-center gap-2 pt-2 border-t border-slate-700">
-                <input type="checkbox" class="sys-active accent-cyan-500" ${{(sys ? sys.active : true) ? 'checked' : ''}}>
-                <label class="text-xs text-slate-300 cursor-pointer">Sistema activo (visible para los usuarios)</label>
-            </div>
-        `;
-        container.appendChild(div);
-        
-        // Agregar enlaces existentes
-        const linksContainer = div.querySelector('.sys-links');
-        if (sys && sys.links && sys.links.length > 0) {{
-            sys.links.forEach(link => addDownloadLink(div, link.label, link.url));
-        }} else {{
-            addDownloadLink(div);
-        }}
-        
-        // Event listeners para actualizar display
-        div.querySelector('.sys-name').addEventListener('input', function() {{
-            const v = div.querySelector('.sys-version').value;
-            div.querySelector('.sys-name-display').textContent = this.value + (v ? ' v' + v : '');
-        }});
-        div.querySelector('.sys-version').addEventListener('input', function() {{
-            const n = div.querySelector('.sys-name').value;
-            div.querySelector('.sys-name-display').textContent = (n || 'Sistema') + ' v' + this.value;
-        }});
-    }}
-    
-    function addDownloadSystem() {{
-        addDownloadSystemRow();
-    }}
-    
-    function updateOsDisplay(selectEl) {{
-        const div = selectEl.closest('[data-sys-id]');
-        const osKey = selectEl.value;
-        const meta = OS_META[osKey] || OS_META['other'];
-        const iconEl = div.querySelector('.sys-icon-display');
-        const osDisplay = div.querySelector('.sys-os-display');
-        const iconWrap = iconEl.parentElement;
-        iconEl.className = meta.icon + ' sys-icon-display';
-        iconWrap.className = `w-10 h-10 bg-gradient-to-br ${{meta.color}} rounded-lg flex items-center justify-center text-white text-xl`;
-        osDisplay.textContent = meta.name;
-    }}
-    
-    function addDownloadLink(sysDiv, label = '', url = '') {{
-        const linksContainer = sysDiv.querySelector('.sys-links');
-        const linkDiv = document.createElement('div');
-        linkDiv.className = 'flex gap-2';
-        linkDiv.innerHTML = `
-            <input type="text" class="link-label bg-slate-800 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500 text-xs w-1/3" placeholder="Etiqueta (Servidor 1)" value="${{label}}">
-            <input type="text" class="link-url bg-slate-800 rounded p-2 border border-slate-700 outline-none focus:border-cyan-500 text-xs flex-1" placeholder="https://mega.nz/..." value="${{url}}">
-            <button onclick="this.parentElement.remove()" class="bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded text-xs"><i class="fas fa-times"></i></button>
-        `;
-        linksContainer.appendChild(linkDiv);
-    }}
-    
-    async function saveDownloadsData() {{
-        const systems = [];
-        document.querySelectorAll('#downloads-systems-container > [data-sys-id]').forEach(div => {{
-            const name = div.querySelector('.sys-name').value.trim();
-            if (!name) return;
-            const links = [];
-            div.querySelectorAll('.sys-links > div').forEach(linkDiv => {{
-                const url = linkDiv.querySelector('.link-url').value.trim();
-                if (url) {{
-                    links.push({{
-                        label: linkDiv.querySelector('.link-label').value.trim() || 'Servidor',
-                        url: url
-                    }});
-                }}
-            }});
-            systems.push({{
-                id: div.dataset.sysId,
-                name: name,
-                version: div.querySelector('.sys-version').value.trim() || '1.0.0',
-                os: div.querySelector('.sys-os').value,
-                description: div.querySelector('.sys-description').value.trim(),
-                links: links,
-                active: div.querySelector('.sys-active').checked
-            }});
-        }});
-        
-        const payload = {{
-            page_title: document.getElementById('dl_page_title').value || 'Centro de Descargas',
-            page_subtitle: document.getElementById('dl_page_subtitle').value,
-            instructions: document.getElementById('dl_instructions').value,
-            systems: systems
-        }};
-        
-        try {{
-            const res = await fetch('/api/save_downloads', {{
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify(payload)
-            }});
-            const result = await res.json();
-            showToast(result.message);
-        }} catch(e) {{
-            showToast('❌ Error guardando descargas.');
-            console.error(e);
-        }}
-    }}
-    
+
     async function saveData(reloadSelector = false) {{
         const slug = document.getElementById('current_slug').value || document.getElementById('page_selector').value;
-        if (!slug) {{
-            showToast('❌ No hay página seleccionada.');
-            return;
-        }}
-        
         let pubsArray = [];
         document.querySelectorAll('#pubs-container > div').forEach(div => {{
-            const urlInput = div.querySelector('.pub-url');
-            if(urlInput && urlInput.value.trim()) {{
-                pubsArray.push({{ 
-                    type: div.querySelector('.pub-type').value, 
-                    url: urlInput.value, 
-                    desc: div.querySelector('.pub-desc').value 
-                }});
+            if(div.querySelector('.pub-url').value.trim()) {{
+                pubsArray.push({{ type: div.querySelector('.pub-type').value, url: div.querySelector('.pub-url').value, desc: div.querySelector('.pub-desc').value }});
             }}
         }});
-        
+
         let plansArray = [];
         document.querySelectorAll('#plans-container > div').forEach(div => {{
-            const nameInput = div.querySelector('.p-name');
-            if(nameInput && nameInput.value.trim()) {{
-                plansArray.push({{ 
-                    name: nameInput.value, 
-                    price: div.querySelector('.p-price').value, 
-                    features: div.querySelector('.p-features').value, 
-                    link: div.querySelector('.p-link').value, 
-                    highlight: div.querySelector('.p-highlight').checked 
-                }});
+            if(div.querySelector('.p-name').value.trim()) {{
+                plansArray.push({{ name: div.querySelector('.p-name').value, price: div.querySelector('.p-price').value, features: div.querySelector('.p-features').value, link: div.querySelector('.p-link').value, highlight: div.querySelector('.p-highlight').checked }});
             }}
         }});
-        
+
+        let dlLinksArray = [];
+        document.querySelectorAll('#dl-links-container > div').forEach(div => {{
+            if(div.querySelector('.dl-url').value.trim()) {{
+                dlLinksArray.push(div.querySelector('.dl-url').value);
+            }}
+        }});
+
         allPages[slug] = {{
             page_name: document.getElementById('page_name').value,
             chatbot_id: document.getElementById('chatbot_id').value || 'gzEjAzK1VCE72hJ_hBfA4',
             hero_title: document.getElementById('hero_title').value,
             hero_subtitle: document.getElementById('hero_subtitle').value,
             hero_text: document.getElementById('hero_text').value,
-            affiliate_link: document.getElementById('affiliate_link').value,
-            affiliate_text: document.getElementById('affiliate_text').value,
             publications: pubsArray,
             plans: plansArray,
             social_links: {{
@@ -1450,29 +759,20 @@ def admin_panel(request: Request):
                 beneficiary: document.getElementById('bt_beneficiary').value,
                 email_for_proof: document.getElementById('bt_email').value,
                 whatsapp_for_proof: document.getElementById('bt_whatsapp').value
-            }}
+            }},
+            download_links: dlLinksArray,
+            download_instructions: document.getElementById('download_instructions').value
         }};
         
-        try {{
-            const res = await fetch('/api/save_pages', {{ 
-                method: 'POST', 
-                credentials: 'same-origin', 
-                headers: {{'Content-Type': 'application/json'}}, 
-                body: JSON.stringify(allPages) 
-            }});
-            const result = await res.json();
-            showToast(result.message);
-            if (result.status === 'error') {{ console.error('Error guardando:', result); return; }}
-            if(reloadSelector) {{ updateSelector(); }}
-        }} catch(e) {{
-            showToast('❌ Error de conexión.');
-            console.error(e);
-        }}
+        const res = await fetch('/api/save_pages', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(allPages) }});
+        const result = await res.json();
+        showToast(result.message);
+        if(reloadSelector) {{ updateSelector(); document.getElementById('page_selector').value = Object.keys(allPages).pop(); loadPageData(); }}
     }}
-    
+
     async function loadStats() {{
         try {{
-            const res = await fetch('/api/get_stats', {{ credentials: 'same-origin' }});
+            const res = await fetch('/api/get_stats');
             const data = await res.json();
             document.getElementById('stat_views').innerText = data.views || 0;
             const countries = data.countries || {{}};
@@ -1483,6 +783,7 @@ def admin_panel(request: Request):
                 html += `<div class="flex justify-between items-center bg-slate-900 p-2 rounded"><span class="text-sm text-slate-300">${{c}}</span><span class="text-cyan-400 font-bold">${{countries[c]}}</span></div>`;
             }});
             document.getElementById('stat_countries').innerHTML = html || '<p class="text-slate-500 text-sm">Aún no hay datos.</p>';
+            
             const leads = data.captured_leads || [];
             let leadsHtml = '';
             if(leads.length === 0) {{
@@ -1494,35 +795,44 @@ def admin_panel(request: Request):
                                     l.follow_up_stage === 2 ? 'Seguimiento 2 Enviado' : 'Embudo Finalizado';
                     leadsHtml += `<div class="bg-slate-900 p-3 rounded border border-slate-700">
                         <div class="flex justify-between">
-                            <span class="text-cyan-400 font-bold text-sm">${{l.name}} - $${{l.email}}</span>
+                            <span class="text-cyan-400 font-bold text-sm">${{l.name}} - ${{l.email}}</span>
                             <span class="text-slate-500 text-xs">${{l.date.split('T')[0]}}</span>
                         </div>
-                        <div class="text-slate-400 text-xs mt-1">Interés: $${{l.interaction}}</div>
-                        <div class="text-emerald-400 text-xs mt-1">🤖 IA: $${{stageText}}</div>
+                        <div class="text-slate-400 text-xs mt-1">Interés: ${{l.interaction}}</div>
+                        <div class="text-emerald-400 text-xs mt-1">🤖 IA: ${{stageText}}</div>
                     </div>`;
                 }});
             }}
             document.getElementById('stat_leads').innerHTML = leadsHtml;
         }} catch (e) {{ console.error(e); }}
     }}
-    
+
     async function loadAIConfig() {{
         try {{
-            const res = await fetch('/api/get_ai_config', {{ credentials: 'same-origin' }});
+            const res = await fetch('/api/get_ai_config');
             const data = await res.json();
-            const cfg = data || {{}};
+            // ✅ Si la base de datos está vacía, usamos los textos por defecto (con \\n para no romper el JS)
+            const defaults = {{
+                stage1_days: 2, stage1_subject: "🚀 {{name}}, descubre el poder de la IA Institucional con BLENIN.G.77", stage1_body: "Hola {{name}},\\n\\nGracias por tu interés en BLENIN.G.77...",
+                stage2_days: 5, stage2_subject: "🔥 {{name}}, esto es lo que estás dejando atrás...", stage2_body: "Hola {{name}},\\n\\nQueríamos mostrarte lo que la comunidad...",
+                stage3_days: 10, stage3_subject: "⏳ {{name}}, tu acceso VIP a BLENIN.G.77 está por expirar", stage3_body: "Hola {{name}},\\n\\nHemos notado que aún no has dado el paso..."
+            }};
+            const cfg = Object.keys(data).length > 0 ? data : defaults;
+            
             document.getElementById('s1_days').value = cfg.stage1_days || 2;
-            document.getElementById('s1_subject').value = cfg.stage1_subject || '';
-            document.getElementById('s1_body').value = cfg.stage1_body || '';
+            document.getElementById('s1_subject').value = cfg.stage1_subject || defaults.stage1_subject;
+            document.getElementById('s1_body').value = cfg.stage1_body || defaults.stage1_body;
+            
             document.getElementById('s2_days').value = cfg.stage2_days || 5;
-            document.getElementById('s2_subject').value = cfg.stage2_subject || '';
-            document.getElementById('s2_body').value = cfg.stage2_body || '';
+            document.getElementById('s2_subject').value = cfg.stage2_subject || defaults.stage2_subject;
+            document.getElementById('s2_body').value = cfg.stage2_body || defaults.stage2_body;
+            
             document.getElementById('s3_days').value = cfg.stage3_days || 10;
-            document.getElementById('s3_subject').value = cfg.stage3_subject || '';
-            document.getElementById('s3_body').value = cfg.stage3_body || '';
+            document.getElementById('s3_subject').value = cfg.stage3_subject || defaults.stage3_subject;
+            document.getElementById('s3_body').value = cfg.stage3_body || defaults.stage3_body;
         }} catch(e) {{ console.error(e); }}
     }}
-    
+
     async function saveAIConfig() {{
         const payload = {{
             stage1_days: parseInt(document.getElementById('s1_days').value),
@@ -1535,14 +845,14 @@ def admin_panel(request: Request):
             stage3_subject: document.getElementById('s3_subject').value,
             stage3_body: document.getElementById('s3_body').value
         }};
-        const res = await fetch('/api/save_ai_config', {{ method: 'POST', credentials: 'same-origin', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
+        const res = await fetch('/api/save_ai_config', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
         const result = await res.json();
         showToast(result.message);
     }}
-    
+
     async function loadUpdateConfig() {{
         try {{
-            const res = await fetch('/api/get_update_config', {{ credentials: 'same-origin' }});
+            const res = await fetch('/api/get_update_config');
             const data = await res.json();
             document.getElementById('upd_version').value = data.latest_version || '1.0.0';
             document.getElementById('upd_url').value = data.download_url || '';
@@ -1550,7 +860,7 @@ def admin_panel(request: Request):
             document.getElementById('upd_force').checked = data.force_update || false;
         }} catch(e) {{ console.error(e); }}
     }}
-    
+
     async function saveUpdateConfig() {{
         const payload = {{
             latest_version: document.getElementById('upd_version').value,
@@ -1558,490 +868,586 @@ def admin_panel(request: Request):
             force_update: document.getElementById('upd_force').checked,
             update_message: document.getElementById('upd_message').value
         }};
-        const res = await fetch('/api/save_update_config', {{ method: 'POST', credentials: 'same-origin', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
+        const res = await fetch('/api/save_update_config', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(payload) }});
         const result = await res.json();
         showToast(result.message);
     }}
-    
-    async function generateMarketing(type) {{
-        const outputDiv = document.getElementById('marketing_output');
-        outputDiv.innerText = "🧠 La IA está pensando y redactando el contenido... (Esto puede tardar 15-30 segundos)";
-        try {{
-            const res = await fetch('/api/generate_marketing', {{
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{ type: type }})
-            }});
-            const data = await res.json();
-            if (data.status === 'success') {{
-                outputDiv.innerText = data.content;
-                currentMarketingText = data.content;
-            }} else {{
-                outputDiv.innerText = "❌ Error: " + (data.message || "No se pudo generar");
-            }}
-        }} catch(e) {{
-            outputDiv.innerText = "❌ Error de conexión con el servidor.";
-            console.error(e);
-        }}
-    }}
-    
-    function copyMarketing() {{
-        if (!currentMarketingText) {{ showToast('No hay contenido para copiar'); return; }}
-        navigator.clipboard.writeText(currentMarketingText).then(() => showToast('✅ Contenido copiado al portapapeles'));
-    }}
-    
+
     async function createManualLicense() {{
         const plan = document.getElementById('manual_plan').value;
-        const days = parseInt(document.getElementById('manual_days').value);
-        const email = document.getElementById('manual_email').value.trim();
-        if(!email) {{ showToast('⚠️ Ingresa el correo del cliente'); return; }}
-        try {{
-            const res = await fetch('/api/create_manual_license', {{
-                method: 'POST', credentials: 'same-origin',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{ plan: plan, days: days, email: email }})
-            }});
-            const data = await res.json();
-            const msg = document.getElementById('manual_lic_msg');
-            msg.classList.remove('hidden');
-            if (data.status === 'success') {{
-                msg.innerText = '✅ Licencia generada: ' + data.license_key;
-                msg.className = 'mt-4 text-cyan-400 font-bold text-sm bg-slate-900 p-3 rounded';
-            }} else {{
-                msg.innerText = '❌ ' + (data.detail || 'Error');
-                msg.className = 'mt-4 text-red-400 font-bold text-sm bg-slate-900 p-3 rounded';
-            }}
-        }} catch(e) {{ console.error(e); }}
+        const days = document.getElementById('manual_days').value;
+        const email = document.getElementById('manual_email').value;
+        if(!email) {{ alert('Por favor ingresa el correo del cliente.'); return; }}
+        const res = await fetch('/api/create_license', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{ plan: plan, duration_days: parseInt(days), email: email }}) }});
+        const result = await res.json();
+        const msgDiv = document.getElementById('manual_lic_msg');
+        msgDiv.classList.remove('hidden');
+        if(result.status === 'success') {{
+            msgDiv.innerHTML = `✅ Licencia creada y guardada en el servidor: <br><br> <input type="text" value="${{result.key}}" readonly class="w-full bg-slate-950 text-cyan-400 p-2 rounded mt-2 cursor-pointer select-all" onclick="this.select()">`;
+            document.getElementById('lic_key').value = result.key; 
+        }} else {{
+            msgDiv.innerText = "❌ " + (result.message || "Error al crear la licencia.");
+        }}
+        showToast('Proceso de licencia manual completado.');
     }}
-    
-    async function manageLic(activate) {{
-        const key = document.getElementById('lic_key').value.trim();
-        if(!key) {{ showToast('⚠️ Ingresa una clave de licencia'); return; }}
-        try {{
-            const res = await fetch('/api/manage_license', {{
-                method: 'POST', credentials: 'same-origin',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{ key: key, active: activate }})
-            }});
-            const data = await res.json();
-            const msg = document.getElementById('lic_msg');
-            msg.classList.remove('hidden');
-            msg.innerText = data.message;
-            msg.className = 'mt-4 text-cyan-400 font-bold text-sm';
-        }} catch(e) {{ console.error(e); }}
+
+    async function manageLic(activeStatus) {{
+        const key = document.getElementById('lic_key').value;
+        if(!key) {{ alert('Por favor ingresa una clave de licencia.'); return; }}
+        const res = await fetch('/api/manage_license', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{key: key, active: activeStatus}}) }});
+        const result = await res.json();
+        document.getElementById('lic_msg').classList.remove('hidden');
+        document.getElementById('lic_msg').innerText = result.message;
+        showToast(result.message);
     }}
-    
+
     async function resetHwid() {{
-        const key = document.getElementById('lic_key').value.trim();
-        if(!key) {{ showToast('⚠️ Ingresa una clave de licencia'); return; }}
-        try {{
-            const res = await fetch('/api/reset_hwid', {{
-                method: 'POST', credentials: 'same-origin',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{ key: key }})
-            }});
-            const data = await res.json();
-            const msg = document.getElementById('lic_msg');
-            msg.classList.remove('hidden');
-            msg.innerText = data.message;
-        }} catch(e) {{ console.error(e); }}
+        const key = document.getElementById('lic_key').value;
+        if(!key) {{ alert('Por favor ingresa una clave de licencia.'); return; }}
+        const res = await fetch('/api/reset_hwid', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{key: key}}) }});
+        const result = await res.json();
+        document.getElementById('lic_msg').classList.remove('hidden');
+        document.getElementById('lic_msg').innerText = result.message;
+        showToast(result.message);
     }}
-    
+
     async function changePassword() {{
-        const cur = document.getElementById('current_pwd').value;
-        const newP = document.getElementById('new_pwd').value;
-        const conf = document.getElementById('confirm_pwd').value;
-        if (newP !== conf) {{
-            const msg = document.getElementById('pwd_msg');
-            msg.classList.remove('hidden');
-            msg.className = 'mt-4 font-bold text-sm text-red-400';
-            msg.innerText = '❌ Las contraseñas no coinciden.';
+        const current_pwd = document.getElementById('current_pwd').value;
+        const new_pwd = document.getElementById('new_pwd').value;
+        const confirm_pwd = document.getElementById('confirm_pwd').value;
+        if(new_pwd !== confirm_pwd) {{
+            const msgDiv = document.getElementById('pwd_msg');
+            msgDiv.className = "mt-4 font-bold text-sm text-red-400";
+            msgDiv.innerText = "❌ Las nuevas contraseñas no coinciden.";
+            msgDiv.classList.remove('hidden');
             return;
         }}
-        try {{
-            const res = await fetch('/api/change_password', {{
-                method: 'POST', credentials: 'same-origin',
-                headers: {{'Content-Type': 'application/json'}},
-                body: JSON.stringify({{ current_password: cur, new_password: newP }})
-            }});
-            const data = await res.json();
-            const msg = document.getElementById('pwd_msg');
-            msg.classList.remove('hidden');
-            msg.innerText = data.message;
-            msg.className = 'mt-4 font-bold text-sm ' + (data.status === 'success' ? 'text-emerald-400' : 'text-red-400');
-        }} catch(e) {{ console.error(e); }}
+        const res = await fetch('/api/change_password', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify({{ current_password: current_pwd, new_password: new_pwd }}) }});
+        const result = await res.json();
+        const msgDiv = document.getElementById('pwd_msg');
+        msgDiv.className = "mt-4 font-bold text-sm " + (result.status === 'success' ? 'text-emerald-400' : 'text-red-400');
+        msgDiv.innerText = result.message;
+        msgDiv.classList.remove('hidden');
+        showToast(result.message);
+        if(result.status === 'success') {{
+            document.getElementById('current_pwd').value = '';
+            document.getElementById('new_pwd').value = '';
+            document.getElementById('confirm_pwd').value = '';
+        }}
     }}
-    
+
     // Init
     updateSelector();
+    loadPageData();
     </script>
     </body></html>
     """
 
-# ==========================================
-# 🌐 APIs PÚBLICAS Y DE PÁGINAS
-# ==========================================
 @app.post("/api/save_pages")
-def save_pages_api(request: Request, data: dict):
-    if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
-    success = save_all_pages({"pages": data})
-    if success:
-        return {"status": "success", "message": "✅ Páginas guardadas correctamente."}
-    return {"status": "error", "message": "❌ Error guardando en Supabase."}
-
-@app.get("/api/get_stats")
-def get_stats_api(request: Request):
-    if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
-    return {
-        "views": stats_db.get("views", 0),
-        "countries": stats_db.get("countries", {}),
-        "captured_leads": list(trials_db.values()) if trials_db else []
-    }
-
-@app.get("/api/get_ai_config")
-def get_ai_config_api(request: Request):
-    if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
-    return ai_agent_config
-
-class AIData(BaseModel):
-    stage1_days: int
-    stage1_subject: str
-    stage1_body: str
-    stage2_days: int
-    stage2_subject: str
-    stage2_body: str
-    stage3_days: int
-    stage3_subject: str
-    stage3_body: str
-
-@app.post("/api/save_ai_config")
-def save_ai_config_api(request: Request, data: AIData):
-    global ai_agent_config
-    if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
-    ai_agent_config = data.dict()
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config, downloads_config)
-    return {"status": "success", "message": "✅ Configuración del Agente IA guardada."}
-
-class ManualLicData(BaseModel):
-    plan: str
-    days: int
-    email: str
-
-@app.post("/api/create_manual_license")
-def create_manual_license_api(request: Request, data: ManualLicData):
-    global licenses_db
-    if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
-    
-    prefix = "BLENIN-" + data.plan.upper() + "-"
-    code = prefix + ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-    expires = (datetime.now() + timedelta(days=data.days)).isoformat()
-    licenses_db[code] = {
-        "hwid": None, "expires": expires, "active": True,
-        "plan": data.plan, "email": data.email
-    }
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config, downloads_config)
-    return {"status": "success", "license_key": code}
-
-class ManageLicData(BaseModel):
-    key: str
-    active: bool
-
-@app.post("/api/manage_license")
-def manage_license_api(request: Request, data: ManageLicData):
-    global licenses_db
-    if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
-    if data.key in licenses_db:
-        licenses_db[data.key]["active"] = data.active
-        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config, downloads_config)
-        return {"message": f"✅ Licencia {'activada' if data.active else 'suspendida'} correctamente."}
-    return {"message": "❌ Licencia no encontrada."}
-
-class ResetHwidData(BaseModel):
-    key: str
-
-@app.post("/api/reset_hwid")
-def reset_hwid_api(request: Request, data: ResetHwidData):
-    global licenses_db
-    if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
-    if data.key in licenses_db:
-        licenses_db[data.key]["hwid"] = None
-        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config, downloads_config)
-        return {"message": "✅ HWID reseteado correctamente."}
-    return {"message": "❌ Licencia no encontrada."}
+def api_save_pages(request: Request, data: dict):
+    if not verify_admin(request): return {"message": "❌ No autorizado."}
+    if save_all_pages({"pages": data}):
+        return {"message": "✅ Página guardada correctamente."}
+    return {"message": "❌ Error al guardar."}
 
 @app.post("/api/change_password")
-def change_password_api(request: Request, data: ChangePasswordData):
+def api_change_password(request: Request, data: ChangePasswordData):
     global admin_password_db
     if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
-    if data.current_password != admin_password_db:
-        return {"status": "error", "message": "❌ La contraseña actual es incorrecta."}
-    if len(data.new_password) < 6:
-        return {"status": "error", "message": "❌ La nueva contraseña debe tener al menos 6 caracteres."}
+    if data.current_password != admin_password_db: return {"status": "error", "message": "❌ La contraseña actual es incorrecta."}
+    if len(data.new_password) < 4: return {"status": "error", "message": "❌ La nueva contraseña debe tener al menos 4 caracteres."}
     admin_password_db = data.new_password
-    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config, downloads_config)
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"status": "success", "message": "✅ Contraseña actualizada correctamente."}
 
-class MarketingRequest(BaseModel):
-    type: str
+@app.get("/recuperar-clave", response_class=HTMLResponse)
+def recover_page():
+    return """
+    <html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Recuperar Licencia - BLENIN77</title><script src="https://cdn.tailwindcss.com"></script><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet"><style>body { font-family: 'Inter', sans-serif; }</style></head>
+    <body class="bg-slate-900 text-slate-300 flex items-center justify-center min-h-screen"><div class="bg-slate-800 p-8 rounded-xl shadow-2xl border border-slate-700 w-full max-w-md text-center"><h1 class="text-2xl font-bold text-cyan-400 mb-2">🔑 Recuperar Licencia</h1><p class="text-slate-400 mb-6 text-sm">Ingresa el correo electrónico con el que realizaste tu compra.</p><input type="email" id="email" placeholder="tu.correo@gmail.com" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 outline-none focus:border-cyan-500"><button onclick="recover()" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Enviar mi licencia</button><div id="msg" class="mt-4 text-emerald-400 font-bold text-sm hidden"></div></div><script>function recover(){var email = document.getElementById('email').value;fetch('/api/recover_by_email', {method: 'POST',headers: {'Content-Type': 'application/json'},body: JSON.stringify({email: email})}).then(r => r.json()).then(d => {const msgDiv = document.getElementById('msg');msgDiv.innerText = d.message;msgDiv.classList.remove('hidden');});}</script></body></html>
+    """
 
-@app.post("/api/generate_marketing")
-def generate_marketing_api(request: Request, data: MarketingRequest):
-    if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
-    
-    prompts = {
-        "seo_blog": "Escribe un artículo SEO optimizado de 800 palabras sobre BLENIN.G.77, un sistema de trading institucional con IA Predictiva, enjambre de 500 agentes y modo híbrido (MT5 + noticias macroeconómicas). Incluye títulos H2, palabras clave como 'trading algorítmico', 'IA para trading', 'bot MT5'. Tono profesional pero accesible.",
-        "tiktok_script": "Crea un guion viral para TikTok/Reels (60 segundos) sobre BLENIN.G.77. Debe tener gancho en los primeros 3 segundos, mostrar resultados impactantes de trading con IA, y llamada a la acción clara. Incluye indicaciones visuales entre corchetes.",
-        "forum_post": "Escribe un post para foros como Reddit (r/algotrading) presentando BLENIN.G.77. Debe ser genuino, no spammy, enfocarse en la tecnología (IA predictiva, enjambre de agentes, modo híbrido), y generar discusión técnica. Máximo 500 palabras."
-    }
-    
-    prompt = prompts.get(data.type, prompts["seo_blog"])
-    content = generate_dynamic_content_with_llama(prompt, max_tokens=1500)
-    
-    if content:
-        return {"status": "success", "content": content}
-    return {"status": "error", "message": "No se pudo generar el contenido. Verifica la API key de Gemini."}
-
-# ==========================================
-# 🌍 RENDERIZADO DE PÁGINAS PÚBLICAS
-# ==========================================
-def render_landing_page(page_data: dict, slug: str = "main"):
-    """Renderiza la landing page pública con el formulario de captura que redirige a /download"""
-    plans_html = ""
-    for plan in page_data.get("plans", []):
-        highlight_class = "border-cyan-500 scale-105 shadow-2xl shadow-cyan-500/20" if plan.get("highlight") else "border-slate-700"
-        badge = '<div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-cyan-500 text-slate-900 text-xs font-bold px-3 py-1 rounded-full">MÁS POPULAR</div>' if plan.get("highlight") else ''
-        features_html = plan.get("features", "").replace("\n", "<br>")
-        plans_html += f"""
-        <div class="bg-slate-800 border-2 {highlight_class} rounded-2xl p-6 relative transition-all hover:scale-105">
-            {badge}
-            <h3 class="text-2xl font-bold text-white mb-2">{plan.get('name', '')}</h3>
-            <p class="text-4xl font-extrabold text-cyan-400 mb-4">{plan.get('price', '')}</p>
-            <div class="text-slate-300 text-sm mb-6">{features_html}</div>
-            <form action="https://www.paypal.com/checkoutnow" method="post" target="_blank">
-                <input type="hidden" name="cmd" value="_s-xclick">
-                <input type="hidden" name="hosted_button_id" value="{plan.get('link', '')}">
-                <button type="submit" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Adquirir Plan</button>
-            </form>
-        </div>
-        """
-    
+def render_landing_page(c):
     pubs_html = ""
-    for pub in page_data.get("publications", []):
-        if pub.get("type") == "video":
-            pubs_html += f"""
-            <div class="bg-slate-800 rounded-xl overflow-hidden border border-slate-700">
-                <div class="aspect-video"><iframe class="w-full h-full" src="{pub.get('url', '')}" allowfullscreen></iframe></div>
-                <div class="p-4 text-sm text-slate-400">{pub.get('desc', '')}</div>
-            </div>"""
-        else:
-            pubs_html += f"""
-            <div class="bg-slate-800 rounded-xl overflow-hidden border border-slate-700">
-                <img src="{pub.get('url', '')}" class="w-full">
-                <div class="p-4 text-sm text-slate-400">{pub.get('desc', '')}</div>
-            </div>"""
+    for p in c.get('publications', []):
+        if p.get('url'):
+            if p.get('type') == 'video':
+                pubs_html += f"""<div class="text-center mb-12"><div class="relative aspect-video w-full max-w-2xl mx-auto shadow-2xl rounded-xl overflow-hidden border-2 border-slate-800"><iframe src="{p['url']}" class="absolute top-0 left-0 w-full h-full" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div><p class="mt-4 text-slate-400 max-w-xl mx-auto">{p.get('desc', '')}</p></div>"""
+            elif p.get('type') == 'image':
+                pubs_html += f"""<div class="text-center mb-12"><img src="{p['url']}" alt="Publicación" class="max-w-2xl mx-auto rounded-xl border-2 border-slate-800 shadow-xl"><p class="mt-4 text-slate-400 max-w-xl mx-auto">{p.get('desc', '')}</p></div>"""
+
+    bt = c.get('bank_transfer_info', {})
+    has_bank_info = bt.get('account_number')
     
-    social = page_data.get("social_links", {})
+    plans_html = ""
+    paypal_scripts = ""
+    for p in c.get('plans', []):
+        if p.get('name'):
+            highlight_classes = "lg:scale-105 border-cyan-500 shadow-cyan-500/20" if p.get('highlight') else "border-slate-800"
+            badge = '<span class="absolute top-0 right-0 bg-cyan-500 text-slate-900 text-xs font-bold px-3 py-1 rounded-bl-lg">MÁS POPULAR</span>' if p.get('highlight') else ''
+            features_html = p.get('features', '').replace('\n', '<br>')
+            
+            bank_btn_html = ""
+            if has_bank_info:
+                bank_btn_html = f"""<button onclick="openBankModal('{p.get('name', '')}', '{p.get('price', '')}')" class="block text-center w-full bg-slate-700 hover:bg-slate-600 text-slate-300 font-medium py-2 rounded text-sm transition mt-2"><i class="fas fa-university mr-2"></i>Pagar por Transferencia Bancaria</button>"""
+
+            plan_link = p.get('link', '#')
+            if plan_link.startswith("P-"):
+                pay_btn_html = f'<div id="paypal-btn-{plan_link}" class="mt-auto"></div>'
+                paypal_scripts += f"""
+                <script>
+                if (typeof paypal !== 'undefined') {{
+                    paypal.Buttons({{
+                        style: {{ shape: 'rect', color: 'blue', layout: 'vertical', label: 'subscribe' }},
+                        createSubscription: function(data, actions) {{
+                            return actions.subscription.create({{ plan_id: '{plan_link}' }});
+                        }},
+                        onApprove: function(data, actions) {{
+                            alert('¡Suscripción procesada con éxito! Te enviaremos tu licencia a tu correo en un momento.');
+                        }}
+                    }}).render('#paypal-btn-{plan_link}');
+                }}
+                </script>
+                """
+            else:
+                pay_btn_html = f'<div class="mt-auto"><a href="{plan_link}" class="block text-center w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Suscribirme con Tarjeta</a></div>'
+
+            plans_html += f"""
+            <div class="relative bg-slate-800 p-8 rounded-xl border {highlight_classes} transition-all duration-300 hover:-translate-y-2 hover:shadow-xl flex flex-col">
+                {badge}
+                <h3 class="text-xl font-bold text-white mb-2">{p.get('name', '')}</h3>
+                <div class="text-4xl font-extrabold text-cyan-400 mb-4">{p.get('price', '')}<span class="text-base font-normal text-slate-500">/mes</span></div>
+                <p class="text-slate-300 text-sm mb-6 flex-grow">{features_html}</p>
+                {pay_btn_html}
+                <div class="mt-2">{bank_btn_html}</div>
+            </div>
+            """
+
+    # ✅ LECTURA ROBUSTA DE REDES SOCIALES
+    social = c.get('social_links')
+    if not isinstance(social, dict):
+        social = {}
+        
     social_html = ""
-    icon_map = {"facebook": "fab fa-facebook", "whatsapp": "fab fa-whatsapp", "youtube": "fab fa-youtube", 
-                "tiktok": "fab fa-tiktok", "telegram": "fab fa-telegram", "instagram": "fab fa-instagram"}
-    for k, v in social.items():
-        if v:
-            social_html += f'<a href="{v}" target="_blank" class="w-10 h-10 bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 rounded-full flex items-center justify-center transition"><i class="{icon_map.get(k, "fas fa-link")}"></i></a>'
+    if social.get('facebook'): social_html += f'<a href="{social.get("facebook")}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-facebook-f"></i></a>'
+    if social.get('whatsapp'): social_html += f'<a href="{social.get("whatsapp")}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-whatsapp"></i></a>'
+    if social.get('youtube'): social_html += f'<a href="{social.get("youtube")}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-youtube"></i></a>'
+    if social.get('tiktok'): social_html += f'<a href="{social.get("tiktok")}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-tiktok"></i></a>'
+    if social.get('telegram'): social_html += f'<a href="{social.get("telegram")}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-telegram-plane"></i></a>'
+    if social.get('instagram'): social_html += f'<a href="{social.get("instagram")}" target="_blank" class="bg-slate-800 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 p-3 rounded-full transition-all duration-300 transform hover:-translate-y-1"><i class="fab fa-instagram"></i></a>'
     
-    bt = page_data.get("bank_transfer_info", {})
-    bt_html = ""
-    if bt.get("bank_name"):
-        bt_html = f"""
-        <div class="bg-slate-800 border border-amber-700/50 rounded-2xl p-6 mt-8">
-            <h3 class="text-lg font-bold text-white mb-4">💳 Pago por Transferencia Bancaria</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-slate-300">
-                <div><span class="text-slate-500">Banco:</span> {bt.get('bank_name', '')}</div>
-                <div><span class="text-slate-500">Tipo:</span> {bt.get('account_type', '')}</div>
-                <div><span class="text-slate-500">Cuenta:</span> {bt.get('account_number', '')}</div>
-                <div><span class="text-slate-500">Beneficiario:</span> {bt.get('beneficiary', '')}</div>
-            </div>
-            <p class="text-xs text-slate-400 mt-4">Envía tu comprobante a: <strong>{bt.get('email_for_proof', '')}</strong> o WhatsApp: <strong>{bt.get('whatsapp_for_proof', '')}</strong></p>
-        </div>"""
+    # ✅ Si no hay redes, ocultamos la sección para que no quede un espacio vacío
+    if not social_html:
+        social_section_html = ""
+    else:
+        social_section_html = f'<section class="py-12 border-t border-slate-800"><div class="container mx-auto px-6 text-center"><h3 class="text-xl font-bold text-white mb-6">Síguenos en nuestras redes</h3><div class="flex justify-center space-x-4 text-xl">{social_html}</div></div></section>'
+
+    chatbot_id = c.get('chatbot_id', 'gzEjAzK1VCE72hJ_hBfA4')
     
-    # Formulario de captura que redirige a nueva pestaña
-    capture_form = """
-    <div id="download-capture" class="bg-gradient-to-br from-cyan-900/40 to-emerald-900/40 border border-cyan-500/30 rounded-2xl p-6 md:p-8 text-center">
-        <div class="inline-flex items-center gap-2 bg-cyan-500/15 text-cyan-400 px-4 py-1.5 rounded-full text-xs font-semibold mb-4">
-            <i class="fas fa-download"></i> DESCARGA GRATUITA
-        </div>
-        <h3 class="text-2xl md:text-3xl font-bold text-white mb-2">Descarga el Sistema Ahora</h3>
-        <p class="text-slate-300 mb-6">Deja tu correo y te redirigiremos a nuestro centro de descargas oficial</p>
-        <form id="lead-form" class="flex flex-col sm:flex-row gap-3 max-w-md mx-auto" onsubmit="submitLead(event)">
-            <input type="email" id="lead-email" required placeholder="tu@correo.com" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white outline-none focus:border-cyan-500">
-            <input type="text" id="lead-name" placeholder="Tu nombre (opcional)" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white outline-none focus:border-cyan-500">
-            <button type="submit" id="lead-btn" class="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold px-6 py-3 rounded-lg transition whitespace-nowrap">
-                <i class="fas fa-download mr-2"></i>Descargar
-            </button>
-        </form>
-        <p id="lead-msg" class="mt-4 text-sm hidden"></p>
-        <p class="text-xs text-slate-500 mt-4"><i class="fas fa-shield-alt mr-1"></i>Tu correo está seguro. No spam.</p>
-    </div>
-    <script>
-    async function submitLead(e) {
-        e.preventDefault();
-        const email = document.getElementById('lead-email').value;
-        const name = document.getElementById('lead-name').value;
-        const btn = document.getElementById('lead-btn');
-        const msg = document.getElementById('lead-msg');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Procesando...';
-        msg.classList.add('hidden');
-        try {
-            const res = await fetch('/api/capture_lead_for_download', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ email: email, name: name, interaction: 'Descarga desde landing' })
-            });
-            const data = await res.json();
-            if (data.status === 'success') {
-                msg.className = 'mt-4 text-sm text-emerald-400';
-                msg.innerHTML = '<i class="fas fa-check-circle mr-1"></i>' + data.message;
-                msg.classList.remove('hidden');
-                // ABRIR EN NUEVA PESTAÑA
-                setTimeout(() => {
-                    window.open(data.download_url, '_blank');
-                }, 500);
-                btn.innerHTML = '<i class="fas fa-check mr-2"></i>¡Descarga lista!';
-            } else {
-                throw new Error(data.detail || 'Error');
-            }
-        } catch(err) {
-            msg.className = 'mt-4 text-sm text-red-400';
-            msg.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>Error: ' + err.message;
-            msg.classList.remove('hidden');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-download mr-2"></i>Reintentar';
-        }
-    }
-    </script>
-    """
+    bank_modal_html = ""
+    if has_bank_info:
+        wa_link = f"https://wa.me/{bt.get('whatsapp_for_proof', '')}?text=Hola%2C%20adjunto%20el%20comprobante%20de%20pago%20para%20el%20plan%20"
+        mail_link = f"mailto:{bt.get('email_for_proof', '')}?subject=Comprobante%20de%20Pago%20Plan%20"
+        bank_modal_html = f"""
+        <div id="bankModal" class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4"><div class="bg-slate-800 p-8 rounded-xl max-w-md w-full border border-slate-700 shadow-2xl relative"><button onclick="closeBankModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl">&times;</button><h3 class="text-2xl font-bold text-cyan-400 mb-2">Instrucciones de Pago</h3><p class="text-slate-400 text-sm mb-6">Estás comprando el plan: <span id="modal_plan_name" class="font-bold text-white"></span> por <span id="modal_plan_price" class="font-bold text-white"></span></p><div class="bg-slate-900 p-4 rounded-lg border border-slate-700 space-y-3 text-sm"><p><strong class="text-slate-400">Banco:</strong> <span class="text-white">{bt.get('bank_name', '')}</span></p><p><strong class="text-slate-400">Tipo de Cuenta:</strong> <span class="text-white">{bt.get('account_type', '')}</span></p><p><strong class="text-slate-400">Número de Cuenta:</strong> <span class="text-cyan-400 font-mono">{bt.get('account_number', '')}</span></p><p><strong class="text-slate-400">Beneficiario:</strong> <span class="text-white">{bt.get('beneficiary', '')}</span></p></div><div class="mt-6"><h4 class="text-white font-bold mb-2">¿Qué hacer después?</h4><p class="text-slate-400 text-sm mb-4">1. Realiza la transferencia por el monto exacto del plan.<br>2. Envía el comprobante de pago por WhatsApp o Correo.<br>3. Recibirás tu licencia de activación en cuanto confirmemos el pago.</p></div><div class="flex flex-col gap-2 mt-4"><a id="wa_send_btn" href="{wa_link}" target="_blank" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-center font-bold py-3 rounded transition"><i class="fab fa-whatsapp mr-2"></i> Enviar comprobante por WhatsApp</a><a id="mail_send_btn" href="{mail_link}" class="w-full bg-slate-600 hover:bg-slate-500 text-white text-center font-bold py-3 rounded transition"><i class="fas fa-envelope mr-2"></i> Enviar comprobante por Correo</a></div></div></div>
+        <script>function openBankModal(planName, planPrice) {{document.getElementById('modal_plan_name').innerText = planName;document.getElementById('modal_plan_price').innerText = planPrice;let waLink = "{wa_link}" + encodeURIComponent(planName);let mailLink = "{mail_link}" + encodeURIComponent(planName);document.getElementById('wa_send_btn').href = waLink;document.getElementById('mail_send_btn').href = mailLink;document.getElementById('bankModal').classList.remove('hidden');}}function closeBankModal() {{document.getElementById('bankModal').classList.add('hidden');}}</script>
+        """
+
+    download_instructions_html = c.get('download_instructions', 'Descarga el archivo, extrae y ejecuta el instalador.').replace('\n', '<br>')
+    download_links = c.get('download_links', [])
+    if not download_links and c.get('download_link'): download_links = [c.get('download_link')]
+
+    download_buttons_html = ""
+    if download_links:
+        if len(download_links) == 1:
+            download_buttons_html = f"""<a href="{download_links[0]}" target="_blank" class="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block w-full"><i class="fas fa-download mr-2"></i> Descargar Blenin77</a>"""
+        else:
+            for i, link in enumerate(download_links):
+                download_buttons_html += f"""<a href="{link}" target="_blank" class="bg-slate-700 hover:bg-cyan-500 hover:text-slate-900 text-slate-300 font-bold py-3 px-8 rounded transition transform hover:-translate-y-1 shadow-lg inline-block w-full mb-2"><i class="fas fa-server mr-2"></i> Servidor de Descarga {i+1}</a>"""
+
+    template = """<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>BLENIN.G.77 - Institutional Trading AI</title>
     
-    return f"""
-    <html lang="es"><head><meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{page_data.get('hero_title', 'BLENIN.G.77')} - {page_data.get('hero_subtitle', '')}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body {{ font-family: 'Inter', sans-serif; background: #020617; }}
-        .gradient-bg {{ background: linear-gradient(135deg, #020617 0%, #0c4a6e 50%, #0e7490 100%); }}
-        .grid-pattern {{ background-image: radial-gradient(circle at 1px 1px, rgba(34, 211, 238, 0.08) 1px, transparent 0); background-size: 32px 32px; }}
-    </style>
-    </head>
-    <body class="text-slate-200">
-        <div class="gradient-bg grid-pattern">
-            <div class="absolute top-10 right-10 w-72 h-72 bg-cyan-500/10 rounded-full blur-3xl"></div>
-            <nav class="relative max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-                <div class="flex items-center gap-2 text-white font-bold text-xl">
-                    <div class="w-10 h-10 bg-gradient-to-br from-cyan-400 to-emerald-500 rounded-lg flex items-center justify-center">
-                        <i class="fas fa-bolt text-slate-900"></i>
-                    </div>
-                    BLENIN.G.77
-                </div>
-                <a href="#pricing" class="text-slate-300 hover:text-cyan-400 text-sm">Planes</a>
-            </nav>
-            <div class="relative max-w-4xl mx-auto px-4 py-20 text-center">
-                <h1 class="text-5xl md:text-7xl font-extrabold text-white mb-4">{page_data.get('hero_title', '')}</h1>
-                <p class="text-xl md:text-2xl text-cyan-400 font-semibold mb-4">{page_data.get('hero_subtitle', '')}</p>
-                <p class="text-lg text-slate-300 mb-8 max-w-2xl mx-auto">{page_data.get('hero_text', '')}</p>
-                <div class="flex gap-3 justify-center flex-wrap">
-                    <a href="#download-capture" class="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold px-8 py-3 rounded-lg transition"><i class="fas fa-download mr-2"></i>Descargar Ahora</a>
-                    <a href="#pricing" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-8 py-3 rounded-lg transition border border-slate-700">Ver Planes</a>
-                </div>
-            </div>
-        </div>
-        
-        <main class="max-w-6xl mx-auto px-4 py-16 space-y-16">
-            {capture_form}
-            
-            {'<section><h2 class="text-3xl font-bold text-white text-center mb-8">Galería</h2><div class="grid grid-cols-1 md:grid-cols-2 gap-6">' + pubs_html + '</div></section>' if pubs_html else ''}
-            
-            <section id="pricing">
-                <h2 class="text-3xl font-bold text-white text-center mb-8">Planes de Suscripción</h2>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                    {plans_html}
-                </div>
-                {bt_html}
-            </section>
-        </main>
-        
-        <footer class="border-t border-slate-800 bg-slate-950 py-8">
-            <div class="max-w-6xl mx-auto px-4 text-center">
-                <div class="flex justify-center gap-3 mb-4">{social_html}</div>
-                <p class="text-slate-500 text-sm">© 2024 BLENIN.G.77 Trading Systems</p>
-            </div>
-        </footer>
-    </body></html>
-    """
+    <!-- ETIQUETAS SEO PARA GOOGLE -->
+    <meta name="description" content="BLENIN.G.77: Sistema de Trading con IA Predictiva, Enjambre de 500 Agentes y Análisis Global en Tiempo Real para MetaTrader 5. Automatiza tus operaciones hoy.">
+    <meta name="keywords" content="trading IA, bot metatrader 5, inteligencia artificial trading, EA forex, bot automático MT5, enjambre de agentes trading, blenin77">
+    <meta name="robots" content="index, follow">
+    
+    <!-- ETIQUETAS PARA REDES SOCIALES (OPEN GRAPH) -->
+    <meta property="og:title" content="BLENIN.G.77 - IA Predictiva para Trading Institucional">
+    <meta property="og:description" content="El mejor sistema de IA para automatizar tus operaciones en MT5. Enjambre de 500 agentes trabajando por ti.">
+    <meta property="og:image" content="https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png">
+    <meta property="og:url" content="https://blenin77-server.onrender.com/">
+
+    <script src="https://cdn.tailwindcss.com"></script><script src="https://www.paypal.com/sdk/js?client-id=AYybGelHI0tT0nLaGtRnRG2sc8z4FnGqAazhHUyP9Vc_DFJAxp_psxzTqe2QBKwwSCO1UbNx2ehJ28Eg&vault=true&intent=subscription"></script><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><script>window.embeddedChatbotConfig = {chatbotId: "{CHATBOT_ID}",domain: "www.chatbase.co"}</script><script src="https://www.chatbase.co/embed.min.js" chatbotId="{CHATBOT_ID}" domain="www.chatbase.co" defer></script><style>body { font-family: 'Inter', sans-serif; background-color: #020617; }.glow { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }.hero-bg { background: linear-gradient(to bottom, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; }.chatbase-bubble-button, iframe[src*="chatbase.co"] { z-index: 99999 !important; display: block !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; }.goog-te-banner-frame.skiptranslate { display: none !important; } body { top: 0px !important; }.goog-tooltip, .goog-tooltip:hover { display: none !important; }.goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }#google_translate_element { position: absolute; top: -9999px; left: -9999px; opacity: 0; }.goog-te-gadget { font-size: 0 !important; }#lang-menu::-webkit-scrollbar { width: 6px; }#lang-menu::-webkit-scrollbar-track { background: #1e293b; border-radius: 10px; }#lang-menu::-webkit-scrollbar-thumb { background: #0e7490; border-radius: 10px; }</style></head>
+<body class="text-slate-300">
+    <nav class="bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-800"><div class="container mx-auto px-6 py-4 flex justify-between items-center"><a href="/" class="text-xl font-extrabold text-cyan-400 glow">BLENIN.G.77</a><div class="hidden md:flex space-x-6 text-sm font-medium items-center"><a href="#features" class="hover:text-cyan-400 transition">Tecnología</a><a href="#videos" class="hover:text-cyan-400 transition">Galería</a><a href="#pricing" class="hover:text-cyan-400 transition">Precios</a><div class="relative inline-block text-left"><button id="lang-btn" class="inline-flex justify-center items-center gap-2 rounded-md border border-slate-700 px-3 py-1.5 bg-slate-800 text-sm font-medium text-slate-300 hover:bg-slate-700 transition"><i class="fas fa-globe text-cyan-400"></i> <span id="current-lang-name">🇪🇸 Español</span> <i class="fas fa-chevron-down text-xs"></i></button><div id="lang-menu" class="hidden absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-slate-800 ring-1 ring-black ring-opacity-5 z-50 max-h-80 overflow-y-auto"><div class="py-1"><a href="#" onclick="changeLang('es', '🇪🇸 Español'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇪🇸 Español</a><a href="#" onclick="changeLang('en', '🇬🇧 English'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇬🇧 English</a><a href="#" onclick="changeLang('fr', '🇫🇷 Français'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇫🇷 Français</a><a href="#" onclick="changeLang('pt', '🇵🇹 Português'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇵🇹 Português</a><a href="#" onclick="changeLang('ru', '🇷🇺 Русский'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇷🇺 Русский</a><a href="#" onclick="changeLang('it', '🇮🇹 Italiano'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇮🇹 Italiano</a><a href="#" onclick="changeLang('de', '🇩🇪 Deutsch'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇩🇪 Deutsch</a><a href="#" onclick="changeLang('zh-CN', '🇨🇳 中文'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇨🇳 中文</a><a href="#" onclick="changeLang('ko', '🇰🇷 한국어'); return false;" class="flex items-center gap-3 px=4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇰🇷 한국어</a><a href="#" onclick="changeLang('hi', '🇮🇳 हिन्दी'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇮🇳 हिन्दी</a></div></div></div></div><a href="#pricing" class="bg-cyan-500 text-slate-900 px-4 py-2 rounded text-sm font-bold hover:bg-cyan-400 transition">Comprar Ahora</a></div></nav>
+
+    <div id="urgency-banner" class="bg-gradient-to-r from-amber-500 to-red-500 text-slate-900 text-center py-2 px-4 text-sm font-bold flex justify-center items-center gap-3"><i class="fas fa-fire animate-pulse"></i><span>OFERTA DE LANZAMIENTO: Termina en</span><span id="countdown-timer" class="font-mono bg-slate-900 text-amber-400 px-2 py-1 rounded">23:59:59</span></div>
+    <script>function startCountdown() {let now = new Date();let midnight = new Date();midnight.setHours(23, 59, 59, 999);let diff = midnight - now;let hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));let minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));let seconds = Math.floor((diff % (1000 * 60)) / 1000);document.getElementById('countdown-timer').innerText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;}setInterval(startCountdown, 1000);</script>
+
+    <header class="relative overflow-hidden py-24 md:py-32 hero-bg"><div class="container mx-auto px-6 text-center relative z-10"><div class="inline-block bg-slate-800/50 border border-slate-700 px-4 py-1 rounded-full text-xs font-medium text-cyan-400 mb-6">🚀 SISTEMA INSTITUCIONAL ACTIVO</div><h1 class="text-4xl md:text-6xl font-extrabold text-white mb-4 glow">{HERO_TITLE}</h1><h2 class="text-lg md:text-xl text-slate-400 font-light mb-6 tracking-wider uppercase">{HERO_SUBTITLE}</h2><p class="text-md md:text-lg text-slate-300 max-w-2xl mx-auto mb-10">{HERO_TEXT}</p><div class="flex justify-center gap-4"><a href="#pricing" class="bg-cyan-500 text-slate-900 font-bold py-3 px-8 rounded hover:bg-cyan-400 transition transform hover:-translate-y-1 shadow-lg shadow-cyan-500/20">Ver Planes</a><a href="#videos" class="border border-slate-700 text-slate-300 font-bold py-3 px-8 rounded hover:bg-slate-800 transition">Ver Demo</a></div></div></header>
+
+    <section id="features" class="py-20 container mx-auto px-6"><h2 class="text-3xl font-bold text-center text-white mb-12">Tecnología de Nivel Institucional</h2><div class="grid md:grid-cols-3 gap-8"><div class="bg-slate-900 p-8 rounded-xl border border-slate-800 hover:border-cyan-500 transition group"><div class="text-cyan-400 text-3xl mb-4 group-hover:scale-110 transition"><i class="fas fa-fish"></i></div><h3 class="text-xl font-bold text-white mb-2">Enjambre 3D</h3><p class="text-slate-400 text-sm">500 agentes virtuales simulan el futuro del mercado en milisegundos basándose en el patrón histórico del activo antes de operar.</p></div><div class="bg-slate-900 p-8 rounded-xl border border-slate-800 hover:border-cyan-500 transition group"><div class="text-cyan-400 text-3xl mb-4 group-hover:scale-110 transition"><i class="fas fa-shield-alt"></i></div><h3 class="text-xl font-bold text-white mb-2">Agente Centinela</h3><p class="text-slate-400 text-sm">Un guardaespaldas que lee Reuters, CNBC y la Fed en tiempo real. Si detecta un crash, bloquea al bot para proteger tu capital.</p></div><div class="bg-slate-900 p-8 rounded-xl border border-slate-800 hover:border-cyan-500 transition group"><div class="text-cyan-400 text-3xl mb-4 group-hover:scale-110 transition"><i class="fas fa-brain"></i></div><h3 class="text-xl font-bold text-white mb-2">Cerebro Global</h3><p class="text-slate-400 text-sm">Red neuronal descentralizada. Tu bot aprende de las operaciones exitosas y fallidas de todos los usuarios a nivel mundial.</p></div></div></section>
+
+    <section id="videos" class="py-20 bg-slate-950"><div class="container mx-auto px-6"><h2 class="text-3xl font-bold text-center text-white mb-12">Mira al Sistema en Acción</h2>{PUBLICATIONS_HTML}</div></section>
+
+    <section id="pricing" class="py-20 container mx-auto px-6"><h2 class="text-3xl font-bold text-center text-white mb-4">Planes de Suscripción</h2><p class="text-slate-400 text-center mb-12">Elige el plan que se adapte a tu capital y estilo de trading.</p><div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">{PLANS_HTML}</div></section>
+
+    <div class="py-16 px-6 bg-slate-950"><div class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-lg text-center" id="ml-form-wrapper"><h3 class="text-2xl font-bold text-white mb-2">¿Quieres ver al Bot operando en vivo?</h3><p class="text-slate-400 text-sm mb-6">Deja tu correo y te enviaremos un video de cómo el Enjambre de Agentes abre operaciones reales, además de darte acceso al sistema.</p><div class="ml-form-embedContainer ml-subscribe-form ml-subscribe-form-44360624"><div class="ml-form-align-center"><div class="ml-form-embedWrapper embedForm"><div class="ml-form-embedBody ml-form-embedBodyDefault row-form"><div class="ml-form-embedContent"><p style="color: #94a3b8; font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 400; line-height: 20px; margin: 0 0 10px 0; text-align: center;">Ingresa tu correo para continuar.</p></div><form class="ml-block-form" action="https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/subscribe" data-code="" method="post" target="_blank" onsubmit="return ml_reveal_download()"><div class="ml-form-formContent"><div class="ml-form-fieldRow ml-last-item"><div class="ml-field-group ml-field-email ml-validate-email ml-validate-required"><input aria-label="email" aria-required="true" type="email" class="form-control" data-inputmask="" name="fields[email]" placeholder="Email" autocomplete="email" style="background-color: #0f172a !important; color: #fff !important; border: 1px solid #334155 !important; border-radius: 6px !important; padding: 12px !important; width: 100% !important; margin-bottom: 10px !important;"></div></div></div><input type="hidden" name="ml-submit" value="1"><div class="ml-form-embedSubmit" style="margin-top: 0;"><button type="submit" class="primary" style="background-color: #00e5ff !important; color: #020617 !important; border-radius: 6px !important; font-weight: 700; font-family: 'Inter', sans-serif; padding: 12px !important; width: 100% !important; border: none !important; cursor: pointer;">Quiero Acceso y Descargar</button><button disabled="disabled" style="display: none;" type="button" class="loading"><div class="ml-form-embedSubmitLoad"></div><span class="sr-only">Loading...</span></button></div><input type="hidden" name="anticsrf" value="true"></form></div></div></div></div><script>function ml_webform_success_44360624() {var $ = ml_jQuery || jQuery;$('.ml-subscribe-form-44360624 .row-success').show();$('.ml-subscribe-form-44360624 .row-form').hide();}</script><script src="https://groot.mailerlite.com/js/w/webforms.min.js?v83147fa8ce2d95cb73ece7f28b469519" type="text/javascript"></script><script>fetch("https://assets.mailerlite.com/jsonp/2548287/forms/194532136823292943/takel")</script></div><div id="download-box" class="max-w-md mx-auto bg-slate-800 p-8 rounded-xl border border-cyan-500 shadow-cyan-500/10 shadow-lg text-center mt-6" style="display: none;"><i class="fas fa-check-circle text-emerald-400 text-4xl mb-4"></i><h4 class="text-xl font-bold text-cyan-400 mb-4">¡Listo! Aquí tienes tu descarga:</h4><div class="text-slate-300 text-sm mb-6 text-left bg-slate-900 p-4 rounded-lg border border-slate-700">{DOWNLOAD_INSTRUCTIONS_HTML}</div><div class="flex flex-col gap-3">{DOWNLOAD_BUTTONS_HTML}</div></div><script>function ml_reveal_download() {setTimeout(function() {document.getElementById('download-box').style.display = 'block';document.getElementById('ml-form-wrapper').style.display = 'none';document.getElementById('download-box').scrollIntoView({behavior: "smooth", block: "center"});}, 1000);return true;}</script></div>
+
+    {SOCIAL_SECTION_HTML}
+
+    <footer class="bg-slate-950 py-10 border-t border-slate-800"><div class="container mx-auto px-6 text-center"><p class="text-slate-500 text-sm mb-4 max-w-3xl mx-auto"><strong>Aviso de Riesgo:</strong> El trading de divisas y CFDs implica un riesgo sustancial y no es adecuado para todos los inversores. El rendimiento pasado no es indicativo de resultados futuros. Operar con apalancamiento puede resultar en la pérdida de su capital.</p><p class="text-slate-600 text-xs">&copy; 2024 BLENIN.G.77 THE BEST FUTURE FOR YOU. Creado por Lenin Benitez.</p></div></footer>
+
+    {BANK_MODAL_HTML}
+
+    <div id="google_translate_element"></div><script type="text/javascript">function googleTranslateElementInit() { new google.translate.TranslateElement({pageLanguage: 'es', includedLanguages: 'en,fr,pt,ru,it,de,zh-CN,ko,hi', layout: google.translate.TranslateElement.InlineLayout.SIMPLE, autoDisplay: false}, 'google_translate_element'); }</script><script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    <script>const langBtn = document.getElementById('lang-btn');const langMenu = document.getElementById('lang-menu');langBtn.addEventListener('click', (e) => { e.stopPropagation(); langMenu.classList.toggle('hidden'); });window.addEventListener('click', (e) => { if (!langMenu.contains(e.target) && !langBtn.contains(e.target)) { langMenu.classList.add('hidden'); } });function changeLang(langCode, langName) {document.getElementById('current-lang-name').innerText = langName;langMenu.classList.add('hidden');var date = new Date(); date.setTime(date.getTime() + (365 * 24 * 60 * 60 * 1000)); var expires = "; expires=" + date.toUTCString();var hostname = window.location.hostname;if (langCode === 'es') {document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/";document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + hostname;document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=." + hostname;} else {var cookieValue = "/es/" + langCode;document.cookie = "googtrans=" + cookieValue + expires + "; path=/";document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=" + hostname;document.cookie = "googtrans=" + cookieValue + expires + "; path=/; domain=." + hostname;}window.location.reload();}window.onload = function() {var match = document.cookie.match(/googtrans=\/es\/([a-zA-Z\-]+)/);if (match && match[1]) {var langMap = { 'en': '🇬🇧 English', 'fr': '🇫🇷 Français', 'pt': '🇵🇹 Português', 'ru': '🇷🇺 Русский', 'it': '🇮🇹 Italiano', 'de': '🇩🇪 Deutsch', 'zh-CN': '🇨🇳 中文', 'ko': '🇰🇷 한국어', 'hi': '🇮🇳 हिन्दी' };if (langMap[match[1]]) document.getElementById('current-lang-name').innerText = langMap[match[1]];}};</script>
+    <script>fetch('/api/track_view', { method: 'POST' });</script>
+
+    <!-- ALGORITMO DE PERSUASIÓN Y CAPTACIÓN DE LEADS -->
+    <div id="social-proof-toast" class="fixed bottom-5 left-5 bg-slate-800 border border-cyan-500 text-slate-300 p-4 rounded-lg shadow-2xl flex items-center gap-3 transition-all duration-500 opacity-0 translate-y-10 z-[9998] max-w-xs"><i class="fas fa-check-circle text-cyan-400 text-2xl"></i><div><p id="sp-name" class="font-bold text-white text-sm">Carlos de México</p><p id="sp-action" class="text-xs text-slate-400">Acaba de adquirir el Plan Oro</p></div></div>
+    <script>function showSocialProof() {const names = ["Carlos M.", "Ana G.", "John D.", "María F.", "Alex R.", "Sofía L.", "David P.", "Elena V."];const countries = ["México", "España", "Argentina", "Colombia", "Estados Unidos", "Chile", "Perú", "Ecuador"];const actions = ["Acaba de adquirir el Plan Oro", "Acaba de adquirir el Plan Plata", "Está viendo una demostración en vivo", "Solicitó prueba gratuita de 30 días"];const toast = document.getElementById('social-proof-toast');document.getElementById('sp-name').innerText = `${names[Math.floor(Math.random()*names.length)]} de ${countries[Math.floor(Math.random()*countries.length)]}`;document.getElementById('sp-action').innerText = actions[Math.floor(Math.random()*actions.length)];toast.classList.remove('opacity-0', 'translate-y-10');setTimeout(() => toast.classList.add('opacity-0', 'translate-y-10'), 5000);}setTimeout(showSocialProof, 5000);setInterval(showSocialProof, Math.floor(Math.random() * (25000 - 15000 + 1)) + 15000);</script>
+
+    <div id="exit-modal" class="hidden fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4"><div class="bg-slate-800 p-8 rounded-xl border border-cyan-500 max-w-md w-full text-center relative"><button onclick="document.getElementById('exit-modal').classList.add('hidden')" class="absolute top-3 right-4 text-slate-500 hover:text-white text-2xl">&times;</button><i class="fas fa-gift text-cyan-400 text-5xl mb-4"></i><h3 class="text-2xl font-bold text-white mb-2">¡Espera! No te vayas sin tu regalo</h3><p class="text-slate-400 mb-6 text-sm">Suscríbete ahora y recibe un <strong class="text-cyan-400">Ebook Gratuito</strong> además de un descuento del 10% en tu primer mes.</p><input type="text" id="exit_name_input" placeholder="Tu Nombre" class="w-full bg-slate-900 rounded p-3 mb-3 border border-slate-700 text-white"><input type="email" id="exit_email_input" placeholder="Tu mejor correo" class="w-full bg-slate-900 rounded p-3 mb-4 border border-slate-700 text-white"><button onclick="submitLead('Modal de Abandono')" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 rounded transition">Quiero mi Descuento</button></div></div>
+    <script>document.addEventListener('mouseleave', function(e) {if (e.clientY < 0 && !localStorage.getItem('exit_modal_shown')) {document.getElementById('exit-modal').classList.remove('hidden');localStorage.setItem('exit_modal_shown', 'true');}});</script>
+
+    <div id="lead-capture-widget" class="fixed bottom-5 right-5 bg-slate-800 p-6 rounded-xl border border-cyan-500 shadow-2xl w-80 z-[9998] transition-all duration-500 translate-y-[150%] hidden"><button onclick="closeLeadWidget()" class="absolute top-2 right-3 text-slate-500 hover:text-white text-xl">&times;</button><div class="text-center mb-4"><i class="fas fa-robot text-cyan-400 text-3xl mb-2"></i><h4 class="text-white font-bold text-lg">¿Te gusta lo que ves?</h4><p class="text-slate-400 text-sm">Déjanos tu nombre y correo. Nuestra IA te enviará un video privado de cómo opera + un descuento.</p></div><input type="text" id="lead_name_input" placeholder="Tu Nombre" class="w-full bg-slate-900 rounded p-2 mb-3 border border-slate-700 text-white outline-none focus:border-cyan-500"><input type="email" id="lead_email_input" placeholder="tu.correo@gmail.com" class="w-full bg-slate-900 rounded p-2 mb-3 border border-slate-700 text-white outline-none focus:border-cyan-500"><button onclick="submitLead('Widget Flotante')" class="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-2 rounded transition">Quiero el Video y Descuento</button><div id="lead_thanks" class="hidden text-center text-emerald-400 text-sm font-bold mt-4"><i class="fas fa-check-circle"></i> ¡Revisa tu correo en 2 minutos!</div></div>
+    <script>let leadTriggered = false;function showLeadWidget(interactionType) {if (leadTriggered || localStorage.getItem('lead_captured')) return;const widget = document.getElementById('lead-capture-widget');widget.classList.remove('hidden');setTimeout(() => widget.classList.remove('translate-y-[150%]'), 50);leadTriggered = true;widget.dataset.interaction = interactionType;}function closeLeadWidget() {const widget = document.getElementById('lead-capture-widget');widget.classList.add('translate-y-[150%]');setTimeout(() => widget.classList.add('hidden'), 500);setTimeout(() => { leadTriggered = false; }, 3600000);}async function submitLead(source) {let email = '';let name = '';if(source === 'Modal de Abandono') {name = document.getElementById('exit_name_input').value || 'Usuario';email = document.getElementById('exit_email_input').value;} else {name = document.getElementById('lead_name_input').value || 'Usuario';email = document.getElementById('lead_email_input').value;}if (!email || !email.includes('@')) {alert('Por favor ingresa un correo válido.');return;}let interaction = source;if(source !== 'Modal de Abandono') {interaction = document.getElementById('lead-capture-widget').dataset.interaction || source;}try {await fetch('/api/capture_lead', {method: 'POST',headers: { 'Content-Type': 'application/json' },body: JSON.stringify({ name: name, email: email, interaction: interaction })});if(source === 'Modal de Abandono') {document.getElementById('exit-modal').classList.add('hidden');} else {document.getElementById('lead_name_input').style.display = 'none';document.getElementById('lead_email_input').style.display = 'none';document.querySelector('#lead-capture-widget button[onclick^="submitLead"]').style.display = 'none';document.getElementById('lead_thanks').classList.remove('hidden');}localStorage.setItem('lead_captured', 'true');setTimeout(closeLeadWidget, 4000);} catch (e) {alert('Hubo un error, intenta de nuevo.');}}document.querySelectorAll('a[href="#videos"]').forEach(btn => {btn.addEventListener('click', () => {setTimeout(() => showLeadWidget('Clic en Ver Demo'), 3000);});});const pricingSection = document.getElementById('pricing');if (pricingSection) {pricingSection.addEventListener('mouseenter', () => {setTimeout(() => showLeadWidget('Mirando los Planes'), 5000);});}setTimeout(() => {if (!leadTriggered && !localStorage.getItem('lead_captured')) showLeadWidget('Lectura profunda (40s)');}, 40000);</script>
+    
+    {PAYPAL_SCRIPTS}
+</body></html>"""
+    return template.replace("{CHATBOT_ID}", chatbot_id)\
+                   .replace("{HERO_TITLE}", c.get('hero_title', ''))\
+                   .replace("{HERO_SUBTITLE}", c.get('hero_subtitle', ''))\
+                   .replace("{HERO_TEXT}", c.get('hero_text', ''))\
+                   .replace("{PUBLICATIONS_HTML}", pubs_html)\
+                   .replace("{PLANS_HTML}", plans_html)\
+                   .replace("{SOCIAL_SECTION_HTML}", social_section_html)\
+                   .replace("{BANK_MODAL_HTML}", bank_modal_html)\
+                   .replace("{DOWNLOAD_BUTTONS_HTML}", download_buttons_html)\
+                   .replace("{DOWNLOAD_INSTRUCTIONS_HTML}", download_instructions_html)\
+                   .replace("{PAYPAL_SCRIPTS}", paypal_scripts)
+
+# ==========================================
+# 🔍 VERIFICACIÓN DE GOOGLE SEARCH CONSOLE
+# ==========================================
+@app.get("/google80facc731870c13b.html", response_class=PlainTextResponse)
+def google_verification():
+    return "google-site-verification: google80facc731870c13b.html"
 
 @app.get("/", response_class=HTMLResponse)
-def render_main_page(request: Request):
+def read_root(request: Request):
     pages_data = get_all_pages()
-    main_page = pages_data.get("pages", {}).get("main", get_default_content())
-    return render_landing_page(main_page, "main")
+    c = pages_data.get("pages", {}).get("main", get_default_content())
+    user_country_name = "Internacional"
+    try:
+        ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "8.8.8.8").split(",")[0]
+        geo_resp = requests.get(f"https://get.geojs.io/v1/ip/country.json?ip={ip}", timeout=2)
+        if geo_resp.status_code == 200: user_country_name = geo_resp.json().get("country_name", "Internacional")
+    except: pass
+    if user_country_name != "Internacional": c['hero_text'] = f"🔥 Usuarios de {user_country_name} ya están multiplicando su capital. " + c.get('hero_text', '')
+    return render_landing_page(c)
 
 @app.get("/p/{slug}", response_class=HTMLResponse)
-def render_custom_page(slug: str, request: Request):
+def read_dynamic_page(slug: str):
     pages_data = get_all_pages()
-    page = pages_data.get("pages", {}).get(slug)
-    if not page:
-        raise HTTPException(status_code=404, detail="Página no encontrada")
-    return render_landing_page(page, slug)
+    c = pages_data.get("pages", {}).get(slug)
+    if c: return render_landing_page(c)
+    return HTMLResponse("<h1>404 - Página no encontrada</h1><a href='/'>Volver al inicio</a>")
 
 # ==========================================
-# 🔄 SCHEDULER DE SEGUIMIENTO AUTOMÁTICO
+# 🧠 BASES DE DATOS Y RUTAS API
 # ==========================================
-def process_follow_ups():
+db_trades = []
+
+class TradeData(BaseModel): strategy: str; symbol: str; timeframe: str; outcome: bool; profit_pips: float; session: str
+class LicenseCheck(BaseModel): key: str; hwid: str
+class LicenseCreate(BaseModel): plan: str; duration_days: int = 30; email: str = ""
+class RecoveryRequest(BaseModel): email: str
+class TrialRequest(BaseModel): hwid: str
+class LicenseUpdate(BaseModel): key: str; active: bool = False
+class ResetHWID(BaseModel): key: str
+class LeadCapture(BaseModel): 
+    name: str = "Usuario"
+    email: str
+    interaction: str = "Visualizó demo"
+
+@app.post("/api/track_view")
+def track_view(request: Request):
+    global stats_db
+    try:
+        ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "8.8.8.8").split(",")[0]
+        geo_resp = requests.get(f"https://get.geojs.io/v1/ip/country.json?ip={ip}", timeout=2)
+        country = geo_resp.json().get("country", "Unknown") if geo_resp.status_code == 200 else "Unknown"
+    except: country = "Unknown"
+    stats_db["views"] = stats_db.get("views", 0) + 1
+    stats_db["countries"][country] = stats_db["countries"].get(country, 0) + 1
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
+    return {"status": "tracked"}
+
+@app.get("/api/get_stats")
+def get_stats(): return stats_db
+
+@app.get("/api/get_ai_config")
+def get_ai_config():
+    # ✅ Si la base de datos está vacía o corrupta, devuelve los mensajes institucionales por defecto
+    if not ai_agent_config or "stage1_subject" not in ai_agent_config:
+        return get_default_ai_config()
+    return ai_agent_config
+
+@app.post("/api/save_ai_config")
+def save_ai_config(request: Request, data: dict):
+    global ai_agent_config
+    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
+    ai_agent_config = data
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
+    return {"status": "success", "message": "✅ Configuración del Agente IA guardada correctamente."}
+
+def generate_license_key(plan):
+    p1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+    p2 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+    return f"BLENIN-{plan.upper()}-{p1}-{p2}"
+
+@app.post("/api/sync_intel")
+def receive_intel(trade: TradeData):
+    db_trades.append(trade)
+    return {"status": "received", "total_trades": len(db_trades)}
+
+@app.get("/api/get_global_intel")
+def get_intel():
+    if not db_trades: return {}
+    stats = defaultdict(lambda: {"wins": 0, "total": 0})
+    for t in db_trades:
+        k = f"{t.strategy}_{t.symbol}_{t.session}"
+        stats[k]["total"] += 1
+        if t.outcome: stats[k]["wins"] += 1
+    return {k: {"win_rate": v["wins"]/v["total"], "trades": v["total"]} for k, v in stats.items() if v["total"] > 0}
+
+@app.post("/api/start_trial")
+def start_trial(data: TrialRequest):
     global trials_db
-    if not trials_db or not ai_agent_config:
-        return
-    
-    now = datetime.now()
-    changed = False
-    for email, info in trials_db.items():
-        try:
-            stage = info.get("follow_up_stage", 0)
-            if stage >= 3: continue
-            last_sent = datetime.fromisoformat(info.get("last_email_sent", now.isoformat()))
-            days_required = ai_agent_config.get(f"stage{{stage+1}}_days", 5)
-            if (now - last_sent).days >= days_required:
-                subject = ai_agent_config.get(f"stage{{stage+1}}_subject", "").format(name=info.get("name", ""))
-                body = ai_agent_config.get(f"stage{{stage+1}}_body", "").format(name=info.get("name", ""))
-                if send_email(email, subject, body):
-                    trials_db[email]["follow_up_stage"] = stage + 1
-                    trials_db[email]["last_email_sent"] = now.isoformat()
-                    changed = True
-                    print(f"✅ Seguimiento {{stage+1}} enviado a {{email}}", flush=True)
-        except Exception as e:
-            print(f"❌ Error en seguimiento de {{email}}: {{e}}", flush=True)
-    
-    if changed:
-        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config, downloads_config)
+    if data.hwid in trials_db:
+        expires = datetime.fromisoformat(trials_db[data.hwid]["expires"])
+        if datetime.now() > expires: return {"valid": False, "message": "⏳ Prueba expirada."}
+        return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": "BRONCE"}
+    trials_db[data.hwid] = {"expires": (datetime.now() + timedelta(days=30)).isoformat()}
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
+    return {"valid": True, "days_left": 30, "plan": "BRONCE"}
 
-# Limpieza periódica de tokens expirados
-def cleanup_tokens():
-    now = time.time()
-    expired = [t for t, v in download_access_tokens.items() if v.get("expires", 0) < now]
-    for t in expired:
-        download_access_tokens.pop(t, None)
+@app.post("/api/validate_license")
+def validate_license(data: LicenseCheck):
+    global licenses_db
+    key = data.key.upper().strip()
+    if key not in licenses_db: return {"valid": False, "message": "❌ Licencia no encontrada."}
+    info = licenses_db[key]
+    if not info["active"]: return {"valid": False, "message": "🚫 Licencia suspendida."}
+    expires = datetime.fromisoformat(info["expires"])
+    if datetime.now() > expires: return {"valid": False, "message": "⏳ Expirada."}
+    if info["hwid"] is None:
+        info["hwid"] = data.hwid
+        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
+    elif info["hwid"] != data.hwid: return {"valid": False, "message": "🔒 En uso en otra PC."}
+    return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": info["plan"]}
+
+@app.post("/api/create_license")
+def create_license(request: Request, data: LicenseCreate):
+    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
+    global licenses_db
+    key = generate_license_key(data.plan)
+    licenses_db[key] = {"hwid": None, "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(), "active": True, "plan": data.plan.upper(), "email": data.email.lower()}
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
+    return {"status": "success", "key": key}
+
+@app.post("/api/recover_by_email")
+def recover_by_email(req: RecoveryRequest):
+    for key, info in licenses_db.items():
+        if info.get("email", "").lower() == req.email.lower() and info["active"]:
+            send_email(req.email, "🔑 Tu Licencia BLENIN77", f"Tu clave es: {key}\nPlan: {info['plan']}")
+            return {"status": "success", "message": "Enviado al correo."}
+    return {"status": "error", "message": "Correo no encontrado."}
+
+@app.post("/api/manage_license")
+def manage_license(request: Request, data: LicenseUpdate):
+    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
+    global licenses_db
+    key = data.key.upper().strip()
+    if key not in licenses_db: return {"status": "error", "message": "❌ Licencia no encontrada."}
+    licenses_db[key]["active"] = data.active
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
+    status = "activada" if data.active else "suspendida"
+    return {"status": "success", "message": f"✅ Licencia {key} {status} correctamente."}
+
+@app.post("/api/reset_hwid")
+def reset_hwid(request: Request, data: ResetHWID):
+    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
+    global licenses_db
+    key = data.key.upper().strip()
+    if key not in licenses_db: return {"status": "error", "message": "❌ Licencia no encontrada."}
+    licenses_db[key]["hwid"] = None
+    save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
+    return {"status": "success", "message": f"✅ HWID reseteado para {key}."}
+
+# ==========================================
+# 🔥 WEBHOOK DE HOTMART (PASARELA DE PAGOS Y AFILIADOS)
+# ==========================================
+@app.post("/api/hotmart_webhook")
+def hotmart_webhook(request: Request):
+    try:
+        data = request.json()
+        # Hotmart envía esto cuando una venta es aprobada
+        if data.get("event") == "PURCHASE_APPROVED" or data.get("event_type") == "PURCHASE_APPROVED":
+            buyer_data = data.get("data", {}).get("buyer", {})
+            product_data = data.get("data", {}).get("product", {})
+            
+            email = buyer_data.get("email")
+            if not email:
+                # Estructura alternativa de Hotmart
+                email = data.get("data", {}).get("purchase", {}).get("buyer", {}).get("email")
+                
+            product_name = (product_data.get("name") or "BRONCE").upper()
+            
+            # Determinar el plan basado en el nombre del producto en Hotmart
+            if "ORO" in product_name: plan_upper = "ORO"
+            elif "PLATA" in product_name: plan_upper = "PLATA"
+            else: plan_upper = "BRONCE"
+            
+            # Generar la licencia
+            global licenses_db
+            key = generate_license_key(plan_upper)
+            licenses_db[key] = {
+                "hwid": None, 
+                "expires": (datetime.now() + timedelta(days=30)).isoformat(), 
+                "active": True, 
+                "plan": plan_upper, 
+                "email": email.lower()
+            }
+            save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
+            
+            # Enviar correo al cliente con su licencia
+            client_subject = "✅ Pago Confirmado - Aquí tienes tu Licencia BLENIN77"
+            client_body = f"¡Gracias por tu compra!\n\nTu pago ha sido confirmado exitosamente.\n\nAquí tienes tu clave de licencia:\n{key}\n\nPlan: {plan_upper}\nDuración: 30 días\n\nPara descargar el sistema, ingresa a: https://blenin77-server.onrender.com/\n\nSaludos,\nEquipo BLENIN77."
+            send_email(email, client_subject, client_body)
+            
+            # Enviar correo a ti (admin) para avisarte de la venta
+            admin_subject = f"💰 ¡Nueva Venta en Hotmart! Plan {plan_upper}"
+            admin_body = f"Se ha procesado una venta en Hotmart.\n\nCliente: {email}\nPlan: {plan_upper}\nLicencia generada: {key}"
+            send_email(SMTP_EMAIL, admin_subject, admin_body)
+            
+            return {"status": "success", "message": "Licencia generada por Hotmart."}
+        return {"status": "ignored", "message": "Evento no es de compra aprobada."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ==========================================
+# 🔗 WEBHOOK DE MAKE.COM (PASARELA DE PAGOS)
+# ==========================================
+class MakeWebhookData(BaseModel):
+    email: str
+    plan: str
+    duration_days: int = 30
+    secret_token: str
+
+MAKE_WEBHOOK_TOKEN = "blenin_secret_token_2024"
+
+@app.post("/api/make_payment_webhook")
+def make_payment_webhook(data: MakeWebhookData):
+    if data.secret_token != MAKE_WEBHOOK_TOKEN:
+        raise HTTPException(status_code=403, detail="Acceso denegado.")
+    try:
+        global licenses_db
+        plan_upper = data.plan.upper()
+        if "ORO" in plan_upper: plan_upper = "ORO"
+        elif "PLATA" in plan_upper: plan_upper = "PLATA"
+        else: plan_upper = "BRONCE"
+        
+        key = generate_license_key(plan_upper)
+        licenses_db[key] = {
+            "hwid": None, 
+            "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(), 
+            "active": True, 
+            "plan": plan_upper, 
+            "email": data.email.lower()
+        }
+        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
+        
+        client_subject = "✅ Pago Confirmado - Aquí tienes tu Licencia BLENIN77"
+        client_body = f"¡Gracias por tu compra!\n\nTu pago ha sido confirmado exitosamente.\n\nAquí tienes tu clave de licencia:\n{key}\n\nPlan: {plan_upper}\nDuración: {data.duration_days} días\n\nPara descargar el sistema, ingresa a: https://blenin77-server.onrender.com/\n\nSaludos,\nEquipo BLENIN77."
+        send_email(data.email, client_subject, client_body)
+        
+        admin_subject = f"💰 ¡Nueva Venta Automática! Plan {plan_upper}"
+        admin_body = f"Se ha procesado un pago automáticamente a través de PayPal.\n\nCliente: {data.email}\nPlan: {plan_upper}\nLicencia generada: {key}"
+        send_email(SMTP_EMAIL, admin_subject, admin_body)
+        
+        return {"status": "success", "message": "Licencia generada y enviada por correo."}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/capture_lead")
+def capture_lead(lead: LeadCapture):
+    global stats_db
+    try:
+        if "captured_leads" not in stats_db: stats_db["captured_leads"] = []
+        existing_emails = [l.get("email") for l in stats_db["captured_leads"]]
+        if lead.email.lower() not in existing_emails:
+            stats_db["captured_leads"].append({"name": lead.name, "email": lead.email.lower(), "interaction": lead.interaction, "date": datetime.now().isoformat(), "follow_up_stage": 0, "last_email_sent": datetime.now().isoformat()})
+            save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
+        
+        client_subject = f"🚀 ¡Bienvenido {lead.name}! Tu acceso a BLENIN.G.77"
+        client_body = f"Hola {lead.name},\n\nGracias por tu interés en BLENIN.G.77.\nDetectamos que te interesa nuestro sistema de IA Predictiva por tu interacción: '{lead.interaction}'.\n\nAquí tienes información exclusiva para ti. Si deseas agendar una llamada, responde a este correo.\n\nSaludos,\nEl equipo de BLENIN77."
+        send_email(lead.email, client_subject, client_body)
+        
+        admin_subject = f"🔥 Nuevo Lead Interesado: {lead.name}"
+        admin_body = f"¡Alerta de captación!\n\nNombre: {lead.name}\nCorreo: {lead.email}\nInteracción: {lead.interaction}\n\nEl Agente IA ha iniciado el seguimiento automático."
+        send_email(SMTP_EMAIL, admin_subject, admin_body)
+        return {"status": "success", "message": "Información enviada al correo."}
+    except Exception as e: return {"status": "error", "message": str(e)}
+
+# ==========================================
+# 🧠 AGENTE IA DE SEGUIMIENTO AUTOMÁTICO (SCHEDULER)
+# ==========================================
+def ai_follow_up_agent():
+    global stats_db
+    if "captured_leads" not in stats_db: return
+    leads_updated = False
+    now = datetime.now()
+
+    for lead in stats_db["captured_leads"]:
+        stage = lead.get("follow_up_stage", 0)
+        last_sent_str = lead.get("last_email_sent")
+        if not last_sent_str: continue
+        last_sent = datetime.fromisoformat(last_sent_str)
+        days_since_last = (now - last_sent).days
+
+        if stage == 0 and days_since_last >= int(ai_agent_config.get("stage1_days", 2)):
+            subject = ai_agent_config.get("stage1_subject", "").replace("{name}", lead["name"])
+            body = ai_agent_config.get("stage1_body", "").replace("{name}", lead["name"])
+            if send_email(lead["email"], subject, body)):
+                lead["follow_up_stage"] = 1
+                lead["last_email_sent"] = now.isoformat()
+                leads_updated = True
+
+        elif stage == 1 and days_since_last >= int(ai_agent_config.get("stage2_days", 5)):
+            subject = ai_agent_config.get("stage2_subject", "").replace("{name}", lead["name"])
+            body = ai_agent_config.get("stage2_body", "").replace("{name}", lead["name"])
+            if send_email(lead["email"], subject, body)):
+                lead["follow_up_stage"] = 2
+                lead["last_email_sent"] = now.isoformat()
+                leads_updated = True
+
+        elif stage == 2 and days_since_last >= int(ai_agent_config.get("stage3_days", 10)):
+            subject = ai_agent_config.get("stage3_subject", "").replace("{name}", lead["name"])
+            body = ai_agent_config.get("stage3_body", "").replace("{name}", lead["name"])
+            if send_email(lead["email"], subject, body)):
+                lead["follow_up_stage"] = 3
+                lead["last_email_sent"] = now.isoformat()
+                leads_updated = True
+
+    if leads_updated:
+        save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(process_follow_ups, 'interval', hours=1)
-scheduler.add_job(cleanup_tokens, 'interval', hours=6)
+scheduler.add_job(ai_follow_up_agent, 'interval', hours=1)
 scheduler.start()
-
-@app.on_event("shutdown")
-def shutdown_event():
-    scheduler.shutdown()
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
 
