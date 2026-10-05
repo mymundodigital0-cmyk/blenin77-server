@@ -108,15 +108,15 @@ def send_email(to_email, subject, body):
         msg.attach(MIMEText(body, 'plain'))
         
         server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.set_debuglevel(1)  # Muestra exactamente qué hace la conexión en los logs
+        server.set_debuglevel(1)
         server.starttls()
         server.login(SMTP_EMAIL, SMTP_PASSWORD)
         server.send_message(msg)
         server.quit()
-        print(f"✅ Correo enviado exitosamente a {to_email}")  # Log de éxito
+        print(f"✅ Correo enviado exitosamente a {to_email}")
         return True
     except Exception as e:
-        print(f"❌ ERROR CRÍTICO ENVIANDO CORREO A {to_email}: {e}")  # Muestra el error real
+        print(f"❌ ERROR CRÍTICO ENVIANDO CORREO A {to_email}: {e}")
         return False
 
 # ==========================================
@@ -153,7 +153,8 @@ def load_dbs():
             ai_cfg = data.get("ai_agent_config", get_default_ai_config())
             upd_cfg = data.get("bot_update_config", get_default_update_config())
             return data.get("licenses_db", {}), data.get("trials_db", {}), data.get("stats_db", {"views": 0, "countries": {}}), pwd, ai_cfg, upd_cfg
-    except: pass
+    except Exception as e:
+        print(f"⚠️ Error cargando DB: {e}")
     return {}, {}, {"views": 0, "countries": {}}, os.environ.get("ADMIN_PASSWORD", "cambiar_esta_clave_123"), get_default_ai_config(), get_default_update_config()
 
 def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
@@ -167,7 +168,8 @@ def save_dbs(lic, trials, stats, pwd=None, ai_cfg=None, upd_cfg=None):
         if upd_cfg:
             data["bot_update_config"] = upd_cfg
         requests.put(JSONBIN_DB_URL, json=data, headers=headers, timeout=5)
-    except: pass
+    except Exception as e:
+        print(f"⚠️ Error guardando DB: {e}")
 
 licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config = load_dbs()
 
@@ -222,7 +224,8 @@ def get_all_pages():
                 save_all_pages(new_data)
                 return new_data
             return data
-    except: pass
+    except Exception as e:
+        print(f"⚠️ Error cargando páginas: {e}")
     default_data = {"pages": {"main": get_default_content()}}
     save_all_pages(default_data)
     return default_data
@@ -232,7 +235,9 @@ def save_all_pages(data):
         headers = {"Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY}
         requests.put(JSONBIN_URL, json=data, headers=headers, timeout=5)
         return True
-    except: return False
+    except Exception as e:
+        print(f"⚠️ Error guardando páginas: {e}")
+        return False
 
 # ==========================================
 # 🔄 SISTEMA DE ACTUALIZACIONES DEL BOT (PÚBLICO Y ADMIN)
@@ -249,13 +254,15 @@ class UpdateConfigData(BaseModel):
 
 @app.get("/api/get_update_config")
 def get_update_config_api():
-    if not bot_update_config: return get_default_update_config()
+    if not bot_update_config:
+        return get_default_update_config()
     return bot_update_config
 
 @app.post("/api/save_update_config")
 def save_update_config_api(request: Request, data: UpdateConfigData):
     global bot_update_config
-    if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
+    if not verify_admin(request):
+        raise HTTPException(status_code=401, detail="No autorizado")
     bot_update_config = data.dict()
     save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"status": "success", "message": "✅ Configuración de actualización guardada."}
@@ -811,7 +818,6 @@ def admin_panel(request: Request):
         try {{
             const res = await fetch('/api/get_ai_config');
             const data = await res.json();
-            // ✅ Si la base de datos está vacía, usamos los textos por defecto (con \\n para no romper el JS)
             const defaults = {{
                 stage1_days: 2, stage1_subject: "🚀 {{name}}, descubre el poder de la IA Institucional con BLENIN.G.77", stage1_body: "Hola {{name}},\\n\\nGracias por tu interés en BLENIN.G.77...",
                 stage2_days: 5, stage2_subject: "🔥 {{name}}, esto es lo que estás dejando atrás...", stage2_body: "Hola {{name}},\\n\\nQueríamos mostrarte lo que la comunidad...",
@@ -945,7 +951,8 @@ def admin_panel(request: Request):
 
 @app.post("/api/save_pages")
 def api_save_pages(request: Request, data: dict):
-    if not verify_admin(request): return {"message": "❌ No autorizado."}
+    if not verify_admin(request):
+        return {"message": "❌ No autorizado."}
     if save_all_pages({"pages": data}):
         return {"message": "✅ Página guardada correctamente."}
     return {"message": "❌ Error al guardar."}
@@ -953,9 +960,12 @@ def api_save_pages(request: Request, data: dict):
 @app.post("/api/change_password")
 def api_change_password(request: Request, data: ChangePasswordData):
     global admin_password_db
-    if not verify_admin(request): raise HTTPException(status_code=401, detail="No autorizado")
-    if data.current_password != admin_password_db: return {"status": "error", "message": "❌ La contraseña actual es incorrecta."}
-    if len(data.new_password) < 4: return {"status": "error", "message": "❌ La nueva contraseña debe tener al menos 4 caracteres."}
+    if not verify_admin(request):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    if data.current_password != admin_password_db:
+        return {"status": "error", "message": "❌ La contraseña actual es incorrecta."}
+    if len(data.new_password) < 4:
+        return {"status": "error", "message": "❌ La nueva contraseña debe tener al menos 4 caracteres."}
     admin_password_db = data.new_password
     save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"status": "success", "message": "✅ Contraseña actualizada correctamente."}
@@ -1055,7 +1065,8 @@ def render_landing_page(c):
 
     download_instructions_html = c.get('download_instructions', 'Descarga el archivo, extrae y ejecuta el instalador.').replace('\n', '<br>')
     download_links = c.get('download_links', [])
-    if not download_links and c.get('download_link'): download_links = [c.get('download_link')]
+    if not download_links and c.get('download_link'):
+        download_links = [c.get('download_link')]
 
     download_buttons_html = ""
     if download_links:
@@ -1081,7 +1092,7 @@ def render_landing_page(c):
 
     <script src="https://cdn.tailwindcss.com"></script><script src="https://www.paypal.com/sdk/js?client-id=AYybGelHI0tT0nLaGtRnRG2sc8z4FnGqAazhHUyP9Vc_DFJAxp_psxzTqe2QBKwwSCO1UbNx2ehJ28Eg&vault=true&intent=subscription"></script><link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><script>window.embeddedChatbotConfig = {chatbotId: "{CHATBOT_ID}",domain: "www.chatbase.co"}</script><script src="https://www.chatbase.co/embed.min.js" chatbotId="{CHATBOT_ID}" domain="www.chatbase.co" defer></script><style>body { font-family: 'Inter', sans-serif; background-color: #020617; }.glow { text-shadow: 0 0 10px rgba(6, 182, 212, 0.5); }.hero-bg { background: linear-gradient(to bottom, rgba(2, 6, 23, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%), url('https://raw.githubusercontent.com/mymundodigital0-cmyk/blenin77-server/main/bienvenida_blenin.png') center/cover no-repeat; }.chatbase-bubble-button, iframe[src*="chatbase.co"] { z-index: 99999 !important; display: block !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; }.goog-te-banner-frame.skiptranslate { display: none !important; } body { top: 0px !important; }.goog-tooltip, .goog-tooltip:hover { display: none !important; }.goog-text-highlight { background-color: transparent !important; box-shadow: none !important; }#google_translate_element { position: absolute; top: -9999px; left: -9999px; opacity: 0; }.goog-te-gadget { font-size: 0 !important; }#lang-menu::-webkit-scrollbar { width: 6px; }#lang-menu::-webkit-scrollbar-track { background: #1e293b; border-radius: 10px; }#lang-menu::-webkit-scrollbar-thumb { background: #0e7490; border-radius: 10px; }</style></head>
 <body class="text-slate-300">
-    <nav class="bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-800"><div class="container mx-auto px-6 py-4 flex justify-between items-center"><a href="/" class="text-xl font-extrabold text-cyan-400 glow">BLENIN.G.77</a><div class="hidden md:flex space-x-6 text-sm font-medium items-center"><a href="#features" class="hover:text-cyan-400 transition">Tecnología</a><a href="#videos" class="hover:text-cyan-400 transition">Galería</a><a href="#pricing" class="hover:text-cyan-400 transition">Precios</a><div class="relative inline-block text-left"><button id="lang-btn" class="inline-flex justify-center items-center gap-2 rounded-md border border-slate-700 px-3 py-1.5 bg-slate-800 text-sm font-medium text-slate-300 hover:bg-slate-700 transition"><i class="fas fa-globe text-cyan-400"></i> <span id="current-lang-name">🇪🇸 Español</span> <i class="fas fa-chevron-down text-xs"></i></button><div id="lang-menu" class="hidden absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-slate-800 ring-1 ring-black ring-opacity-5 z-50 max-h-80 overflow-y-auto"><div class="py-1"><a href="#" onclick="changeLang('es', '🇪🇸 Español'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇪🇸 Español</a><a href="#" onclick="changeLang('en', '🇬🇧 English'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇬🇧 English</a><a href="#" onclick="changeLang('fr', '🇫🇷 Français'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇫🇷 Français</a><a href="#" onclick="changeLang('pt', '🇵🇹 Português'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇵🇹 Português</a><a href="#" onclick="changeLang('ru', '🇷🇺 Русский'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇷🇺 Русский</a><a href="#" onclick="changeLang('it', '🇮🇹 Italiano'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇮🇹 Italiano</a><a href="#" onclick="changeLang('de', '🇩🇪 Deutsch'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇩🇪 Deutsch</a><a href="#" onclick="changeLang('zh-CN', '🇨🇳 中文'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇨🇳 中文</a><a href="#" onclick="changeLang('ko', '🇰🇷 한국어'); return false;" class="flex items-center gap-3 px=4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇰🇷 한국어</a><a href="#" onclick="changeLang('hi', '🇮🇳 हिन्दी'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇮🇳 हिन्दी</a></div></div></div></div><a href="#pricing" class="bg-cyan-500 text-slate-900 px-4 py-2 rounded text-sm font-bold hover:bg-cyan-400 transition">Comprar Ahora</a></div></nav>
+    <nav class="bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 border-b border-slate-800"><div class="container mx-auto px-6 py-4 flex justify-between items-center"><a href="/" class="text-xl font-extrabold text-cyan-400 glow">BLENIN.G.77</a><div class="hidden md:flex space-x-6 text-sm font-medium items-center"><a href="#features" class="hover:text-cyan-400 transition">Tecnología</a><a href="#videos" class="hover:text-cyan-400 transition">Galería</a><a href="#pricing" class="hover:text-cyan-400 transition">Precios</a><div class="relative inline-block text-left"><button id="lang-btn" class="inline-flex justify-center items-center gap-2 rounded-md border border-slate-700 px-3 py-1.5 bg-slate-800 text-sm font-medium text-slate-300 hover:bg-slate-700 transition"><i class="fas fa-globe text-cyan-400"></i> <span id="current-lang-name">🇪🇸 Español</span> <i class="fas fa-chevron-down text-xs"></i></button><div id="lang-menu" class="hidden absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-slate-800 ring-1 ring-black ring-opacity-5 z-50 max-h-80 overflow-y-auto"><div class="py-1"><a href="#" onclick="changeLang('es', '🇪🇸 Español'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇪🇸 Español</a><a href="#" onclick="changeLang('en', '🇬🇧 English'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇬🇧 English</a><a href="#" onclick="changeLang('fr', '🇫🇷 Français'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇫🇷 Français</a><a href="#" onclick="changeLang('pt', '🇵🇹 Português'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇵🇹 Português</a><a href="#" onclick="changeLang('ru', '🇷🇺 Русский'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇷🇺 Русский</a><a href="#" onclick="changeLang('it', '🇮🇹 Italiano'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇮🇹 Italiano</a><a href="#" onclick="changeLang('de', '🇩🇪 Deutsch'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇩🇪 Deutsch</a><a href="#" onclick="changeLang('zh-CN', '🇨🇳 中文'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇨🇳 中文</a><a href="#" onclick="changeLang('ko', '🇰🇷 한국어'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇰🇷 한국어</a><a href="#" onclick="changeLang('hi', '🇮🇳 हिन्दी'); return false;" class="flex items-center gap-3 px-4 py-2 text-sm hover:bg-slate-700 hover:text-cyan-400">🇮🇳 हिन्दी</a></div></div></div></div><a href="#pricing" class="bg-cyan-500 text-slate-900 px-4 py-2 rounded text-sm font-bold hover:bg-cyan-400 transition">Comprar Ahora</a></div></nav>
 
     <div id="urgency-banner" class="bg-gradient-to-r from-amber-500 to-red-500 text-slate-900 text-center py-2 px-4 text-sm font-bold flex justify-center items-center gap-3"><i class="fas fa-fire animate-pulse"></i><span>OFERTA DE LANZAMIENTO: Termina en</span><span id="countdown-timer" class="font-mono bg-slate-900 text-amber-400 px-2 py-1 rounded">23:59:59</span></div>
     <script>function startCountdown() {let now = new Date();let midnight = new Date();midnight.setHours(23, 59, 59, 999);let diff = midnight - now;let hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));let minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));let seconds = Math.floor((diff % (1000 * 60)) / 1000);document.getElementById('countdown-timer').innerText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;}setInterval(startCountdown, 1000);</script>
@@ -1145,16 +1156,20 @@ def read_root(request: Request):
     try:
         ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "8.8.8.8").split(",")[0]
         geo_resp = requests.get(f"https://get.geojs.io/v1/ip/country.json?ip={ip}", timeout=2)
-        if geo_resp.status_code == 200: user_country_name = geo_resp.json().get("country_name", "Internacional")
-    except: pass
-    if user_country_name != "Internacional": c['hero_text'] = f"🔥 Usuarios de {user_country_name} ya están multiplicando su capital. " + c.get('hero_text', '')
+        if geo_resp.status_code == 200:
+            user_country_name = geo_resp.json().get("country_name", "Internacional")
+    except:
+        pass
+    if user_country_name != "Internacional":
+        c['hero_text'] = f"🔥 Usuarios de {user_country_name} ya están multiplicando su capital. " + c.get('hero_text', '')
     return render_landing_page(c)
 
 @app.get("/p/{slug}", response_class=HTMLResponse)
 def read_dynamic_page(slug: str):
     pages_data = get_all_pages()
     c = pages_data.get("pages", {}).get(slug)
-    if c: return render_landing_page(c)
+    if c:
+        return render_landing_page(c)
     return HTMLResponse("<h1>404 - Página no encontrada</h1><a href='/'>Volver al inicio</a>")
 
 # ==========================================
@@ -1162,14 +1177,37 @@ def read_dynamic_page(slug: str):
 # ==========================================
 db_trades = []
 
-class TradeData(BaseModel): strategy: str; symbol: str; timeframe: str; outcome: bool; profit_pips: float; session: str
-class LicenseCheck(BaseModel): key: str; hwid: str
-class LicenseCreate(BaseModel): plan: str; duration_days: int = 30; email: str = ""
-class RecoveryRequest(BaseModel): email: str
-class TrialRequest(BaseModel): hwid: str
-class LicenseUpdate(BaseModel): key: str; active: bool = False
-class ResetHWID(BaseModel): key: str
-class LeadCapture(BaseModel): 
+class TradeData(BaseModel):
+    strategy: str
+    symbol: str
+    timeframe: str
+    outcome: bool
+    profit_pips: float
+    session: str
+
+class LicenseCheck(BaseModel):
+    key: str
+    hwid: str
+
+class LicenseCreate(BaseModel):
+    plan: str
+    duration_days: int = 30
+    email: str = ""
+
+class RecoveryRequest(BaseModel):
+    email: str
+
+class TrialRequest(BaseModel):
+    hwid: str
+
+class LicenseUpdate(BaseModel):
+    key: str
+    active: bool = False
+
+class ResetHWID(BaseModel):
+    key: str
+
+class LeadCapture(BaseModel):
     name: str = "Usuario"
     email: str
     interaction: str = "Visualizó demo"
@@ -1181,18 +1219,19 @@ def track_view(request: Request):
         ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "8.8.8.8").split(",")[0]
         geo_resp = requests.get(f"https://get.geojs.io/v1/ip/country.json?ip={ip}", timeout=2)
         country = geo_resp.json().get("country", "Unknown") if geo_resp.status_code == 200 else "Unknown"
-    except: country = "Unknown"
+    except:
+        country = "Unknown"
     stats_db["views"] = stats_db.get("views", 0) + 1
     stats_db["countries"][country] = stats_db["countries"].get(country, 0) + 1
     save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"status": "tracked"}
 
 @app.get("/api/get_stats")
-def get_stats(): return stats_db
+def get_stats():
+    return stats_db
 
 @app.get("/api/get_ai_config")
 def get_ai_config():
-    # ✅ Si la base de datos está vacía o corrupta, devuelve los mensajes institucionales por defecto
     if not ai_agent_config or "stage1_subject" not in ai_agent_config:
         return get_default_ai_config()
     return ai_agent_config
@@ -1200,7 +1239,8 @@ def get_ai_config():
 @app.post("/api/save_ai_config")
 def save_ai_config(request: Request, data: dict):
     global ai_agent_config
-    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
+    if not verify_admin(request):
+        return {"status": "error", "message": "❌ No autorizado."}
     ai_agent_config = data
     save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"status": "success", "message": "✅ Configuración del Agente IA guardada correctamente."}
@@ -1217,12 +1257,14 @@ def receive_intel(trade: TradeData):
 
 @app.get("/api/get_global_intel")
 def get_intel():
-    if not db_trades: return {}
+    if not db_trades:
+        return {}
     stats = defaultdict(lambda: {"wins": 0, "total": 0})
     for t in db_trades:
         k = f"{t.strategy}_{t.symbol}_{t.session}"
         stats[k]["total"] += 1
-        if t.outcome: stats[k]["wins"] += 1
+        if t.outcome:
+            stats[k]["wins"] += 1
     return {k: {"win_rate": v["wins"]/v["total"], "trades": v["total"]} for k, v in stats.items() if v["total"] > 0}
 
 @app.post("/api/start_trial")
@@ -1230,7 +1272,8 @@ def start_trial(data: TrialRequest):
     global trials_db
     if data.hwid in trials_db:
         expires = datetime.fromisoformat(trials_db[data.hwid]["expires"])
-        if datetime.now() > expires: return {"valid": False, "message": "⏳ Prueba expirada."}
+        if datetime.now() > expires:
+            return {"valid": False, "message": "⏳ Prueba expirada."}
         return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": "BRONCE"}
     trials_db[data.hwid] = {"expires": (datetime.now() + timedelta(days=30)).isoformat()}
     save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
@@ -1240,23 +1283,34 @@ def start_trial(data: TrialRequest):
 def validate_license(data: LicenseCheck):
     global licenses_db
     key = data.key.upper().strip()
-    if key not in licenses_db: return {"valid": False, "message": "❌ Licencia no encontrada."}
+    if key not in licenses_db:
+        return {"valid": False, "message": "❌ Licencia no encontrada."}
     info = licenses_db[key]
-    if not info["active"]: return {"valid": False, "message": "🚫 Licencia suspendida."}
+    if not info["active"]:
+        return {"valid": False, "message": "🚫 Licencia suspendida."}
     expires = datetime.fromisoformat(info["expires"])
-    if datetime.now() > expires: return {"valid": False, "message": "⏳ Expirada."}
+    if datetime.now() > expires:
+        return {"valid": False, "message": "⏳ Expirada."}
     if info["hwid"] is None:
         info["hwid"] = data.hwid
         save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
-    elif info["hwid"] != data.hwid: return {"valid": False, "message": "🔒 En uso en otra PC."}
+    elif info["hwid"] != data.hwid:
+        return {"valid": False, "message": "🔒 En uso en otra PC."}
     return {"valid": True, "days_left": (expires - datetime.now()).days, "plan": info["plan"]}
 
 @app.post("/api/create_license")
 def create_license(request: Request, data: LicenseCreate):
-    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
+    if not verify_admin(request):
+        return {"status": "error", "message": "❌ No autorizado."}
     global licenses_db
     key = generate_license_key(data.plan)
-    licenses_db[key] = {"hwid": None, "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(), "active": True, "plan": data.plan.upper(), "email": data.email.lower()}
+    licenses_db[key] = {
+        "hwid": None,
+        "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(),
+        "active": True,
+        "plan": data.plan.upper(),
+        "email": data.email.lower()
+    }
     save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"status": "success", "key": key}
 
@@ -1270,10 +1324,12 @@ def recover_by_email(req: RecoveryRequest):
 
 @app.post("/api/manage_license")
 def manage_license(request: Request, data: LicenseUpdate):
-    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
+    if not verify_admin(request):
+        return {"status": "error", "message": "❌ No autorizado."}
     global licenses_db
     key = data.key.upper().strip()
-    if key not in licenses_db: return {"status": "error", "message": "❌ Licencia no encontrada."}
+    if key not in licenses_db:
+        return {"status": "error", "message": "❌ Licencia no encontrada."}
     licenses_db[key]["active"] = data.active
     save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     status = "activada" if data.active else "suspendida"
@@ -1281,10 +1337,12 @@ def manage_license(request: Request, data: LicenseUpdate):
 
 @app.post("/api/reset_hwid")
 def reset_hwid(request: Request, data: ResetHWID):
-    if not verify_admin(request): return {"status": "error", "message": "❌ No autorizado."}
+    if not verify_admin(request):
+        return {"status": "error", "message": "❌ No autorizado."}
     global licenses_db
     key = data.key.upper().strip()
-    if key not in licenses_db: return {"status": "error", "message": "❌ Licencia no encontrada."}
+    if key not in licenses_db:
+        return {"status": "error", "message": "❌ Licencia no encontrada."}
     licenses_db[key]["hwid"] = None
     save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
     return {"status": "success", "message": f"✅ HWID reseteado para {key}."}
@@ -1293,9 +1351,10 @@ def reset_hwid(request: Request, data: ResetHWID):
 # 🔥 WEBHOOK DE HOTMART (PASARELA DE PAGOS Y AFILIADOS)
 # ==========================================
 @app.post("/api/hotmart_webhook")
-def hotmart_webhook(request: Request):
+async def hotmart_webhook(request: Request):
+    """Webhook de Hotmart - Usa await request.json() porque es async."""
     try:
-        data = request.json()
+        data = await request.json()
         # Hotmart envía esto cuando una venta es aprobada
         if data.get("event") == "PURCHASE_APPROVED" or data.get("event_type") == "PURCHASE_APPROVED":
             buyer_data = data.get("data", {}).get("buyer", {})
@@ -1309,18 +1368,21 @@ def hotmart_webhook(request: Request):
             product_name = (product_data.get("name") or "BRONCE").upper()
             
             # Determinar el plan basado en el nombre del producto en Hotmart
-            if "ORO" in product_name: plan_upper = "ORO"
-            elif "PLATA" in product_name: plan_upper = "PLATA"
-            else: plan_upper = "BRONCE"
+            if "ORO" in product_name:
+                plan_upper = "ORO"
+            elif "PLATA" in product_name:
+                plan_upper = "PLATA"
+            else:
+                plan_upper = "BRONCE"
             
             # Generar la licencia
             global licenses_db
             key = generate_license_key(plan_upper)
             licenses_db[key] = {
-                "hwid": None, 
-                "expires": (datetime.now() + timedelta(days=30)).isoformat(), 
-                "active": True, 
-                "plan": plan_upper, 
+                "hwid": None,
+                "expires": (datetime.now() + timedelta(days=30)).isoformat(),
+                "active": True,
+                "plan": plan_upper,
                 "email": email.lower()
             }
             save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
@@ -1358,16 +1420,19 @@ def make_payment_webhook(data: MakeWebhookData):
     try:
         global licenses_db
         plan_upper = data.plan.upper()
-        if "ORO" in plan_upper: plan_upper = "ORO"
-        elif "PLATA" in plan_upper: plan_upper = "PLATA"
-        else: plan_upper = "BRONCE"
+        if "ORO" in plan_upper:
+            plan_upper = "ORO"
+        elif "PLATA" in plan_upper:
+            plan_upper = "PLATA"
+        else:
+            plan_upper = "BRONCE"
         
         key = generate_license_key(plan_upper)
         licenses_db[key] = {
-            "hwid": None, 
-            "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(), 
-            "active": True, 
-            "plan": plan_upper, 
+            "hwid": None,
+            "expires": (datetime.now() + timedelta(days=data.duration_days)).isoformat(),
+            "active": True,
+            "plan": plan_upper,
             "email": data.email.lower()
         }
         save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
@@ -1388,10 +1453,18 @@ def make_payment_webhook(data: MakeWebhookData):
 def capture_lead(lead: LeadCapture):
     global stats_db
     try:
-        if "captured_leads" not in stats_db: stats_db["captured_leads"] = []
+        if "captured_leads" not in stats_db:
+            stats_db["captured_leads"] = []
         existing_emails = [l.get("email") for l in stats_db["captured_leads"]]
         if lead.email.lower() not in existing_emails:
-            stats_db["captured_leads"].append({"name": lead.name, "email": lead.email.lower(), "interaction": lead.interaction, "date": datetime.now().isoformat(), "follow_up_stage": 0, "last_email_sent": datetime.now().isoformat()})
+            stats_db["captured_leads"].append({
+                "name": lead.name,
+                "email": lead.email.lower(),
+                "interaction": lead.interaction,
+                "date": datetime.now().isoformat(),
+                "follow_up_stage": 0,
+                "last_email_sent": datetime.now().isoformat()
+            })
             save_dbs(licenses_db, trials_db, stats_db, admin_password_db, ai_agent_config, bot_update_config)
         
         client_subject = f"🚀 ¡Bienvenido {lead.name}! Tu acceso a BLENIN.G.77"
@@ -1402,28 +1475,153 @@ def capture_lead(lead: LeadCapture):
         admin_body = f"¡Alerta de captación!\n\nNombre: {lead.name}\nCorreo: {lead.email}\nInteracción: {lead.interaction}\n\nEl Agente IA ha iniciado el seguimiento automático."
         send_email(SMTP_EMAIL, admin_subject, admin_body)
         return {"status": "success", "message": "Información enviada al correo."}
-    except Exception as e: return {"status": "error", "message": str(e)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ==========================================
+# 🧠 ENDPOINTS DE IA PARA TODOS LOS USUARIOS DEL BOT
+# ==========================================
+GEMINI_API_KEY_SERVER = os.environ.get("GEMINI_API_KEY", "")
+
+@app.post("/api/ai_chat")
+async def ai_chat(request: Request):
+    """Proxy de Gemini para todos los usuarios del bot (sin API key propia)."""
+    try:
+        body = await request.json()
+        message = body.get("message", "")
+        context = body.get("context", "")
+        license_key = body.get("license_key", "")
+        
+        # Verificar licencia (opcional - si no hay key, permitir igual)
+        if license_key:
+            key = license_key.upper().strip()
+            if key in licenses_db:
+                if not licenses_db[key].get("active", False):
+                    return {"response": "⚠️ Licencia inactiva."}
+        
+        if not GEMINI_API_KEY_SERVER:
+            return {"response": "⚠️ IA no disponible en el servidor. Configura GEMINI_API_KEY en Render."}
+        
+        system_prompt = """Eres la Super IA Gerente de BLENIN.G.77, un sistema de trading institucional.
+El usuario es el DUEÑO de la empresa y tú eres su GERENTE.
+Responde en español, profesional pero cercana. Máximo 300 palabras.
+No prometas ganancias. Sé honesta sobre riesgos."""
+        
+        full_prompt = f"{system_prompt}\n\n=== CONTEXTO ===\n{context[:3000]}\n\n=== PREGUNTA ===\n{message[:500]}"
+        
+        # Probar múltiples modelos
+        models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]
+        
+        for model_name in models:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY_SERVER}"
+            payload = {
+                "contents": [{"parts": [{"text": full_prompt}]}],
+                "generationConfig": {"maxOutputTokens": 800, "temperature": 0.7}
+            }
+            
+            response = requests.post(url, json=payload, timeout=30)
+            
+            if response.status_code == 200:
+                text = response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                if text:
+                    return {"response": text}
+            elif response.status_code == 429:
+                # Rate limit - probar siguiente modelo
+                continue
+            else:
+                continue
+        
+        return {"response": "⚠️ Todos los modelos de IA están saturados. Intenta en unos minutos."}
+        
+    except Exception as e:
+        return {"response": f"⚠️ Error: {str(e)}"}
+
+@app.post("/api/ai_notify")
+async def ai_notify(request: Request):
+    """Genera mensaje de notificación inteligente para el bot."""
+    try:
+        body = await request.json()
+        event_type = body.get("event_type", "")
+        data = body.get("data", "")
+        
+        if not GEMINI_API_KEY_SERVER:
+            return {"message": ""}
+        
+        prompt = f"Redacta una notificación corta (máximo 50 palabras) en español sobre: {event_type}. Datos: {str(data)[:500]}. Directo y profesional."
+        
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY_SERVER}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"maxOutputTokens": 150, "temperature": 0.7}
+        }
+        
+        response = requests.post(url, json=payload, timeout=15)
+        
+        if response.status_code == 200:
+            text = response.json().get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            return {"message": text.strip() if text else ""}
+        
+        return {"message": ""}
+    except:
+        return {"message": ""}
+
+@app.post("/api/report_user_risk")
+async def report_user_risk(request: Request):
+    """Recibe alertas de riesgo del bot y envía email al usuario."""
+    try:
+        body = await request.json()
+        license_key = body.get("license_key", "")
+        consecutive_losses = body.get("consecutive_losses", 0)
+        drawdown_pct = body.get("current_drawdown_pct", 0.0)
+        
+        # Buscar email del usuario
+        user_email = ""
+        if license_key:
+            key = license_key.upper().strip()
+            if key in licenses_db:
+                user_email = licenses_db[key].get("email", "")
+        
+        if user_email and (consecutive_losses >= 3 or drawdown_pct > 5.0):
+            subject = "⚠️ ALERTA DE RIESGO - BLENIN77"
+            body_text = f"""Hola,
+
+El sistema ha detectado una condición de riesgo en tu cuenta:
+
+• Pérdidas consecutivas: {consecutive_losses}
+• Drawdown actual: {drawdown_pct:.1f}%
+
+Te recomendamos revisar tus posiciones y considerar pausar el bot.
+
+Saludos,
+Super IA Gerente de BLENIN.G.77"""
+            send_email(user_email, subject, body_text)
+        
+        return {"status": "received"}
+    except:
+        return {"status": "error"}
 
 # ==========================================
 # 🧠 AGENTE IA DE SEGUIMIENTO AUTOMÁTICO (SCHEDULER)
 # ==========================================
 def ai_follow_up_agent():
     global stats_db
-    if "captured_leads" not in stats_db: return
+    if "captured_leads" not in stats_db:
+        return
     leads_updated = False
     now = datetime.now()
 
     for lead in stats_db["captured_leads"]:
         stage = lead.get("follow_up_stage", 0)
         last_sent_str = lead.get("last_email_sent")
-        if not last_sent_str: continue
+        if not last_sent_str:
+            continue
         last_sent = datetime.fromisoformat(last_sent_str)
         days_since_last = (now - last_sent).days
 
         if stage == 0 and days_since_last >= int(ai_agent_config.get("stage1_days", 2)):
             subject = ai_agent_config.get("stage1_subject", "").replace("{name}", lead["name"])
             body = ai_agent_config.get("stage1_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body)):
+            if send_email(lead["email"], subject, body):
                 lead["follow_up_stage"] = 1
                 lead["last_email_sent"] = now.isoformat()
                 leads_updated = True
@@ -1431,7 +1629,7 @@ def ai_follow_up_agent():
         elif stage == 1 and days_since_last >= int(ai_agent_config.get("stage2_days", 5)):
             subject = ai_agent_config.get("stage2_subject", "").replace("{name}", lead["name"])
             body = ai_agent_config.get("stage2_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body)):
+            if send_email(lead["email"], subject, body):
                 lead["follow_up_stage"] = 2
                 lead["last_email_sent"] = now.isoformat()
                 leads_updated = True
@@ -1439,7 +1637,7 @@ def ai_follow_up_agent():
         elif stage == 2 and days_since_last >= int(ai_agent_config.get("stage3_days", 10)):
             subject = ai_agent_config.get("stage3_subject", "").replace("{name}", lead["name"])
             body = ai_agent_config.get("stage3_body", "").replace("{name}", lead["name"])
-            if send_email(lead["email"], subject, body)):
+            if send_email(lead["email"], subject, body):
                 lead["follow_up_stage"] = 3
                 lead["last_email_sent"] = now.isoformat()
                 leads_updated = True
