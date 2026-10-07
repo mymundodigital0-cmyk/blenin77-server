@@ -1686,7 +1686,7 @@ async def ai_chat(request: Request):
         system_prompt = "Eres la Super IA Gerente de BLENIN.G.77. Responde en espanol, maximo 300 palabras."
         full_prompt = system_prompt + "\n\n" + context[:3000] + "\n\nPregunta: " + message[:500]
         
-        for model in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash"]:
+        for model in ["gemini-2.5-flash", "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-pro"]:
             url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + GEMINI_API_KEY_SERVER
             payload = {"contents": [{"parts": [{"text": full_prompt}]}], "generationConfig": {"maxOutputTokens": 800, "temperature": 0.7}}
             response = requests.post(url, json=payload, timeout=30)
@@ -1726,4 +1726,5 @@ scheduler = BackgroundScheduler()
 scheduler.add_job(ai_follow_up_agent, 'interval', hours=1)
 scheduler.add_job(ai_retention_agent, 'interval', hours=24)
 scheduler.start()
+
 
